@@ -78,7 +78,7 @@ public sealed partial class AiDiscoveryPanelViewModel
     private const int MaxRuntimeFindings = 50;
 
     public const string CoverageCaveat =
-        "Nothing found does not mean nothing was checked, and it does not prove a machine is clean: only the sources listed here were examined.";
+        "Only the sources above are checked.";
 
     private bool _loadRunning;
     private DateTimeOffset? _loadedAt;
@@ -102,7 +102,7 @@ public sealed partial class AiDiscoveryPanelViewModel
     private string? _coverageGaps;
 
     [ObservableProperty]
-    private string _coverageLastScan = "Asking the gateway what its last scan covered…";
+    private string _coverageLastScan = "Asking the gateway for its last scan…";
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasCoverageNote))]
@@ -183,15 +183,14 @@ public sealed partial class AiDiscoveryPanelViewModel
         }
 
         var explanation = enable
-            ? "Sets ai_discovery.enabled to true in config.yaml and leaves your other AI discovery settings (mode, " +
-              "scan roots, cadence, detectors) as they are. " +
+            ? "Sets ai_discovery.enabled to true in config.yaml. Other ai_discovery settings stay as they are. " +
               (restart
-                  ? "It then restarts the gateway so it starts the discovery service, and asks for a first scan."
-                  : "The gateway is not restarted, so nothing starts scanning until it is restarted.")
+                  ? "Restarts the gateway, then asks for a first scan."
+                  : "The gateway is not restarted, so scanning starts after its next restart.")
             : "Sets ai_discovery.enabled to false in config.yaml. " +
               (restart
-                  ? "It then restarts the gateway so the discovery service stops. Components already found stay listed until you clear them."
-                  : "The gateway is not restarted, so it keeps scanning until it is restarted.");
+                  ? "Restarts the gateway. Components already found stay listed until you clear them."
+                  : "The gateway is not restarted, so it keeps scanning until its next restart.");
 
         Review.Open(
             enable ? "Turn on AI Discovery?" : "Turn off AI Discovery?",
@@ -200,7 +199,7 @@ public sealed partial class AiDiscoveryPanelViewModel
             {
                 new DiscoverStep(
                     argv,
-                    enable ? "Enable the sidecar AI discovery service." : "Disable the sidecar AI discovery service.",
+                    enable ? "Enable AI discovery." : "Disable AI discovery.",
                     CommandTier.StateChanging,
                     TimeSpan.FromMinutes(5)),
             },
@@ -366,8 +365,8 @@ public sealed partial class AiDiscoveryPanelViewModel
             {
                 (badgeText, badgeKey) = (configOn ? "On in config, off in gateway" : "Off in config, on in gateway", "Warn");
                 note = configOn
-                    ? "config.yaml has AI discovery on but the running gateway reports it off. Restarting the gateway applies the config."
-                    : "config.yaml has AI discovery off but the running gateway is still running it. Restarting the gateway applies the config.";
+                    ? "config.yaml has AI discovery on, but the gateway reports it off. Restart the gateway to apply the config."
+                    : "config.yaml has AI discovery off, but the gateway is still running it. Restart the gateway to apply the config.";
             }
 
             if (!string.IsNullOrWhiteSpace(live.Error))
@@ -379,10 +378,10 @@ public sealed partial class AiDiscoveryPanelViewModel
         {
             (badgeText, badgeKey) = configOn ? ("On in config, gateway not confirming", "Warn") : ("Off", "Neutral");
             note = live is { Error: { } gatewayError } && !string.IsNullOrWhiteSpace(gatewayError)
-                ? $"The gateway did not answer ({gatewayError}), so the last-scan line below is from disk, if there is one."
+                ? $"The gateway did not answer ({gatewayError}). The last scan below is from disk, if any."
                 : liveProblem is null
-                    ? "The gateway did not answer, so the last-scan line below is from disk, if there is one."
-                    : $"{liveProblem} The last-scan line below is from disk, if there is one.";
+                    ? "The gateway did not answer. The last scan below is from disk, if any."
+                    : $"{liveProblem} The last scan below is from disk, if any.";
         }
         else
         {
@@ -397,7 +396,7 @@ public sealed partial class AiDiscoveryPanelViewModel
         if (configOn)
         {
             CoverageHeadline = $"AI discovery is on ({(string.IsNullOrWhiteSpace(ai.Mode) ? "default" : ai.Mode)} mode).";
-            CoverageLooksAt = "Looks at: " + string.Join("; ", DescribeSources(ai)) + ".";
+            CoverageLooksAt = "Looks at\n" + string.Join("\n", DescribeSources(ai));
 
             var off = new List<string>();
             if (!ai.IncludeShellHistory) { off.Add("shell history"); }
@@ -407,12 +406,12 @@ public sealed partial class AiDiscoveryPanelViewModel
 
             CoverageGaps = off.Count == 0
                 ? null
-                : "Turned off, so it cannot find what only these would show: " + string.Join(", ", off) + ".";
+                : "Turned off: " + string.Join(", ", off) + ".";
         }
         else
         {
             CoverageHeadline = "AI discovery is off.";
-            CoverageLooksAt = "Nothing is being scanned while it is off. Any components listed below are from the last scan before it was turned off.";
+            CoverageLooksAt = "Nothing is scanned. Components below are from the last scan before it was turned off.";
             CoverageGaps = null;
         }
 
@@ -424,34 +423,33 @@ public sealed partial class AiDiscoveryPanelViewModel
         else if (_signalCacheUpdatedAt is { } cachedAt)
         {
             CoverageLastScan =
-                $"The last result on disk was written {cachedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture)}. " +
-                "The gateway has not said what that scan covered.";
+                $"Last result: {cachedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture)}. Scan coverage not reported.";
         }
         else
         {
             CoverageLastScan = live is null && liveProblem is null
-                ? "Asking the gateway what its last scan covered…"
-                : "No scan has been recorded yet.";
+                ? "Asking the gateway for its last scan…"
+                : "No scan recorded yet.";
         }
     }
 
     private static IEnumerable<string> DescribeSources(AiDiscoverySection ai)
     {
         yield return ai.ProcessIntervalS > 0
-            ? $"running processes (every {ai.ProcessIntervalS.ToString(CultureInfo.InvariantCulture)} s)"
-            : "running processes";
+            ? $"Processes: every {ai.ProcessIntervalS.ToString(CultureInfo.InvariantCulture)} s"
+            : "Processes";
 
         var roots = ai.ScanRoots.Count == 0 ? "no folders" : string.Join(", ", ai.ScanRoots);
-        var cadence = ai.ScanIntervalMin > 0 ? $"a full scan every {ai.ScanIntervalMin.ToString(CultureInfo.InvariantCulture)} min" : "a periodic full scan";
+        var cadence = ai.ScanIntervalMin > 0 ? $"full scan every {ai.ScanIntervalMin.ToString(CultureInfo.InvariantCulture)} min" : "periodic full scan";
         var limits = ai.MaxFilesPerScan > 0
-            ? $", at most {ai.MaxFilesPerScan.ToString("N0", CultureInfo.InvariantCulture)} files of up to {FormatBytes(ai.MaxFileBytes)} each"
+            ? $", up to {ai.MaxFilesPerScan.ToString("N0", CultureInfo.InvariantCulture)} files of {FormatBytes(ai.MaxFileBytes)}"
             : string.Empty;
-        yield return $"files under {roots} ({cadence}{limits})";
+        yield return $"Files under {roots}: {cadence}{limits}";
 
-        if (ai.IncludeShellHistory) { yield return "shell history"; }
-        if (ai.IncludePackageManifests) { yield return "package manifests"; }
-        if (ai.IncludeEnvVarNames) { yield return "environment variable names"; }
-        if (ai.IncludeNetworkDomains) { yield return "network domains"; }
+        if (ai.IncludeShellHistory) { yield return "Shell history"; }
+        if (ai.IncludePackageManifests) { yield return "Package manifests"; }
+        if (ai.IncludeEnvVarNames) { yield return "Environment variable names"; }
+        if (ai.IncludeNetworkDomains) { yield return "Network domains"; }
     }
 
     private static string DescribeLastScan(LiveDiscoveryStatus live, DateTimeOffset scannedAt, AiDiscoverySection ai)
@@ -460,8 +458,8 @@ public sealed partial class AiDiscoveryPanelViewModel
 
         var text =
             $"Last scan {scannedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture)}: " +
-            $"source {live.Source ?? "unknown"}, result {live.Result ?? "unknown"}, {N(live.DurationMs)} ms, " +
-            $"{N(live.FilesScanned)} files read, {N(live.TotalSignals)} signals ({N(live.ActiveSignals)} active; " +
+            $"{live.Source ?? "unknown"}, {live.Result ?? "unknown"}, {N(live.DurationMs)} ms, " +
+            $"{N(live.FilesScanned)} files, {N(live.TotalSignals)} signals ({N(live.ActiveSignals)} active, " +
             $"{N(live.NewSignals)} new, {N(live.ChangedSignals)} changed, {N(live.GoneSignals)} gone)";
 
         if (live.Errors is > 0)
@@ -474,10 +472,10 @@ public sealed partial class AiDiscoveryPanelViewModel
         // A process-only poll reads no files; say so, so "0 files" is not mistaken for "nothing to read".
         if ((live.Source ?? string.Empty).Contains("process", StringComparison.OrdinalIgnoreCase) && live.FilesScanned is 0)
         {
-            text += " That was a process-list check, which reads no files" +
+            text += " Process check only, no files read." +
                 (ai.ScanIntervalMin > 0
-                    ? $"; the full file scan runs every {ai.ScanIntervalMin.ToString(CultureInfo.InvariantCulture)} min."
-                    : ".");
+                    ? $" Full file scan every {ai.ScanIntervalMin.ToString(CultureInfo.InvariantCulture)} min."
+                    : string.Empty);
         }
 
         return text;
@@ -511,8 +509,7 @@ public sealed partial class AiDiscoveryPanelViewModel
                 HasNoModels = true;
                 (EmptyTitle, EmptyDetail) = NothingFound(
                     "No local models identified",
-                    "The latest scan did not identify a local AI model: no model file in the folders it examined and no local model " +
-                    "server listing any. That is not the same as none being installed; the Coverage card above lists exactly what it examined.");
+                    "The latest scan found no model file and no local model server listing any. The Coverage card lists what it checked.");
             }
             else if (!ModelsView.Cast<object>().Any())
             {
@@ -534,7 +531,7 @@ public sealed partial class AiDiscoveryPanelViewModel
                     hints.Add("turn on Show all models");
                 }
 
-                NoMatchDetail = hints.Count == 0 ? "Nothing in the list passes the current view." : "To see more, " + string.Join(", or ", hints) + ".";
+                NoMatchDetail = hints.Count == 0 ? "No model passes the current filters." : "To see more: " + string.Join(", or ", hints) + ".";
             }
             else
             {
@@ -552,8 +549,7 @@ public sealed partial class AiDiscoveryPanelViewModel
                     $"The latest scan found {Plural(_allModels.Count, "local model")} and no AI products. The models are listed under Models.")
                 : NothingFound(
                     "Nothing detected in the latest scan",
-                    "The scan ran and found no AI components. That is not the same as nothing having been looked at: " +
-                    "the Coverage card above lists exactly what it examined.");
+                    "The scan ran and found no AI components. The Coverage card lists what it checked.");
         }
         else if (!CardsView.Cast<object>().Any())
         {
@@ -568,14 +564,14 @@ public sealed partial class AiDiscoveryPanelViewModel
     {
         if (!IsDiscoveryEnabledInConfig)
         {
-            return ("AI Discovery is turned off", "Nothing is being scanned, so there is nothing to list. Turn it on above, then run a scan.");
+            return ("AI Discovery is turned off", "Nothing is scanned. Turn it on above, then run a scan.");
         }
 
         if (!_signalSourceAvailable)
         {
             return (
                 "No scan result on disk yet",
-                "AI Discovery is on, but no scan has written a result yet. Run a scan above, or wait for the gateway's next scheduled one.");
+                "No scan has written a result yet. Run a scan above or wait for the next scheduled one.");
         }
 
         return (foundNothingTitle, foundNothingDetail);
@@ -640,8 +636,7 @@ public sealed partial class AiDiscoveryPanelViewModel
                     "Unknown",
                     "Warn",
                     "Runtime coverage: gateway not reachable",
-                    "The gateway is not answering, so this app cannot tell what the runtime plane is watching. " +
-                    "That is not a clean-host result.",
+                    "The gateway is not answering. Runtime coverage is unknown.",
                     snapshot: false);
                 break;
 
@@ -650,7 +645,7 @@ public sealed partial class AiDiscoveryPanelViewModel
                     "Unknown",
                     "Warn",
                     "Runtime coverage: token not accepted",
-                    "The gateway refused this app's API token, so runtime coverage cannot be read. That is not a clean-host result.",
+                    "The gateway refused the API token. Runtime coverage is unknown.",
                     snapshot: false);
                 break;
 
@@ -659,7 +654,7 @@ public sealed partial class AiDiscoveryPanelViewModel
                     "Not connected",
                     "Neutral",
                     "Runtime coverage: not connected",
-                    "The gateway is running but the runtime coverage service is not wired up.",
+                    "The gateway is running, but its runtime coverage service is not connected.",
                     snapshot: false);
                 break;
 
@@ -670,11 +665,8 @@ public sealed partial class AiDiscoveryPanelViewModel
                         "Not supported",
                         "Neutral",
                         "Runtime coverage is not supported by this DefenseClaw version",
-                        "This version's gateway does not serve /api/v1/ai-usage/runtime, and its command line has no " +
-                        "'agent discovery runtime' commands. That is a limit of the version, not a problem with this machine. " +
-                        "It also means nothing is watching for shadow AI network traffic or unattributed agent actions, so the " +
-                        "absence of runtime findings says nothing about the host. A newer DefenseClaw adds this; the section " +
-                        "fills in by itself when the gateway supports it.",
+                        "This gateway has no /api/v1/ai-usage/runtime route. Shadow AI traffic and unattributed agent actions are not watched. " +
+                        "A newer DefenseClaw adds this.",
                         snapshot: false);
                 }
                 else
@@ -699,8 +691,7 @@ public sealed partial class AiDiscoveryPanelViewModel
                 "Incomplete",
                 "Warn",
                 "Runtime coverage response is incomplete",
-                "The gateway answered, but its reply is missing the fields this app reads (enabled, planes, findings). " +
-                "Nothing here should be read as a clean host.",
+                "The gateway reply is missing fields: enabled, planes, findings.",
                 snapshot: false);
             return;
         }
@@ -711,7 +702,7 @@ public sealed partial class AiDiscoveryPanelViewModel
                 "Off",
                 "Neutral",
                 "Runtime coverage is turned off",
-                "Nothing is watching for shadow AI network traffic or unattributed agent actions on this gateway.",
+                "Shadow AI traffic and unattributed agent actions are not watched.",
                 snapshot: false);
             return;
         }
@@ -793,11 +784,10 @@ public sealed partial class AiDiscoveryPanelViewModel
             $"{N(JsonNumber(root, "processes_observed"))} processes observed" +
             (JsonNumber(root, "processes_skipped") is > 0 ? $" ({N(JsonNumber(root, "processes_skipped"))} skipped)" : string.Empty) +
             $"; {N(JsonNumber(root, "connections_observed"))} connections" +
-            (JsonNumber(root, "connections_unattributed") is > 0 ? $" ({N(JsonNumber(root, "connections_unattributed"))} not attributed to a process)" : string.Empty) +
+            (JsonNumber(root, "connections_unattributed") is > 0 ? $" ({N(JsonNumber(root, "connections_unattributed"))} unattributed)" : string.Empty) +
             (polled is { } at ? $"; polled {at.ToLocalTime().ToString("HH:mm:ss", CultureInfo.InvariantCulture)}" : string.Empty) +
             "." +
-            (degraded && reasons.Length > 0 ? $" Degraded: {string.Join("; ", reasons)}." : string.Empty) +
-            " No findings is not the same as a clean host: a plane that is idle or blind saw nothing at all.";
+            (degraded && reasons.Length > 0 ? $" Degraded: {string.Join("; ", reasons)}." : string.Empty);
 
         SetRuntime(
             degraded ? "Degraded" : "Watching",

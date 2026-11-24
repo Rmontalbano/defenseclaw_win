@@ -132,7 +132,7 @@ public sealed record PlaneCCheck(string Id, PlaneCSubject Subject, string Title,
 public static class PlaneCReadiness
 {
     public const string AppTokenNote =
-        "The first three checks describe THIS app's token. The gateway runs under its own token, which can differ; its state is the plane C line, from its runtime snapshot.";
+        "The first three checks describe this app's token. The gateway's token can differ: its state is the plane C line.";
 
     /// <summary>The copy-only verify lines: the three subcategories the grant enables, the three the source also consumes, and the channel's ACL.</summary>
     public static IReadOnlyList<string> VerifyLines { get; } =
@@ -218,7 +218,7 @@ public static class PlaneCReadiness
     }
 
     private static PlaneCCheck Unread(string id, PlaneCSubject subject, string title, string problem) =>
-        new(id, subject, title, PlaneCCheckState.CouldNotRead, "could not read", problem + ". Nothing is assumed either way.");
+        new(id, subject, title, PlaneCCheckState.CouldNotRead, "could not read", problem + ".");
 
     private static PlaneCCheck Elevation(ProbeReading<TokenElevation> reading)
     {
@@ -231,11 +231,11 @@ public static class PlaneCReadiness
         return reading.Value switch
         {
             TokenElevation.Full => new("elevation", PlaneCSubject.App, title, PlaneCCheckState.InPlace, "elevated",
-                "This app is running elevated. That is not needed by the app itself; it is the gateway's token that decides plane C."),
+                "This app runs elevated. Only the gateway's token matters for plane C."),
             TokenElevation.Limited => new("elevation", PlaneCSubject.App, title, PlaneCCheckState.Note, "limited (filtered administrator)",
-                "The normal state for this app. It cannot read the audit policy, and it never elevates itself."),
+                "Normal for this app. It cannot read the audit policy."),
             _ => new("elevation", PlaneCSubject.App, title, PlaneCCheckState.Note, "standard user",
-                "No administrator token exists for this user, so elevation means another account's credentials, which is a different profile and data folder."),
+                "This user has no administrator token. Elevating means another account, which has a different profile and data folder."),
         };
     }
 
@@ -249,9 +249,9 @@ public static class PlaneCReadiness
 
         return reading.Value
             ? new("event-log-readers", PlaneCSubject.App, title, PlaneCCheckState.InPlace, "member",
-                "This token can read the Security channel without elevation. Any process running as this user can then read every process command line in it.")
+                "This token can read the Security channel without elevation. Any process of this user can then read every command line in it.")
             : new("event-log-readers", PlaneCSubject.App, title, PlaneCCheckState.Note, "not a member",
-                "Without it, reading the Security channel needs an elevated token. Joining the group is an untested route (see the commands below).");
+                "Without it, reading the Security channel needs an elevated token. Joining the group is untested. See the commands below.");
     }
 
     private static PlaneCCheck SecurityChannel(ProbeReading<bool> reading)
@@ -290,7 +290,7 @@ public static class PlaneCReadiness
 
     private static PlaneCCheck AuditPolicy() =>
         new("audit-policy", PlaneCSubject.Machine, "Advanced Audit Policy", PlaneCCheckState.CouldNotRead, "unreadable without elevation",
-            "Only an elevated prompt can read the audit policy, and this app never runs auditpol. Verify it yourself with the lines below; Group Policy may also overwrite a local setting.");
+            "Only an elevated prompt can read the audit policy. Verify it with the lines below. Group Policy may overwrite a local setting.");
 
     private static PlaneCCheck Plane(AiRuntimePlane? plane)
     {

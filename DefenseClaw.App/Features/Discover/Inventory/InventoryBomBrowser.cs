@@ -489,14 +489,13 @@ public sealed partial class InventoryBomBrowser : ObservableObject
         {
             SetColumns(Array.Empty<InventoryBomColumn>());
             emptyTitle = "No AI BOM yet";
-            emptyDetail = "Generate AI BOM… runs defenseclaw aibom scan --json and lists the skills, plugins, MCP servers, agents, tools, models and " +
-                          "memory of your connectors with their policy verdicts. Every run records a scan event in audit.db, so it asks first.";
+            emptyDetail = "Generate AI BOM… runs defenseclaw aibom scan --json. It records a scan event in audit.db, so it asks first.";
         }
         else if (connectors.Count == 0)
         {
             SetColumns(Array.Empty<InventoryBomColumn>());
             emptyTitle = $"No inventory for {_scope}";
-            emptyDetail = "The AI BOM on screen does not include that connector. Choose All connectors to see the whole of it, or generate it again for that connector.";
+            emptyDetail = "The AI BOM on screen has no data for that connector. Choose All connectors, or generate it again for that connector.";
         }
         else if (ActiveKind is not { } kind)
         {
@@ -526,8 +525,8 @@ public sealed partial class InventoryBomBrowser : ObservableObject
             {
                 emptyTitle = $"{kind.Label()} were not collected";
                 emptyDetail = _scanned.Count > 0 && !_scanned.Contains(kind)
-                    ? $"This scan was limited to {string.Join(", ", _scanned.Select(k => k.OnlyName()))} (--only), so it did not look at {kind.Plural()}. An empty list here would mean “not looked at”, not “none”."
-                    : $"The runtime says this scan did not collect {kind.Plural()}.";
+                    ? $"This scan was limited to {string.Join(", ", _scanned.Select(k => k.OnlyName()))} with --only, so {kind.Plural()} were not looked at."
+                    : $"This scan did not collect {kind.Plural()}.";
                 _all.Clear();
             }
         }
@@ -544,7 +543,7 @@ public sealed partial class InventoryBomBrowser : ObservableObject
         {
             var dropped = connectors.Sum(c => c.Dropped(active));
             resultCaption = dropped > 0
-                ? string.Create(CultureInfo.CurrentCulture, $"{shown.Count:N0} shown · {dropped:N0} more not kept ({InventoryBomSnapshot.MaxRowsPerCategory:N0} per connector)")
+                ? string.Create(CultureInfo.CurrentCulture, $"{shown.Count:N0} shown · {dropped:N0} more not kept, limit {InventoryBomSnapshot.MaxRowsPerCategory:N0} per connector")
                 : string.Create(CultureInfo.CurrentCulture, $"{shown.Count:N0} shown");
         }
 
@@ -942,7 +941,7 @@ public sealed partial class InventoryBomBrowser : ObservableObject
 
         if (_scanned.Count > 0)
         {
-            notes.Add(("Scope", $"This scan was limited to {string.Join(", ", _scanned.Select(k => k.OnlyName()))} (--only); the other categories were not looked at."));
+            notes.Add(("Scope", $"This scan was limited to {string.Join(", ", _scanned.Select(k => k.OnlyName()))} with --only. The other categories were not looked at."));
         }
 
         if (notes.Count == 0)

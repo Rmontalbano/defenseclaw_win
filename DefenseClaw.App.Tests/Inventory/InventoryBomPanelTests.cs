@@ -432,7 +432,7 @@ public class InventoryBomPanelTests
 
             var toolbar = scene.ToolbarGenerate;
             Assert.True(toolbar.IsEnabled);
-            Assert.StartsWith("Generate AI BOM… defenseclaw aibom scan --json", (string)toolbar.ToolTip, StringComparison.Ordinal);
+            Assert.StartsWith("Generate AI BOM… Runs defenseclaw aibom scan --json", (string)toolbar.ToolTip, StringComparison.Ordinal);
             Assert.Contains("the categories under Scope", (string)toolbar.ToolTip, StringComparison.Ordinal);
             Assert.True(ToolTipService.GetShowOnDisabled(toolbar));
 
@@ -441,7 +441,7 @@ public class InventoryBomPanelTests
             var empty = scene.EmptyStateGenerate;
             Assert.True(empty.IsVisible);
             Assert.True(empty.IsEnabled);
-            Assert.StartsWith("Generate AI BOM… defenseclaw aibom scan --json", (string)empty.ToolTip, StringComparison.Ordinal);
+            Assert.StartsWith("Generate AI BOM… Runs defenseclaw aibom scan --json", (string)empty.ToolTip, StringComparison.Ordinal);
             Assert.True(ToolTipService.GetShowOnDisabled(empty));
         });
     }
@@ -544,7 +544,7 @@ public class InventoryBomPanelTests
                 scene.Host.Relayout();
                 Assert.True(vm.GenerateAiBomCommand.CanExecute(null));
                 Assert.True(scene.ToolbarGenerate.IsEnabled);
-                Assert.StartsWith("Generate AI BOM… defenseclaw aibom scan --json", (string)scene.ToolbarGenerate.ToolTip, StringComparison.Ordinal);
+                Assert.StartsWith("Generate AI BOM… Runs defenseclaw aibom scan --json", (string)scene.ToolbarGenerate.ToolTip, StringComparison.Ordinal);
             }
             finally
             {

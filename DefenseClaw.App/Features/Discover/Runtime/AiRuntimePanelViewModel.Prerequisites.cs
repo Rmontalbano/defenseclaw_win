@@ -39,11 +39,11 @@ public sealed partial class AiRuntimePanelViewModel
     /// "missing" for plane A and B when only the elevated part of them is.
     /// </summary>
     public const string WindowsNote =
-        "Planes A and B work without elevation for your own processes and sockets; an elevated gateway widens them to the whole machine. " +
-        "Plane C (agent actions) needs an elevated gateway and Advanced Audit Policy, and the command-line audit setting for argument-based detections.";
+        "Planes A and B: need no elevation for your own processes. An elevated gateway covers all processes.\n" +
+        "Plane C: needs an elevated gateway and Advanced Audit Policy. Argument-based detections also need command-line auditing.";
 
     public const string CopyOnlyNote =
-        "These lines are text to copy. This app never runs them, and never runs 'permissions --grant'. Run them yourself in an elevated prompt, then check again.";
+        "Run these in an elevated prompt, then select Check again.";
 
     private AiRuntimePermissions? _permissions;
 
@@ -83,8 +83,8 @@ public sealed partial class AiRuntimePanelViewModel
     public string PrerequisitesMessage => PrerequisitesState switch
     {
         AiRuntimePrerequisitesState.Loading => "Asking the runtime what each plane needs…",
-        AiRuntimePrerequisitesState.NotSupported => "This DefenseClaw runtime has no 'agent discovery runtime permissions' command, so there is nothing to check here.",
-        AiRuntimePrerequisitesState.Unavailable => "The permissions check did not complete" + (PrerequisitesProblem.Length > 0 ? ": " + PrerequisitesProblem : ".") + " Nothing is assumed to be granted.",
+        AiRuntimePrerequisitesState.NotSupported => "This runtime has no 'agent discovery runtime permissions' command.",
+        AiRuntimePrerequisitesState.Unavailable => "The permissions check did not complete" + (PrerequisitesProblem.Length > 0 ? ": " + PrerequisitesProblem : "."),
         AiRuntimePrerequisitesState.NotRead => "Not read yet.",
         _ => string.Empty,
     };
@@ -95,7 +95,7 @@ public sealed partial class AiRuntimePanelViewModel
     public bool HasGuidanceOs => GuidanceOs.Length > 0;
 
     public string GuidanceOsNote => HasGuidanceOs
-        ? $"This guidance is for {GuidanceOs}, where the runtime runs, not for this PC."
+        ? $"This guidance is for {GuidanceOs}, where the runtime runs. It does not apply to this PC."
         : string.Empty;
 
     /// <summary>Every copy-only command line of every open grant, one per line.</summary>
@@ -235,19 +235,19 @@ public sealed partial class AiRuntimePanelViewModel
         var parts = new List<string>();
         if (missing > 0)
         {
-            parts.Add($"{missing.ToString(CultureInfo.InvariantCulture)} missing");
+            parts.Add($"{missing.ToString(CultureInfo.InvariantCulture)} missing.");
         }
 
         if (unknown > 0)
         {
-            parts.Add($"{unknown.ToString(CultureInfo.InvariantCulture)} could not be verified from here");
+            parts.Add($"{unknown.ToString(CultureInfo.InvariantCulture)} unknown: this process cannot check them.");
         }
 
         if (parts.Count == 0)
         {
-            return "Nothing this check can see is missing.";
+            return "No missing grants found.";
         }
 
-        return string.Join(", ", parts) + (unknown > 0 ? ". An unknown is not a failure: it is a grant this process cannot verify, not one that is absent." : ".");
+        return string.Join(" ", parts);
     }
 }

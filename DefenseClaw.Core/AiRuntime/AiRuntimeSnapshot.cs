@@ -297,25 +297,25 @@ public sealed record AiRuntimeSnapshot(
         .ToArray();
 
     /// <summary>
-    /// The one-line coverage statement beside the finding count: "212 processes, 3 not fully readable, 148 connections, 6 with no owner".
+    /// The coverage counts as two label/value lines: "Processes: 212, 3 not fully readable" and "Connections: 148, 6 with no owner".
     /// </summary>
     public string CoverageSummary
     {
         get
         {
-            var parts = new List<string> { Count(ProcessesObserved, "process", "processes") };
+            var processes = "Processes: " + ProcessesObserved.ToString("N0", CultureInfo.InvariantCulture);
             if (ProcessesSkipped > 0)
             {
-                parts.Add($"{ProcessesSkipped.ToString("N0", CultureInfo.InvariantCulture)} not fully readable");
+                processes += $", {ProcessesSkipped.ToString("N0", CultureInfo.InvariantCulture)} not fully readable";
             }
 
-            parts.Add(Count(ConnectionsObserved, "connection", "connections"));
+            var connections = "Connections: " + ConnectionsObserved.ToString("N0", CultureInfo.InvariantCulture);
             if (ConnectionsUnattributed > 0)
             {
-                parts.Add($"{ConnectionsUnattributed.ToString("N0", CultureInfo.InvariantCulture)} with no owner");
+                connections += $", {ConnectionsUnattributed.ToString("N0", CultureInfo.InvariantCulture)} with no owner";
             }
 
-            return string.Join(", ", parts);
+            return processes + "\n" + connections;
         }
     }
 
@@ -334,9 +334,6 @@ public sealed record AiRuntimeSnapshot(
     public IReadOnlyList<string> ExtraDegradedReasons => DegradedReasons
         .Where(line => !Planes.Any(p => p.Reason.Length > 0 && line.Contains(p.Reason, StringComparison.Ordinal)))
         .ToArray();
-
-    private static string Count(int value, string singular, string plural) =>
-        $"{value.ToString("N0", CultureInfo.InvariantCulture)} {(value == 1 ? singular : plural)}";
 }
 
 /// <summary>
@@ -352,7 +349,7 @@ public sealed record AiRuntimeCoverage(bool IsComplete, int FullyUpPlanes, strin
 {
     /// <summary>The standing caveat printed with every empty findings list.</summary>
     public const string NoFindingsCaveat =
-        "No findings is not a clean host. It means nothing the planes could see reached the reporting floor; what they could not see is listed above.";
+        "No findings does not mean the host is clean. Planes that are not fully up cannot see everything.";
 
     /// <summary>Judges <paramref name="snapshot"/>.</summary>
     public static AiRuntimeCoverage Of(AiRuntimeSnapshot snapshot)

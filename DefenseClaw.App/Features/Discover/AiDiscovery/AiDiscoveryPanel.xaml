@@ -179,29 +179,29 @@
                                        Icon="{ctl:DcSymbolIcon Play24}"
                                        Command="{Binding RunScanCommand}"
                                        ToolTipService.ShowOnDisabled="True"
-                                       ToolTip="{Binding ChangesBlockedReason, Converter={x:Static govern:ChangeTipConverter.Instance}, ConverterParameter='defenseclaw agent discovery scan: asks the running gateway for one immediate AI discovery scan, which is what the component cards read.'}"
-                                       AutomationProperties.HelpText="Asks the gateway for one immediate AI discovery scan. Shows the exact command first." />
+                                       ToolTip="{Binding ChangesBlockedReason, Converter={x:Static govern:ChangeTipConverter.Instance}, ConverterParameter='defenseclaw agent discovery scan: asks the gateway for one AI discovery scan.'}"
+                                       AutomationProperties.HelpText="Asks the gateway for one AI discovery scan. Shows the command first." />
                             <ui:Button Content="{Binding ToggleDiscoveryText}"
                                        Icon="{ctl:DcSymbolIcon Power24}"
                                        Command="{Binding ToggleDiscoveryCommand}"
                                        ToolTipService.ShowOnDisabled="True"
                                        ToolTip="{Binding ChangesBlockedReason}"
-                                       AutomationProperties.HelpText="Turns the AI discovery service on or off in config.yaml. Shows the exact command first." />
+                                       AutomationProperties.HelpText="Turns AI discovery on or off in config.yaml. Shows the command first." />
                             <CheckBox Content="Restart the gateway now"
                                       IsChecked="{Binding RestartOnToggle}"
-                                      ToolTip="On: turning discovery on or off also restarts the gateway so it takes effect. Off: only config.yaml changes; it applies at the next restart."
-                                      AutomationProperties.HelpText="Applies to turning AI Discovery on or off." />
+                                      ToolTip="On: restarts the gateway after the change. Off: only config.yaml changes, applied at the next restart."
+                                      AutomationProperties.HelpText="Applies when turning AI Discovery on or off." />
                             <ui:Button Content="Tune…"
                                        Icon="{ctl:DcSymbolIcon Options24}"
                                        Command="{Binding OpenTuningCommand}"
-                                       ToolTip="Mode, cadence, scope and sources of AI Discovery. Shows the exact command first; nothing runs until you confirm."
+                                       ToolTip="Mode, cadence, scope and sources. Shows the command first. Nothing runs until you confirm."
                                        AutomationProperties.HelpText="Opens the AI Discovery tuning dialog: mode, scan cadence, folders and sources." />
                             <ui:Button Content="Re-detect agents…"
                                        Icon="{ctl:DcSymbolIcon ArrowSync24}"
                                        Command="{Binding RefreshConnectorsCommand}"
                                        ToolTipService.ShowOnDisabled="True"
-                                       ToolTip="{Binding ChangesBlockedReason, Converter={x:Static govern:ChangeTipConverter.Instance}, ConverterParameter='defenseclaw agent discover --refresh --no-emit-otel: re-checks which agent CLIs are installed and rewrites the connector table under Sources. Does not change the component cards.'}"
-                                       AutomationProperties.HelpText="Re-checks which agent command-line tools are installed. Shows the exact command first." />
+                                       ToolTip="{Binding ChangesBlockedReason, Converter={x:Static govern:ChangeTipConverter.Instance}, ConverterParameter='defenseclaw agent discover --refresh --no-emit-otel: re-checks which agent CLIs are installed. Component cards do not change.'}"
+                                       AutomationProperties.HelpText="Re-checks which agent CLIs are installed. Shows the command first." />
                         </WrapPanel>
 
                         <TextBlock Style="{StaticResource DcCaption}"
@@ -220,7 +220,7 @@
                             IsClosable="False"
                             IsOpen="True"
                             Severity="Informational"
-                            Message="Confidence comes from signature/heuristic matches (process names, config files, MCP registrations, package manifests, environment variable names), not verified installs. A high score does not prove the product is present, and a genuinely running tool can be missed if nothing matched. Evidence is a hashed fingerprint (type, quality, match kind); DefenseClaw does not retain literal file paths." />
+                            Message="Confidence is a signature match on process names, config files, MCP registrations, package manifests and environment variable names. A high score does not prove a product is installed. A running tool can be missed. Evidence is hashed fingerprints. File paths are not kept." />
 
                 <!-- Components -->
                 <TextBlock Style="{StaticResource DcSectionHeader}" Text="Detected components" />
@@ -291,9 +291,9 @@
                                   VerticalAlignment="Center"
                                   IsChecked="{Binding ShowAllModels}"
                                   Visibility="{Binding HasRecommendedScope, Converter={StaticResource BoolToVisibility}}"
-                                  ToolTip="Off lists the recommended models: at least 80% confident, and primary, or a supporting speech, audio, vision or embedding model that an application owns. A model a local model server listed with no confidence of its own is always listed. Choosing a Modality or Relevance lifts the primary / supporting rule."
+                                  ToolTip="Off lists recommended models: 80% or more confident, and primary or app-owned supporting. Models a local server lists with no confidence always show. Choosing Modality or Relevance lifts the primary/supporting rule."
                                   AutomationProperties.Name="Show all models"
-                                  AutomationProperties.HelpText="Also list the models the recommended view hides: low-confidence, embedded and unowned supporting ones." />
+                                  AutomationProperties.HelpText="Also lists low-confidence, embedded and unowned supporting models." />
 
                         <StackPanel Orientation="Horizontal"
                                     Visibility="{Binding HasModalityFilter, Converter={StaticResource BoolToVisibility}}">
@@ -314,7 +314,7 @@
                                       DisplayMemberPath="Label"
                                       SelectedValuePath="Key"
                                       SelectedValue="{Binding RelevanceFilter, Mode=TwoWay}"
-                                      ToolTip="How central the model is to the application that owns it, as the scanner classified it."
+                                      ToolTip="How central the model is to the application that owns it."
                                       AutomationProperties.Name="Relevance" />
                         </StackPanel>
 
@@ -508,7 +508,7 @@
                                         <TextBlock Style="{StaticResource DcCaption}"
                                                    Margin="0,0,0,8"
                                                    TextWrapping="Wrap"
-                                                   Text="Cowork plugins as Claude Desktop lists them on this machine. Discovery reports no protection state." />
+                                                   Text="Cowork plugins as Claude Desktop lists them. No protection state is reported." />
                                     </StackPanel>
 
                                     <!-- Each signal: its state, name and confidence, then the detector, model, process (pid, user) and activity lines it has. -->
@@ -686,7 +686,7 @@
                 </Border>
 
                 <!-- Sources section -->
-                <ui:CardExpander Header="Sources: where these cards came from" IsExpanded="True">
+                <ui:CardExpander Header="Sources" IsExpanded="True">
                     <StackPanel Margin="0,8,0,0">
                         <ItemsControl ItemsSource="{Binding Sources}"
                                       Focusable="False"

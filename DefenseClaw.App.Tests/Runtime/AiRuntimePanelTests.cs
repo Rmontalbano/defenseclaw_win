@@ -143,7 +143,7 @@ public sealed class AiRuntimePanelTests : IDisposable
         Assert.Equal("Enable…", vm.EnableButtonText);
 
         // Two buttons share the reason: it is said once, for both.
-        Assert.Equal("Poll now and Disable are off: The runtime planes are disabled; enable them first.", vm.ActionsNote);
+        Assert.Equal("Poll now and Disable are off: The runtime planes are disabled. Enable them first.", vm.ActionsNote);
     }
 
     [Fact]
@@ -168,8 +168,7 @@ public sealed class AiRuntimePanelTests : IDisposable
         Assert.Equal("6 findings", vm.FindingsCaption);
         // The verdict follows the count at once: a narrow window cuts the caption short and must not cut that.
         Assert.Equal(
-            "6 findings · all planes up · polled " + AiRuntimePanelViewModel.Time(new DateTimeOffset(2030, 1, 15, 10, 4, 30, TimeSpan.Zero)) +
-            " · 212 processes, 3 not fully readable, 148 connections, 6 with no owner",
+            "6 findings · all planes up · polled " + AiRuntimePanelViewModel.Time(new DateTimeOffset(2030, 1, 15, 10, 4, 30, TimeSpan.Zero)),
             vm.CaptionText);
         Assert.Equal("host plane: 57 Security-log events classified, 41 excluded outside AI-agent lineage", vm.HostPlaneText);
 
@@ -226,8 +225,7 @@ public sealed class AiRuntimePanelTests : IDisposable
         Assert.Equal(("off", "Neutral", true), (off.Badge, off.ToneKey, off.HasReason));
         Assert.Equal("not selected in ai_discovery.runtime.planes", off.Reason);
 
-        Assert.StartsWith(AiRuntimeCoverage.NoFindingsCaveat, vm.NoFindingsDetail, StringComparison.Ordinal);
-        Assert.EndsWith("Partial coverage: 2 of 3 planes fully reporting.", vm.NoFindingsDetail, StringComparison.Ordinal);
+        Assert.Equal(AiRuntimeCoverage.NoFindingsCaveat, vm.NoFindingsDetail);
         Assert.DoesNotContain("all planes up", vm.CaptionText, StringComparison.Ordinal);
         Assert.StartsWith("0 findings · partial coverage · polled ", vm.CaptionText, StringComparison.Ordinal);
     }
@@ -244,7 +242,7 @@ public sealed class AiRuntimePanelTests : IDisposable
 
         Assert.Equal(AiRuntimeState.NoPoll, vm.State);
         Assert.Equal(AiRuntimePanelViewModel.NoPollTitle, vm.StateTitle);
-        Assert.Contains("not a clean-host result", vm.StateDetail, StringComparison.Ordinal);
+        Assert.Contains("none has polled yet", vm.StateDetail, StringComparison.Ordinal);
         Assert.True(vm.ShowCoverage);
         Assert.False(vm.ShowFindings);
         Assert.Equal("idle", vm.Planes.Single().Badge);
@@ -267,7 +265,7 @@ public sealed class AiRuntimePanelTests : IDisposable
 
         Assert.Equal(AiRuntimeState.Unsupported, vm.State);
         Assert.Equal(AiRuntimePanelViewModel.UnsupportedTitle, vm.StateTitle);
-        Assert.Contains("limit of the version", vm.StateDetail, StringComparison.Ordinal);
+        Assert.Contains("Install a DefenseClaw build with the runtime planes", vm.StateDetail, StringComparison.Ordinal);
         Assert.False(vm.IsStale);
         Assert.Empty(vm.Rows);
         Assert.Empty(vm.Planes);
@@ -289,7 +287,7 @@ public sealed class AiRuntimePanelTests : IDisposable
         Assert.Equal(AiRuntimeState.Unavailable, vm.State);
         Assert.Equal(AiRuntimePanelViewModel.UnavailableTitle, vm.StateTitle);
         Assert.Contains("The gateway is not answering.", vm.StateDetail, StringComparison.Ordinal);
-        Assert.Contains("not a clean-host result", vm.StateDetail, StringComparison.Ordinal);
+        Assert.Contains("what the planes can see is unknown", vm.StateDetail, StringComparison.Ordinal);
         Assert.False(vm.IsStale); // there is nothing older to call stale
         Assert.False(vm.ShowCoverage);
         Assert.False(vm.CanPollNow || vm.CanEnable || vm.CanDisable);
@@ -661,7 +659,7 @@ public sealed class AiRuntimePanelTests : IDisposable
 
         Assert.Equal(AiRuntimeReader.MaxFindings, scene.Vm.Rows.Count);
         Assert.Equal(
-            "1,000 findings; 100 more were not kept (the worst 1,000 are listed)",
+            "1,000 findings; 100 more not kept, worst 1,000 listed",
             scene.Vm.FindingsCaption);
     }
 
@@ -938,12 +936,12 @@ public sealed class AiRuntimePanelTests : IDisposable
         Assert.Equal(new[] { "missing", "missing", "unknown", "missing", "unknown" }, vm.Grants.Select(g => g.StateText).ToArray());
         Assert.Equal(new[] { "Bad", "Bad", "Warn", "Bad", "Warn" }, vm.Grants.Select(g => g.ToneKey).ToArray());
         Assert.Equal(
-            "3 missing, 2 could not be verified from here. An unknown is not a failure: it is a grant this process cannot verify, not one that is absent.",
+            "3 missing. 2 unknown: this process cannot check them.",
             vm.PrerequisitesSummary);
         Assert.True(vm.ShowGrants);
         Assert.False(vm.ShowPrerequisitesMessage);
         Assert.False(vm.HasGuidanceOs);
-        Assert.Contains("work without elevation for your own processes", AiRuntimePanelViewModel.WindowsNote, StringComparison.Ordinal);
+        Assert.Contains("need no elevation for your own processes", AiRuntimePanelViewModel.WindowsNote, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -972,7 +970,7 @@ public sealed class AiRuntimePanelTests : IDisposable
         Assert.StartsWith("Copied.", vm.CopyNote, StringComparison.Ordinal);
         Assert.True(vm.HasCopyNote);
         Assert.Empty(scene.Ran);
-        Assert.Contains("never runs 'permissions --grant'", AiRuntimePanelViewModel.CopyOnlyNote, StringComparison.Ordinal);
+        Assert.Contains("elevated prompt", AiRuntimePanelViewModel.CopyOnlyNote, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -1003,7 +1001,7 @@ public sealed class AiRuntimePanelTests : IDisposable
         await scene.Vm.CheckPrerequisitesCommand.ExecuteAsync(null);
 
         Assert.True(scene.Vm.HasGuidanceOs);
-        Assert.Equal("This guidance is for linux, where the runtime runs, not for this PC.", scene.Vm.GuidanceOsNote);
+        Assert.Equal("This guidance is for linux, where the runtime runs. It does not apply to this PC.", scene.Vm.GuidanceOsNote);
         Assert.False(scene.Vm.HasCommands);
     }
 
@@ -1032,7 +1030,7 @@ public sealed class AiRuntimePanelTests : IDisposable
         Assert.False(scene.Vm.ShowGrants);
         Assert.True(scene.Vm.ShowPrerequisitesMessage);
         Assert.StartsWith("The permissions check did not complete", scene.Vm.PrerequisitesMessage, StringComparison.Ordinal);
-        Assert.EndsWith("Nothing is assumed to be granted.", scene.Vm.PrerequisitesMessage, StringComparison.Ordinal);
+        Assert.StartsWith("The permissions check did not complete", scene.Vm.PrerequisitesMessage, StringComparison.Ordinal);
         Assert.False(scene.Vm.HasCommands);
 
         static CliInvocation WithFailure(IReadOnlyList<string> argv)

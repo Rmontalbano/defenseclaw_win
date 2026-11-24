@@ -237,7 +237,7 @@
                                  Margin="12,0,0,0"
                                  SelectedValue="{Binding SelectedArea, Mode=TwoWay}"
                                  AutomationProperties.Name="Settings area"
-                                 AutomationProperties.HelpText="General, Monitoring, Notifications or Connection. Left and Right move between them; Ctrl+Tab and Ctrl+Shift+Tab do too, from anywhere on the page.">
+                                 AutomationProperties.HelpText="General, Monitoring, Notifications or Connection. Left and Right switch area. Ctrl+Tab and Ctrl+Shift+Tab work from anywhere on the page.">
                     <ctl:DcSegment Value="{x:Static svc:SettingsArea.General}"
                                    Content="General"
                                    ToolTip="Startup and the window, appearance, and updates for this app and for the DefenseClaw runtime" />
@@ -259,7 +259,7 @@
                                ToolTip="Refresh (F5)"
                                AutomationProperties.Name="Refresh"
                                AutomationProperties.AcceleratorKey="F5"
-                               AutomationProperties.HelpText="Read the settings, the Start with Windows entry, the files and the CLI location again. Changes nothing. Shortcut F5." />
+                               AutomationProperties.HelpText="Reads the settings, startup entry, files and CLI location again. F5." />
                 </StackPanel>
             </ctl:DcPageToolbar.Actions>
         </ctl:DcPageToolbar>
@@ -292,10 +292,10 @@
                         <HeaderedContentControl Style="{StaticResource SettingRow}"
                                                 local:SettingsRow.IsFirst="True"
                                                 Header="Start with Windows"
-                                                local:SettingsRow.Caption="Launches DefenseClaw minimized to the tray when you sign in. It adds a per-user startup entry; no administrator rights are needed.">
+                                                local:SettingsRow.Caption="Starts DefenseClaw in the tray at sign-in with a per-user startup entry. No administrator rights needed.">
                             <ui:ToggleSwitch IsChecked="{Binding StartWithWindows, Mode=TwoWay}"
                                              AutomationProperties.Name="Start with Windows"
-                                             AutomationProperties.HelpText="Adds or removes the per-user startup entry that launches DefenseClaw to the tray at sign-in." />
+                                             AutomationProperties.HelpText="Adds or removes the per-user startup entry." />
                         </HeaderedContentControl>
                         <TextBlock Style="{StaticResource ProblemLine}"
                                    Visibility="{Binding HasAutostartProblem, Converter={StaticResource BoolToVisibility}}"
@@ -311,10 +311,10 @@
 
                         <HeaderedContentControl Style="{StaticResource SettingRow}"
                                                 Header="Reopen on the last panel"
-                                                local:SettingsRow.Caption="Opens the dashboard on the panel you were last looking at, instead of Overview.">
+                                                local:SettingsRow.Caption="Opens the dashboard on the last panel instead of Overview.">
                             <ui:ToggleSwitch IsChecked="{Binding RememberLastPanel, Mode=TwoWay}"
                                              AutomationProperties.Name="Reopen on the last panel"
-                                             AutomationProperties.HelpText="Remembers the panel you last looked at and opens the dashboard on it." />
+                                             AutomationProperties.HelpText="Opens the dashboard on the last panel used." />
                         </HeaderedContentControl>
                     </StackPanel>
                 </Border>
@@ -338,7 +338,7 @@
                                              SelectedValue="{Binding AppearanceStyle, Mode=TwoWay}"
                                              ItemContainerStyle="{StaticResource ChoiceSegment}"
                                              AutomationProperties.Name="App style"
-                                             AutomationProperties.HelpText="Default, Linear, TUI or Cisco. Applies at once." />
+                                             AutomationProperties.HelpText="Default, Linear, TUI or Cisco." />
                         </HeaderedContentControl>
 
                         <HeaderedContentControl Style="{StaticResource SettingRow}"
@@ -350,7 +350,7 @@
                                              SelectedValue="{Binding AppearanceMode, Mode=TwoWay}"
                                              ItemContainerStyle="{StaticResource ChoiceSegment}"
                                              AutomationProperties.Name="Light or dark mode"
-                                             AutomationProperties.HelpText="System follows Windows; Light and Dark stay put. Applies at once." />
+                                             AutomationProperties.HelpText="System follows Windows. Light and Dark are fixed." />
                         </HeaderedContentControl>
                     </StackPanel>
                 </Border>
@@ -361,7 +361,7 @@
                         <ctl:DcCardHeader AutomationProperties.HeadingLevel="Level2"
                                           Symbol="ArrowCircleUp24"
                                           Section="Updates"
-                                          Content="Updates — DefenseClaw for Windows (this app)" />
+                                          Content="Updates: this app" />
 
                         <HeaderedContentControl Style="{StaticResource SettingRow}"
                                                 local:SettingsRow.IsFirst="True"
@@ -397,12 +397,12 @@
                                        Content="Check for Updates…"
                                        Icon="{ctl:DcSymbolIcon ArrowSync24}"
                                        Command="{Binding CheckNowCommand}"
-                                       AutomationProperties.HelpText="Asks GitHub for the newest release of DefenseClaw for Windows (this app, not the runtime). A development build says what the latest release is but is never offered it." />
+                                       AutomationProperties.HelpText="Checks GitHub for the newest DefenseClaw for Windows release. A development build sees it but is not offered it." />
                             <ui:Button Margin="0,0,8,4"
                                        Content="Review update…"
                                        Icon="{ctl:DcSymbolIcon ArrowCircleUp24}"
                                        Command="{Binding UpdateNowCommand}"
-                                       AutomationProperties.HelpText="Shows the version, size and SHA-256 of the newer release of this app before anything is downloaded or replaced." />
+                                       AutomationProperties.HelpText="Shows the version, size and SHA-256 of the newer release." />
                         </WrapPanel>
                     </StackPanel>
                 </Border>
@@ -417,7 +417,7 @@
                         <ctl:DcCardHeader AutomationProperties.HeadingLevel="Level2"
                                           Symbol="ArrowCircleUp24"
                                           Section="Updates"
-                                          Content="Updates — DefenseClaw runtime (CLI and gateway)" />
+                                          Content="Updates: runtime, CLI and gateway" />
 
                         <HeaderedContentControl Style="{StaticResource SettingRow}"
                                                 local:SettingsRow.IsFirst="True"
@@ -453,12 +453,12 @@
                                        Content="Check now"
                                        Icon="{ctl:DcSymbolIcon ArrowSync24}"
                                        Command="{Binding CheckNowCommand}"
-                                       AutomationProperties.HelpText="Looks for a newer DefenseClaw runtime release now, skipping the 24 hour cache, and shows the answer here. Installs nothing." />
+                                       AutomationProperties.HelpText="Checks for a newer runtime release now, skipping the 24 hour cache." />
                             <ui:Button Margin="0,0,8,4"
                                        Content="Open Updates…"
                                        Icon="{ctl:DcSymbolIcon ArrowCircleUp24}"
                                        Command="{Binding OpenUpdatesCommand}"
-                                       AutomationProperties.HelpText="Opens the Updates window, where a newer runtime release is reviewed and checked before anything is installed." />
+                                       AutomationProperties.HelpText="Opens the Updates window to review a newer runtime release." />
                         </WrapPanel>
 
                         <!-- What the runtime reports about itself (CUST-291/372): closed by default, the same facts as before. -->
@@ -470,7 +470,7 @@
                                 <HeaderedContentControl Style="{StaticResource SettingBlock}"
                                                         local:SettingsRow.IsFirst="True"
                                                         Header="Runtime identity"
-                                                        local:SettingsRow.Caption="What defenseclaw --version-json reports, and which executable answered. Read again whenever the CLI file changes, so an upgrade shows here by itself.">
+                                                        local:SettingsRow.Caption="What defenseclaw --version-json reports and which executable answered. Re-read when the CLI file changes.">
                                     <Border Style="{StaticResource PathBlock}">
                                         <TextBox Style="{StaticResource DcMonoTextBox}"
                                                  Text="{Binding RuntimeIdentityText, Mode=OneWay}"
@@ -504,7 +504,7 @@
                                            Content="Check the runtime again"
                                            Icon="{ctl:DcSymbolIcon ArrowSync24}"
                                            Command="{Binding RecheckRuntimeCommand}"
-                                           AutomationProperties.HelpText="Asks the CLI again which commands it has. Read-only: only --version-json and --help are run." />
+                                           AutomationProperties.HelpText="Asks the CLI again which commands it has. Runs only --version-json and --help." />
                             </StackPanel>
                         </Expander>
                     </StackPanel>
@@ -529,7 +529,7 @@
                         <HeaderedContentControl Style="{StaticResource SettingRow}"
                                                 local:SettingsRow.IsFirst="True"
                                                 Header="Health poll interval"
-                                                local:SettingsRow.Caption="How often the app asks the gateway for its health. It drives the status strip, the tray icon and alert detection, and applies as soon as you stop moving the slider.">
+                                                local:SettingsRow.Caption="How often gateway health is polled for the status strip, tray icon and alerts. Applies when you release the slider.">
                             <StackPanel Orientation="Horizontal">
                                 <Slider Width="240"
                                         VerticalAlignment="Center"
@@ -556,7 +556,7 @@
                                                 local:SettingsRow.Caption="{Binding PauseCaption}">
                             <ui:ToggleSwitch IsChecked="{Binding IsMonitoringPaused, Mode=TwoWay}"
                                              AutomationProperties.Name="Pause monitoring"
-                                             AutomationProperties.HelpText="Stops polling the gateway and reading the audit database from this app until you turn it off again." />
+                                             AutomationProperties.HelpText="Stops gateway polling and audit database reads until turned off." />
                         </HeaderedContentControl>
                     </StackPanel>
                 </Border>
@@ -612,7 +612,7 @@
                         <HeaderedContentControl Style="{StaticResource SettingRow}"
                                                 local:SettingsRow.IsFirst="True"
                                                 Header="Announce outstanding findings again"
-                                                local:SettingsRow.Caption="Forgets which findings were already announced, so the CRITICAL and HIGH findings that are still unacknowledged are announced once more, as one notification.">
+                                                local:SettingsRow.Caption="Resets which findings were announced, then announces unacknowledged CRITICAL and HIGH findings again as one notification.">
                             <ui:Button Content="Reset seen-alert history"
                                        Icon="{ctl:DcSymbolIcon ArrowReset24}"
                                        Command="{Binding ResetSeenAlertsCommand}"
@@ -643,7 +643,7 @@
                         <HeaderedContentControl Style="{StaticResource SettingRow}"
                                                 local:SettingsRow.IsFirst="True"
                                                 Header="Endpoint"
-                                                local:SettingsRow.Caption="The port is gateway.api_port in config.yaml; the gateway listens on this machine only.">
+                                                local:SettingsRow.Caption="The port is gateway.api_port in config.yaml. The gateway listens on this machine only.">
                             <TextBox Style="{StaticResource DcMonoTextBox}"
                                      Text="{Binding EndpointText, Mode=OneWay}"
                                      AutomationProperties.Name="Gateway endpoint" />
@@ -662,13 +662,13 @@
 
                         <HeaderedContentControl Style="{StaticResource SettingRow}"
                                                 Header="Start the gateway automatically"
-                                                local:SettingsRow.Caption="Once per launch, if the gateway is stopped because nothing is listening on its port, runs defenseclaw-gateway start. Never after a timeout, a refused or unreadable answer, with a WSL gateway, while paused, or after you stop it yourself. Off by default; turning it on shows the command first.">
+                                                local:SettingsRow.Caption="Runs defenseclaw-gateway start once per launch when nothing listens on the gateway port. Never after you stop it.">
                             <ui:ToggleSwitch IsChecked="{Binding AutoStartGateway, Mode=TwoWay}"
                                              IsEnabled="{Binding CanChangeAutoStart}"
                                              ToolTipService.ShowOnDisabled="True"
                                              ToolTip="{Binding AutoStartToolTip}"
                                              AutomationProperties.Name="Start the gateway automatically"
-                                             AutomationProperties.HelpText="Starts the gateway once per launch when its port refuses connections. You review the command when you turn this on." />
+                                             AutomationProperties.HelpText="Starts the gateway once per launch when its port refuses connections. Not after a timeout, a refused or unreadable answer, with a WSL gateway, while paused, or after you stop it. Turning it on shows the command first." />
                         </HeaderedContentControl>
 
                         <!--
@@ -679,13 +679,13 @@
                         -->
                         <HeaderedContentControl Style="{StaticResource SettingRow}"
                                                 Header="Run gateway as administrator"
-                                                local:SettingsRow.Caption="Runs your installed gateway with administrator rights (one Windows prompt per start). Needed only for runtime monitoring's agent-actions plane.">
+                                                local:SettingsRow.Caption="Runs the gateway as administrator. One Windows prompt per start. Only runtime monitoring's agent-actions plane needs it.">
                             <ui:ToggleSwitch IsChecked="{Binding AdminGateway.IsOn, Mode=TwoWay}"
                                              IsEnabled="{Binding AdminGateway.CanToggle}"
                                              ToolTip="{Binding AdminGateway.ToggleTip}"
                                              ToolTipService.ShowOnDisabled="True"
                                              AutomationProperties.Name="Run gateway as administrator"
-                                             AutomationProperties.HelpText="Runs your installed gateway with administrator rights, one Windows prompt per start. Turning it on or off starts and stops nothing." />
+                                             AutomationProperties.HelpText="Runs the installed gateway as administrator, with one Windows prompt per start. The switch starts and stops nothing." />
                         </HeaderedContentControl>
                         <TextBlock Style="{StaticResource StatusLine}"
                                    Text="{Binding AdminGateway.StatusText}"
@@ -701,14 +701,14 @@
                                        ToolTip="{Binding AdminGateway.ActionsTip}"
                                        ToolTipService.ShowOnDisabled="True"
                                        Visibility="{Binding AdminGateway.ShowRepair, Converter={StaticResource BoolToVisibility}}"
-                                       AutomationProperties.HelpText="Gives the files in your .defenseclaw folder that the elevated gateway made as Administrators back to your account, after you confirm and approve the Windows prompt." />
+                                       AutomationProperties.HelpText="Gives files in your .defenseclaw folder that the elevated gateway made as Administrators back to your account. Asks to confirm, then Windows prompts." />
                             <ui:Button Content="Prepare administrator copy…"
                                        Icon="{ctl:DcSymbolIcon ShieldKeyhole24}"
                                        Command="{Binding AdminGateway.PrepareCopyCommand}"
                                        ToolTip="{Binding AdminGateway.ActionsTip}"
                                        ToolTipService.ShowOnDisabled="True"
                                        Visibility="{Binding AdminGateway.ShowPrepare, Converter={StaticResource BoolToVisibility}}"
-                                       AutomationProperties.HelpText="Installs the helper and a copy of your installed gateway in Program Files, after you confirm and approve the Windows prompt. Starts nothing." />
+                                       AutomationProperties.HelpText="Installs the helper and a copy of the installed gateway in Program Files. Asks to confirm, then Windows prompts. Starts nothing." />
                         </WrapPanel>
                     </StackPanel>
                 </Border>
@@ -729,7 +729,7 @@
                         <HeaderedContentControl Style="{StaticResource SettingRow}"
                                                 local:SettingsRow.IsFirst="True"
                                                 Header="Selected by"
-                                                local:SettingsRow.Caption="The first of these that applies: DEFENSECLAW_CONFIG, the developer runtime selector, DEFENSECLAW_HOME, the Windows managed installation, then your user profile. Chosen once, when the app starts.">
+                                                local:SettingsRow.Caption="First that applies: DEFENSECLAW_CONFIG, developer runtime selector, DEFENSECLAW_HOME, managed installation, user profile. Fixed at app start.">
                             <TextBlock Style="{StaticResource DcBody}"
                                        VerticalAlignment="Center"
                                        TextWrapping="Wrap"
@@ -752,7 +752,7 @@
                         </HeaderedContentControl>
                         <HeaderedContentControl Style="{StaticResource SettingBlock}"
                                                 Header="Override"
-                                                local:SettingsRow.Caption="The developer runtime selector below, when it is on. It applies the next time the app starts, like the selector itself.">
+                                                local:SettingsRow.Caption="The developer runtime selector below, when on. Applies at the next app start.">
                             <Border Style="{StaticResource PathBlock}">
                                 <TextBox Style="{StaticResource DcMonoTextBox}"
                                          Text="{Binding InstallationOverride, Mode=OneWay}"
@@ -766,7 +766,7 @@
                         <HeaderedContentControl Style="{StaticResource SettingRow}"
                                                 local:SettingsRow.IsFirst="True"
                                                 Header="Use a different DefenseClaw runtime"
-                                                local:SettingsRow.Caption="For developers. Off, the app drives the DefenseClaw installed on this PC, as always. On, it can drive a side-by-side install or a Docker container instead. Takes effect the next time the app starts.">
+                                                local:SettingsRow.Caption="For developers. Drives a side-by-side install or a Docker container instead of the installed runtime. Applies at the next app start.">
                             <ui:ToggleSwitch IsChecked="{Binding DeveloperEnabled, Mode=TwoWay}"
                                              AutomationProperties.Name="Use a different DefenseClaw runtime"
                                              AutomationProperties.HelpText="Turns the developer runtime selector on or off. Nothing changes until the app restarts." />
@@ -810,7 +810,7 @@
                                                AutomationProperties.HelpText="Choose the side-by-side defenseclaw.exe." />
                                 </Grid>
 
-                                <TextBlock Margin="0,10,0,2" Style="{StaticResource DcCaption}" Text="DEFENSECLAW_HOME for that install (never the installed runtime's folder)" />
+                                <TextBlock Margin="0,10,0,2" Style="{StaticResource DcCaption}" Text="DEFENSECLAW_HOME for that install. Must not be the installed runtime's folder." />
                                 <Grid>
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="*" />
@@ -834,7 +834,7 @@
                                             AutomationProperties.Name="Docker container name"
                                             Text="{Binding RuntimeContainerName, UpdateSourceTrigger=PropertyChanged}" />
 
-                                <TextBlock Margin="0,10,0,2" Style="{StaticResource DcCaption}" Text="Host folder holding a copy of the container's data directory (the app only reads it)" />
+                                <TextBlock Margin="0,10,0,2" Style="{StaticResource DcCaption}" Text="Host folder with a copy of the container's data directory. Read only." />
                                 <Grid>
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="*" />
@@ -853,7 +853,7 @@
                             </StackPanel>
 
                             <StackPanel Visibility="{Binding ShowRuntimeForm, Converter={StaticResource BoolToVisibility}}">
-                                <TextBlock Margin="0,10,0,2" Style="{StaticResource DcCaption}" Text="Gateway address (this PC only: 127.0.0.1, localhost or [::1]; optional for a CLI, required for a container)" />
+                                <TextBlock Margin="0,10,0,2" Style="{StaticResource DcCaption}" Text="Gateway address on this PC: 127.0.0.1, localhost or [::1]. Optional for a CLI, required for a container." />
                                 <ui:TextBox PlaceholderText="http://127.0.0.1:18971"
                                             AutomationProperties.Name="Gateway address"
                                             Text="{Binding RuntimeGatewayUrl, UpdateSourceTrigger=PropertyChanged}" />
@@ -936,7 +936,7 @@
                         <HeaderedContentControl Margin="0,10,0,0"
                                                 Style="{StaticResource SettingRow}"
                                                 Header="Binary path (optional override)"
-                                                local:SettingsRow.Caption="Leave this automatic unless the CLI is installed where PATH does not reach. The file must be named defenseclaw.exe. The file in use is shown in every command review.">
+                                                local:SettingsRow.Caption="Leave automatic unless the CLI is outside PATH. The file must be named defenseclaw.exe.">
                             <StackPanel Orientation="Horizontal">
                                 <ui:Button Content="Browse…"
                                            Icon="{ctl:DcSymbolIcon FolderOpen24}"
@@ -961,7 +961,7 @@
                         <HeaderedContentControl Margin="0,10,0,0"
                                                 Style="{StaticResource SettingRow}"
                                                 Header="Configuration"
-                                                local:SettingsRow.Caption="Re-reads config.yaml and the .env file. The app does this by itself when either changes; this is for when it missed one. It only reads.">
+                                                local:SettingsRow.Caption="Re-reads config.yaml and the .env file. Use it if a change was missed.">
                             <ui:Button Content="Reload config.yaml now"
                                        Icon="{ctl:DcSymbolIcon ArrowSync24}"
                                        Command="{Binding ReloadConfigCommand}"
@@ -980,7 +980,9 @@
                                           Content="Audit archive" />
                         <TextBlock Style="{StaticResource DcCaption}"
                                    TextWrapping="Wrap"
-                                   Text="An upgrade purges the old audit history. If you kept a copy of the old audit.db outside the DefenseClaw folder, choose it here and the Audit panel gets a Live | Archive switch. The file is only ever read (opened read-only, nothing is written beside it)." />
+                                   Text="An upgrade purges old audit history. Choose a copy of the old audit.db from outside the DefenseClaw folder to view it."
+                                   ToolTip="The Audit panel then gets a Live | Archive switch. The file is opened read-only."
+                                   AutomationProperties.HelpText="The Audit panel then gets a Live | Archive switch. The file is opened read-only." />
                         <TextBlock Margin="0,10,0,2" Style="{StaticResource DcCaption}" Text="Archived audit database (optional)" />
                         <Grid>
                             <Grid.ColumnDefinitions>
@@ -1024,7 +1026,7 @@
                         <TextBlock Margin="0,0,0,8"
                                    Style="{StaticResource DcCaption}"
                                    TextWrapping="Wrap"
-                                   Text="DefenseClaw for Windows keeps its own settings and caches here. They are not part of the DefenseClaw installation, and nothing on this page moves them." />
+                                   Text="Settings and caches kept by this app. Not part of the DefenseClaw installation." />
                         <ItemsControl ItemsSource="{Binding CompanionFiles}"
                                       ItemTemplate="{StaticResource FileRow}"
                                       IsTabStop="False"

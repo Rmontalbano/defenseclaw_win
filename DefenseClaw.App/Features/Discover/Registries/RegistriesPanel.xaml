@@ -36,17 +36,17 @@
         <ContextMenu x:Key="SourceRowMenu">
             <MenuItem Header="Sync…"
                       Icon="{ctl:DcSymbolIcon ArrowSync24}"
-                      ToolTip="Fetch, scan and promote this source's entries. Shows the command first."
+                      ToolTip="Fetch, scan and promote this source's entries."
                       Click="OnSyncSource" />
             <MenuItem Header="{Binding ToggleText}"
                       Icon="{ctl:DcSymbolIcon Power24}"
-                      ToolTip="Turn this source on or off. Shows the command first."
+                      ToolTip="Turn this source on or off."
                       Click="OnToggleSource" />
             <Separator />
             <MenuItem Header="Remove…"
                       Style="{StaticResource DcDangerMenuItem}"
                       Icon="{ctl:DcSymbolIcon Delete24}"
-                      ToolTip="Delete this source, the rules it promoted and its cache. Shows the command first."
+                      ToolTip="Delete this source, the rules it promoted and its cache."
                       Click="OnRemoveSource" />
         </ContextMenu>
 
@@ -54,13 +54,13 @@
             <MenuItem Header="Approve…"
                       Icon="{ctl:DcSymbolIcon ShieldCheckmark24}"
                       IsEnabled="{Binding CanReview}"
-                      ToolTip="Approve this entry and promote it into the allow policy. Shows the command first."
+                      ToolTip="Approve this entry and promote it into the allow policy."
                       Click="OnApproveEntry" />
             <MenuItem Header="Reject…"
                       Style="{StaticResource DcDangerMenuItem}"
                       Icon="{ctl:DcSymbolIcon ShieldDismiss24}"
                       IsEnabled="{Binding CanReview}"
-                      ToolTip="Reject this entry so it stays blocked. Shows the command first."
+                      ToolTip="Reject this entry so it stays blocked."
                       Click="OnRejectEntry" />
         </ContextMenu>
 
@@ -77,18 +77,18 @@
             <MenuItem Header="Approve…"
                       Icon="{ctl:DcSymbolIcon ShieldCheckmark24}"
                       IsEnabled="{Binding CanReview}"
-                      ToolTip="Approve this entry and promote it into the allow policy. Shows the command first."
+                      ToolTip="Approve this entry and promote it into the allow policy."
                       Click="OnApproveListedEntry" />
             <MenuItem Header="Reject…"
                       Style="{StaticResource DcDangerMenuItem}"
                       Icon="{ctl:DcSymbolIcon ShieldDismiss24}"
                       IsEnabled="{Binding CanReview}"
-                      ToolTip="Reject this entry so it stays blocked. Shows the command first."
+                      ToolTip="Reject this entry so it stays blocked."
                       Click="OnRejectListedEntry" />
             <Separator />
             <MenuItem Header="Show source"
                       Icon="{ctl:DcSymbolIcon Library24}"
-                      ToolTip="Select this entry's source on the Sources tab: its publisher, fetch time and counts."
+                      ToolTip="Open this entry's source on the Sources tab."
                       Click="OnShowEntrySource" />
         </ContextMenu>
 
@@ -184,7 +184,7 @@
                                  SelectedValue="{Binding ActiveTab, Mode=TwoWay}"
                                  Visibility="{Binding HasSources, Converter={StaticResource BoolToVisibility}}"
                                  AutomationProperties.Name="Registries view"
-                                 AutomationProperties.HelpText="Sources lists the registry sources. Entries lists the cached entries of every source. Approved lists the ones that were approved.">
+                                 AutomationProperties.HelpText="Sources lists registry sources. Entries lists cached entries of every source. Approved lists approved entries.">
                     <ctl:DcSegment Value="sources"
                                    Content="Sources"
                                    ToolTip="The registry sources, and the selected one's details and cached entries" />
@@ -262,7 +262,7 @@
                                 Severity="{Binding ActionSeverity}" />
 
                     <ui:InfoBar Margin="{StaticResource DcCardGap}"
-                                Title="Could not read registry sources; changes are off until a read succeeds"
+                                Title="Could not read registry sources. Changes are off until a read succeeds."
                                 IsClosable="False"
                                 IsOpen="{Binding HasCliError}"
                                 Message="{Binding CliErrorMessage}"
@@ -296,7 +296,7 @@
                         </ui:CardExpander.Header>
                         <StackPanel>
                             <TextBlock Style="{StaticResource DcCaption}"
-                                       Text="Off by default. When on, a skill or MCP server has to match a rule from a registry to be admitted; anything else falls back to the default action. Turning it on before approving entries blocks everything not already covered." />
+                                       Text="Off by default. When on, a skill or MCP server must match a registry rule to be admitted. Turning it on before approving entries blocks everything not covered." />
                             <WrapPanel Style="{StaticResource DcToolbarPanel}" Margin="0,10,0,0" IsEnabled="{Binding IsDataTrusted}">
                                 <TextBlock Style="{StaticResource DcToolbarLabel}" Text="{Binding SkillsRegistryText}" />
                                 <ui:Button Content="Require…"
@@ -375,11 +375,11 @@
                                     <TextBlock Style="{StaticResource DcFieldLabel}" Text="Auth environment variable (optional)" />
                                     <ui:TextBox PlaceholderText="CORP_REGISTRY_TOKEN"
                                                 AutomationProperties.Name="Auth environment variable name"
-                                                AutomationProperties.HelpText="The name of an environment variable that holds a bearer token. Never type the token itself."
+                                                AutomationProperties.HelpText="The name of an environment variable that holds a bearer token. Do not enter the token."
                                                 Text="{Binding AddAuthEnv, UpdateSourceTrigger=PropertyChanged}" />
                                     <TextBlock Style="{StaticResource DcCaption}"
                                                Margin="0,4,0,0"
-                                               Text="The variable's name, not the token. Set the variable yourself (Setup, keys, or your environment)." />
+                                               Text="Enter the variable name only. Set the variable in Setup, keys, or your environment." />
                                 </StackPanel>
 
                                 <StackPanel Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="3" Style="{StaticResource DcField}">
@@ -398,7 +398,7 @@
                                 <CheckBox Content="Sync right after adding"
                                           IsChecked="{Binding AddSyncAfter}"
                                           IsEnabled="{Binding AddEnabled}"
-                                          AutomationProperties.HelpText="Runs a second command that fetches and scans the source, only if the add succeeds." />
+                                          AutomationProperties.HelpText="Runs a second command that syncs the source if the add succeeds." />
                             </WrapPanel>
 
                             <TextBlock Style="{StaticResource DcToneText}"
@@ -436,7 +436,7 @@
                         <ctl:DcSymbolIcon Style="{StaticResource DcEmptyIcon}" Symbol="Database24" />
                         <TextBlock Style="{StaticResource DcEmptyTitle}" Text="No registry sources yet" />
                         <TextBlock Style="{StaticResource DcEmptyDetail}"
-                                   Text="A registry is a catalog of skills or MCP servers that DefenseClaw can pull on demand: a company HTTPS manifest, smithery.ai, or a git repository with a defenseclaw-registry.yaml. Each synced entry is scanned, and clean ones can be promoted into your allow policy. Registries are optional; skills and MCP servers work without one." />
+                                   Text="A registry is an optional catalog of skills or MCP servers: an HTTPS manifest, smithery.ai or a git repo with defenseclaw-registry.yaml." />
 
                         <StackPanel Margin="0,16,0,0" HorizontalAlignment="Center">
                             <TextBlock Style="{StaticResource DcCaption}" Text="1.  Add a source. Nothing is fetched yet." />
@@ -472,7 +472,7 @@
                         <ctl:DcSymbolIcon Style="{StaticResource DcEmptyIcon}" Symbol="Warning24" />
                         <TextBlock Style="{StaticResource DcEmptyTitle}" Text="Registry sources could not be read" />
                         <TextBlock Style="{StaticResource DcEmptyDetail}"
-                                   Text="The DefenseClaw command did not answer, so this panel cannot say whether any sources are configured. The reason is in the banner above." />
+                                   Text="The DefenseClaw command did not answer, so sources cannot be listed. The reason is in the banner above." />
                         <ui:Button HorizontalAlignment="Center"
                                    Margin="0,16,0,0"
                                    Content="Try again"
@@ -816,7 +816,7 @@
                                            Content="Show all entries"
                                            Icon="{ctl:DcSymbolIcon FilterDismiss24}"
                                            Command="{Binding ClearEntryFocusCommand}"
-                                           AutomationProperties.HelpText="Ends the narrowing to this one entry and lists every entry again (Esc)." />
+                                           AutomationProperties.HelpText="Lists every entry again (Esc)." />
                             </Grid>
 
                             <TextBlock x:Name="EntriesWarning"
@@ -919,7 +919,7 @@
                                            Icon="{ctl:DcSymbolIcon Library24}"
                                            Command="{Binding ShowEntrySourceCommand}"
                                            IsEnabled="{Binding HasSelectedTabEntry}"
-                                           AutomationProperties.HelpText="Select the entry's source on the Sources tab: its publisher, fetch time and counts." />
+                                           AutomationProperties.HelpText="Open the entry's source on the Sources tab." />
                             </StackPanel>
                         </Grid>
                     </Border>

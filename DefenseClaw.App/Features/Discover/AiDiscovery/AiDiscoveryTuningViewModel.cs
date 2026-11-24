@@ -59,7 +59,7 @@ public sealed partial class TuningField : ObservableObject
 
     public bool IsUnavailable => !IsAvailable;
 
-    public string UnavailableText => "This DefenseClaw does not list this option, so it cannot be changed here.";
+    public string UnavailableText => "This DefenseClaw does not list this option.";
 
     /// <summary>Raised when the operator types.</summary>
     internal event EventHandler? Edited;
@@ -118,7 +118,7 @@ public sealed partial class TuningSwitch : ObservableObject
 
     public string StateText => IsOn ? "On" : "Off";
 
-    public string UnavailableText => "This DefenseClaw does not list this option, so it cannot be changed here.";
+    public string UnavailableText => "This DefenseClaw does not list this option.";
 
     public string AutomationName =>
         $"{Label}: {StateText}" + (IsChanged ? ", changed, " + ChangeText : string.Empty) + (IsAvailable ? string.Empty : ". Not available.") + ". " + Help;
@@ -181,23 +181,23 @@ public sealed partial class AiDiscoveryTuningViewModel : SetupDialogViewModel
         Applied = applied;
 
         ScanInterval = Field("scan_interval_min", "Scan interval (minutes)", "--scan-interval-min", RangeHelp("Minutes between full scans.", AiDiscoveryTuning.ScanIntervalRange.Min, AiDiscoveryTuning.ScanIntervalRange.Max));
-        ProcessInterval = Field("process_interval_s", "Process poll (seconds)", "--process-interval-s", RangeHelp("Seconds between the cheap checks of the running processes.", AiDiscoveryTuning.ProcessIntervalRange.Min, AiDiscoveryTuning.ProcessIntervalRange.Max));
-        ScanRoots = new TuningField("scan_roots", "Folders to scan", "--scan-roots", "One folder per line; ~ is your home folder. A comma would split a folder in two, so none is accepted.", string.Empty) { IsMultiLine = true };
-        MaxFiles = Field("max_files_per_scan", "Max files per scan", "--max-files-per-scan", RangeHelp("The most files one scan looks at.", AiDiscoveryTuning.MaxFilesRange.Min, AiDiscoveryTuning.MaxFilesRange.Max));
-        MaxBytes = Field("max_file_bytes", "Max bytes per file", "--max-file-bytes", RangeHelp("The largest file it reads, in bytes.", AiDiscoveryTuning.MaxFileBytesRange.Min, AiDiscoveryTuning.MaxFileBytesRange.Max));
+        ProcessInterval = Field("process_interval_s", "Process poll (seconds)", "--process-interval-s", RangeHelp("Seconds between running-process checks.", AiDiscoveryTuning.ProcessIntervalRange.Min, AiDiscoveryTuning.ProcessIntervalRange.Max));
+        ScanRoots = new TuningField("scan_roots", "Folders to scan", "--scan-roots", "One folder per line. ~ is your home folder. Commas are not accepted.", string.Empty) { IsMultiLine = true };
+        MaxFiles = Field("max_files_per_scan", "Max files per scan", "--max-files-per-scan", RangeHelp("Most files one scan reads.", AiDiscoveryTuning.MaxFilesRange.Min, AiDiscoveryTuning.MaxFilesRange.Max));
+        MaxBytes = Field("max_file_bytes", "Max bytes per file", "--max-file-bytes", RangeHelp("Largest file read, in bytes.", AiDiscoveryTuning.MaxFileBytesRange.Min, AiDiscoveryTuning.MaxFileBytesRange.Max));
         Fields = new[] { ScanInterval, ProcessInterval, ScanRoots, MaxFiles, MaxBytes };
 
         SourceSwitches = new[]
         {
-            Switch("include_shell_history", "Shell history", "--include-shell-history", "Look in shell history for AI command-line tools."),
-            Switch("include_package_manifests", "Package manifests", "--include-package-manifests", "Look in package.json, pyproject, Cargo.toml and the like for AI SDKs."),
-            Switch("include_env_var_names", "Environment variable names", "--include-env-var-names", "Look at the names (never the values) of variables that hold AI provider keys."),
-            Switch("include_network_domains", "Network domains", "--include-network-domains", "Look at hosts and SSH config for AI provider domains, and ask vetted loopback model servers what they host."),
+            Switch("include_shell_history", "Shell history", "--include-shell-history", "Check shell history for AI command-line tools."),
+            Switch("include_package_manifests", "Package manifests", "--include-package-manifests", "Check package.json, pyproject, Cargo.toml and similar for AI SDKs."),
+            Switch("include_env_var_names", "Environment variable names", "--include-env-var-names", "Check the names, not the values, of variables that hold AI provider keys."),
+            Switch("include_network_domains", "Network domains", "--include-network-domains", "Check hosts and SSH config for AI provider domains, and ask vetted loopback model servers what they host."),
         };
         PrivacySwitches = new[]
         {
-            Switch("allow_workspace_signatures", "Honour workspace signatures", "--allow-workspace-signatures", "Use signature packs found inside the workspaces it scans. Off by default: a workspace can then change what is detected."),
-            Switch("store_raw_local_paths", "Store raw local paths", "--store-raw-local-paths", "Keep raw local paths in the discovery state file. Off by default for privacy; the CLI says to turn it on only for diagnostics on a trusted machine."),
+            Switch("allow_workspace_signatures", "Honour workspace signatures", "--allow-workspace-signatures", "Use signature packs found in scanned workspaces. Off by default, because a workspace can then change what is detected."),
+            Switch("store_raw_local_paths", "Store raw local paths", "--store-raw-local-paths", "Keep raw local paths in the discovery state file. Off by default. Use only for diagnostics on a trusted machine."),
         };
 
         foreach (var field in Fields)
@@ -233,7 +233,7 @@ public sealed partial class AiDiscoveryTuningViewModel : SetupDialogViewModel
 
     public string Title => DialogTitle;
 
-    public string Subtitle => "Choose what AI Discovery looks at, and how often. Nothing changes until you review the command and confirm it.";
+    public string Subtitle => "Choose what AI Discovery checks and how often. Nothing changes until you confirm the command.";
 
     public IReadOnlyList<TuningField> Fields { get; }
 
@@ -263,8 +263,8 @@ public sealed partial class AiDiscoveryTuningViewModel : SetupDialogViewModel
     private string _mode = AiDiscoveryTuning.EnhancedMode;
 
     public string ModeNote => Mode == AiDiscoveryTuning.PassiveMode
-        ? "Passive looks at the known places and the folders you list. A folder that is your whole home (~) is not walked for model files."
-        : "Enhanced also walks broader places, such as your home folder, to find models that applications download where the signature catalog does not know to look.";
+        ? "Passive checks known places and the folders you list. A folder that is your whole home (~) is not searched for model files."
+        : "Enhanced also searches broader places, such as your home folder, for models in locations the signature catalog does not know.";
 
     /// <summary>"was enhanced": shown beside the mode when it differs from config.yaml's.</summary>
     public string ModeChangeText => Mode != _original.Mode ? $"was {_original.Mode}" : string.Empty;
@@ -284,8 +284,8 @@ public sealed partial class AiDiscoveryTuningViewModel : SetupDialogViewModel
     public bool ShowTuningOffNote => !Enabled;
 
     public string TuningOffNote => _original.Enabled
-        ? "These settings are not used while it is off, and turning it off does not send them. Turn it on to change them."
-        : "These settings take effect once AI Discovery is on. Turn it on to change them; the command then carries what you changed.";
+        ? "These settings are unused while AI Discovery is off. Turn it on to change them."
+        : "These settings apply once AI Discovery is on. Turn it on to change them.";
 
     /// <summary>The TUI's own line for the state today: <c>AI discovery: on  ·  Mode: enhanced</c>.</summary>
     public string StateLine => $"AI discovery: {(_original.Enabled ? "on" : "off")}  ·  Mode: {_original.Mode}";
@@ -308,8 +308,8 @@ public sealed partial class AiDiscoveryTuningViewModel : SetupDialogViewModel
     private bool _canDisable = true;
 
     public string RestartNote => !RestartAfter
-        ? "The gateway is not restarted, so nothing changes until it is restarted; and with no service to answer, no scan is asked for."
-        : "The discovery service reads these settings only when the gateway starts, so the change restarts it.";
+        ? "The gateway is not restarted, so nothing changes until its next restart. No scan is requested."
+        : "The discovery service reads these settings at gateway start, so the gateway restarts.";
 
     partial void OnEnabledChanged(bool value) => Recompute();
 
@@ -579,13 +579,13 @@ public sealed partial class AiDiscoveryTuningViewModel : SetupDialogViewModel
 
         if (!result.Succeeded)
         {
-            return "The options of agent discovery enable could not be read (" + result.Error + "), so the settings cannot be checked against this DefenseClaw. Press Refresh to try again.";
+            return "The options of agent discovery enable could not be read (" + result.Error + "). Press Refresh to try again.";
         }
 
         var help = SetupHelpParser.Parse(result.Text, commandDepth: 3);
         if (!help.Lists("--yes"))
         {
-            return "The installed DefenseClaw's agent discovery enable has no --yes, so it would stop at a question this app cannot answer. Nothing can be sent from here.";
+            return "agent discovery enable has no --yes in this DefenseClaw, so it would stop at a prompt. Nothing can be sent from here.";
         }
 
         _enableFlags = FlagsOf(help);
@@ -727,16 +727,16 @@ public sealed partial class AiDiscoveryTuningViewModel : SetupDialogViewModel
 
             if (_original.Enabled && !Enabled && !CanDisable)
             {
-                return "The installed DefenseClaw's agent discovery disable cannot be used from here (its help does not list --yes), so AI Discovery cannot be turned off.";
+                return "agent discovery disable has no --yes in this DefenseClaw, so AI Discovery cannot be turned off from here.";
             }
 
-            return HasChanges ? null : "Nothing to apply: nothing differs from config.yaml.";
+            return HasChanges ? null : "Nothing differs from config.yaml.";
         }
     }
 
     public bool ReviewBlocked => ReviewBlockedReason is not null;
 
-    public string ReviewTip => ReviewBlockedReason ?? "Shows the exact command first. Nothing runs until you confirm.";
+    public string ReviewTip => ReviewBlockedReason ?? "Shows the command first. Nothing runs until you confirm.";
 
     private bool CanReview() => ReviewBlockedReason is null;
 
@@ -774,30 +774,30 @@ public sealed partial class AiDiscoveryTuningViewModel : SetupDialogViewModel
             title = "Turn off AI Discovery?";
             summary = "Sets ai_discovery.enabled to false in config.yaml. " +
                       (restart
-                          ? "It then restarts the gateway so the discovery service stops. Components already found stay listed until you clear them."
-                          : "The gateway is not restarted, so it keeps scanning until it is restarted.");
-            purpose = "Disable the sidecar AI discovery service.";
+                          ? "Restarts the gateway. Components already found stay listed until you clear them."
+                          : "The gateway is not restarted, so it keeps scanning until its next restart.");
+            purpose = "Disable AI discovery.";
             primary = "Turn off";
         }
         else if (turningOn)
         {
             title = "Turn on AI Discovery?";
             summary = "Sets ai_discovery.enabled to true in config.yaml" +
-                      (_pending.Count > 0 ? $" and changes {Plural(_pending.Count)}: {changes}. " : " and leaves your other AI discovery settings as they are. ") +
+                      (_pending.Count > 0 ? $" and changes {Plural(_pending.Count)}: {changes}. " : ". Other ai_discovery settings stay as they are. ") +
                       (restart
-                          ? "It then restarts the gateway so it starts the discovery service" + (ScanAfter ? ", and asks it for a first scan." : ".")
-                          : "The gateway is not restarted, so nothing starts scanning until it is restarted.");
-            purpose = "Enable the sidecar AI discovery service" + (_pending.Count > 0 ? " with the settings above." : ".");
+                          ? "Restarts the gateway" + (ScanAfter ? ", then asks for a first scan." : ".")
+                          : "The gateway is not restarted, so scanning starts after its next restart.");
+            purpose = "Enable AI discovery" + (_pending.Count > 0 ? " with the settings above." : ".");
             primary = "Turn on";
         }
         else
         {
             title = "Change AI Discovery settings?";
-            summary = $"Sets, in the ai_discovery block of config.yaml: {changes}.Everything else stays as it is. " +
+            summary = $"Sets, in the ai_discovery block of config.yaml: {changes}. Everything else stays as it is. " +
                       (restart
-                          ? "The discovery service reads these only when it starts, so the gateway restarts" + (ScanAfter ? ", and the new settings are used for an immediate scan." : ".")
-                          : "The gateway is not restarted, so the new settings are saved but not in effect until it next restarts.");
-            purpose = "Apply the changed settings with agent discovery enable (it updates a discovery that is already on).";
+                          ? "Restarts the gateway, which reads these settings only at start" + (ScanAfter ? ". An immediate scan then uses them." : ".")
+                          : "The gateway is not restarted, so the settings take effect at its next restart.");
+            purpose = "Apply the changed settings with agent discovery enable.";
             primary = "Apply changes";
         }
 
@@ -806,7 +806,7 @@ public sealed partial class AiDiscoveryTuningViewModel : SetupDialogViewModel
         {
             warnings.Add(new CommandReviewWarning(
                 "Gateway not restarted",
-                "The gateway is not restarted, so the discovery service keeps its old settings until it next restarts, and no scan is asked for."));
+                "The gateway is not restarted, so discovery keeps its old settings until its next restart. No scan is requested."));
         }
 
         if (!turningOff)
@@ -816,14 +816,14 @@ public sealed partial class AiDiscoveryTuningViewModel : SetupDialogViewModel
             {
                 warnings.Add(new CommandReviewWarning(
                     "Stores raw local paths",
-                    "Raw local paths will be kept in the discovery state file instead of hashed fingerprints only. The CLI says to turn this on only for diagnostics on a trusted machine."));
+                    "Raw local paths will be kept in the discovery state file, not only hashed fingerprints. Turn this on only for diagnostics on a trusted machine."));
             }
 
             if (current.AllowWorkspaceSignatures && !_original.AllowWorkspaceSignatures)
             {
                 warnings.Add(new CommandReviewWarning(
                     "Workspace signatures",
-                    "Signature packs found inside the workspaces it scans will be honoured, so a workspace can change what is detected. Off by default for that reason."));
+                    "Signature packs found in scanned workspaces will be used, so a workspace can change what is detected."));
             }
 
             foreach (var (label, was, now) in new[]
@@ -844,7 +844,7 @@ public sealed partial class AiDiscoveryTuningViewModel : SetupDialogViewModel
             {
                 warnings.Add(new CommandReviewWarning(
                     "Looks at less",
-                    "Turned off, so discovery cannot find what only these would show: " + string.Join(", ", stricter) + "."));
+                    "Turned off: " + string.Join(", ", stricter) + ". Discovery will miss what only these find."));
             }
         }
 
@@ -907,7 +907,7 @@ public sealed partial class AiDiscoveryTuningViewModel : SetupDialogViewModel
         }
         else
         {
-            ResultText = "Not applied. " + PlanReport.Describe(result.Outcomes) + " The review and the Activity panel have the output.";
+            ResultText = "Not applied. " + PlanReport.Describe(result.Outcomes) + " See the review and Activity for output.";
             ResultText = ResultText.Replace("  ", " ", StringComparison.Ordinal).Trim();
         }
 

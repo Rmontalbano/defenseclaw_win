@@ -217,9 +217,9 @@ public sealed partial class RegistriesPanelViewModel : IAcceptsNavigation
         var configured = Sources.Any(candidate => string.Equals(candidate.Id, focus.SourceId.Trim(), StringComparison.Ordinal));
         return configured
             ? $"A rule from registry:{source} allows {what}, but no source has a cached entry for it. " +
-              "Sync that source to refresh its cache; the entry may also have left its manifest."
-            : $"A rule from registry:{source} allows {what}, but there is no registry source called “{source}” and no source has a cached entry for it. " +
-              "The source may have been removed from config.yaml by hand; its rule is still in the allow policy.";
+              "Sync that source to refresh its cache. The entry may also have left its manifest."
+            : $"A rule from registry:{source} allows {what}, but there is no registry source called “{source}”. " +
+              "It may have been removed from config.yaml by hand. Its rule is still in the allow policy.";
     }
 
     /// <summary>

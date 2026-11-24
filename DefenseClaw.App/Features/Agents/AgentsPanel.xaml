@@ -81,7 +81,7 @@
                            SearchText="{Binding FilterText}"
                            SearchPlaceholder="Filter agents…"
                            SearchAutomationName="Filter agents"
-                           SearchHelpText="Shows only agents whose connector, user, id or last session contain these words. Shortcut Ctrl+F; Esc clears it.">
+                           SearchHelpText="Filters by connector, user, id or last session. Ctrl+F focuses, Esc clears.">
             <ctl:DcPageToolbar.Leading>
                 <ui:ProgressRing Width="18"
                                  Height="18"
@@ -97,7 +97,7 @@
                                ToolTip="Refresh (F5)"
                                AutomationProperties.Name="Refresh"
                                AutomationProperties.AcceleratorKey="F5"
-                               AutomationProperties.HelpText="Read the agent directory and the open agent from the gateway again (F5). Nothing is changed." />
+                               AutomationProperties.HelpText="Reads the agent directory and the open agent again. F5." />
                 </StackPanel>
             </ctl:DcPageToolbar.Actions>
         </ctl:DcPageToolbar>
@@ -131,12 +131,12 @@
                         <ctl:DcCardHeader Symbol="Search24" Section="Discover" Content="Open an agent by id" />
                         <TextBlock Style="{StaticResource DcCaption}"
                                    TextWrapping="Wrap"
-                                   Text="For an agent the directory does not list, such as a subagent id seen in a log." />
+                                   Text="For an agent not in the directory, such as a subagent id from a log." />
                         <ui:TextBox Margin="0,8,0,0"
                                     PlaceholderText="agent id"
                                     Text="{Binding LookupText, UpdateSourceTrigger=PropertyChanged}"
                                     AutomationProperties.Name="Agent id to open"
-                                    AutomationProperties.HelpText="Type an agent id from a log or the ledger, then press Open. Only reads; nothing is changed.">
+                                    AutomationProperties.HelpText="Type an agent id from a log, then press Open.">
                             <ui:TextBox.InputBindings>
                                 <KeyBinding Key="Return" Command="{Binding OpenLookupCommand}" />
                             </ui:TextBox.InputBindings>
@@ -228,7 +228,7 @@
                             <TextBlock Style="{StaticResource DcTextSecondary}"
                                        Margin="0,8,0,0"
                                        TextWrapping="Wrap"
-                                       Text="Pick an agent on the left to see its subagents, what it did in order, and what the gateway blocked."
+                                       Text="Pick an agent to see its subagents, timeline and blocks."
                                        Visibility="{Binding ShowPickHint, Converter={StaticResource BoolToVisibility}}" />
                         </StackPanel>
                     </Border>
@@ -264,7 +264,7 @@
                             </ItemsControl>
                             <TextBlock Style="{StaticResource DcCaption}"
                                        TextWrapping="Wrap"
-                                       Text="Hover a tile for what it counts. A tile that says Not reported is a figure the correlation ledger does not hold; nothing is estimated in its place." />
+                                       Text="Not reported: the ledger has no figure. Nothing is estimated." />
                         </StackPanel>
                     </Border>
 
@@ -277,7 +277,9 @@
                             <TextBlock Style="{StaticResource DcCaption}"
                                        TextWrapping="Wrap"
                                        Margin="0,0,0,6"
-                                       Text="Each subagent shows how it was linked to its parent (reported, trace exact, derived or inferred) and where that link stands (active, unresolved, conflicted, superseded or rejected). Pick one to see its own timeline." />
+                                       Text="Pick a subagent to see its timeline."
+                                       ToolTip="Each subagent shows how it was linked to its parent: reported, trace exact, derived or inferred. The link status is active, unresolved, conflicted, superseded or rejected."
+                                       AutomationProperties.HelpText="Each subagent shows how it was linked to its parent: reported, trace exact, derived or inferred. The link status is active, unresolved, conflicted, superseded or rejected." />
                             <TreeView x:Name="AgentTree"
                                       ItemsSource="{Binding TreeRoots}"
                                       BorderThickness="0"
@@ -372,7 +374,7 @@
                                        Icon="{ctl:DcSymbolIcon ArrowDown24}"
                                        Command="{Binding LoadMoreCommand}"
                                        AutomationProperties.Name="Load more events"
-                                       AutomationProperties.HelpText="Reads the next page of events from the gateway and adds them to the timeline. Only reads." />
+                                       AutomationProperties.HelpText="Adds the next page of events to the timeline." />
                         </StackPanel>
                     </Border>
                 </StackPanel>

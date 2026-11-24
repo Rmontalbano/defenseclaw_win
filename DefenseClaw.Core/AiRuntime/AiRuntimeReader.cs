@@ -157,7 +157,7 @@ public static class AiRuntimeReader
         {
             return Fail(
                 AiRuntimeReadStatus.Malformed,
-                "The runtime answer is incomplete: it is missing enabled, planes or findings. Nothing here is a clean-host result.");
+                "The runtime answer is incomplete: it is missing enabled, planes or findings.");
         }
 
         var unreadable = 0;

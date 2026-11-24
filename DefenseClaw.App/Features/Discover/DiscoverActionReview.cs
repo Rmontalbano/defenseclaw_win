@@ -517,10 +517,10 @@ public sealed partial class DiscoverActionReview : ObservableObject
         var report = PlanReport.Describe(outcomes);
         ResultKey = succeeded ? "Ok" : "Bad";
         ResultText = report.Length > 0
-            ? (succeeded ? "Done. " : "Did not finish. ") + report + " The exact commands and their full output are in the Activity panel."
+            ? (succeeded ? "Done. " : "Did not finish. ") + report + " Full output is in the Activity panel."
             : succeeded
-                ? "Done. The exact command and its full output are in the Activity panel."
-                : "Did not finish. Steps after the failing one were not run. The exact command and its full output are in the Activity panel.";
+                ? "Done. Full output is in the Activity panel."
+                : "Did not finish. Later steps were not run. Full output is in the Activity panel.";
         ResultOutput = output.Length == 0 ? null : output.ToString().TrimEnd();
 
         var callback = _onFinished;
@@ -558,7 +558,7 @@ public sealed partial class DiscoverActionReview : ObservableObject
 
         _onFinished = null;
         ResultKey = "Bad";
-        ResultText = "Not run. " + reason + " Nothing was changed; the refusal is recorded in the Activity panel.";
+        ResultText = "Not run. " + reason + " Nothing was changed. The refusal is in the Activity panel.";
         ResultOutput = null;
         IsFinished = true;
     }

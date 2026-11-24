@@ -115,7 +115,7 @@ public sealed class AiDiscoveryTuningViewModelTests : IDisposable
         Assert.Equal("AI discovery: on  ·  Mode: passive", vm.StateLine);
         Assert.False(vm.HasChanges);
         Assert.Equal("Nothing to apply", vm.Summary);
-        Assert.Equal("Nothing to apply: nothing differs from config.yaml.", vm.ReviewBlockedReason);
+        Assert.Equal("Nothing differs from config.yaml.", vm.ReviewBlockedReason);
         Assert.Equal(string.Empty, vm.CommandPreview);
         Assert.Empty(cli.Ran);
     }

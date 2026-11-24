@@ -59,23 +59,22 @@ public enum AgentsState
 /// </summary>
 public sealed partial class AgentsPanelViewModel : PanelViewModelBase, IAcceptsNavigation
 {
-    public const string UnsupportedTitle = "The agent view is not supported by this gateway";
+    public const string UnsupportedTitle = "Agents are not supported by this gateway";
 
     public const string UnsupportedDetail =
-        "The selected gateway does not serve the agent directory or the correlation ledger (/api/v1/agents/identities, /api/v1/correlation/*). " +
-        "Install a DefenseClaw 1.0 build to use this view. This is a limit of the version, not a problem with this PC.";
+        "This gateway does not serve /api/v1/agents/identities or /api/v1/correlation/*. Install a DefenseClaw 1.0 build.";
 
     public const string UnavailableTitle = "Agent directory unavailable";
 
-    public const string UnavailableDetail = "The directory could not be read, so nothing can be said about which agents exist. This is not an empty directory.";
+    public const string UnavailableDetail = "The agent directory could not be read.";
 
     public const string DisabledTitle = "This gateway keeps no agent directory";
 
-    public const string DisabledDetail = "The gateway reported that agent identities are not recorded on this host. An agent id can still be opened with the lookup box.";
+    public const string DisabledDetail = "Agent identities are not recorded on this host. Open an agent by id with the lookup box.";
 
     public const string EmptyTitle = "No agents seen yet";
 
-    public const string EmptyDetail = "The directory is empty: no agent has reported through a connector yet. An agent id can still be opened with the lookup box.";
+    public const string EmptyDetail = "No agent has reported through a connector yet. Open an agent by id with the lookup box.";
 
     public const string LoadingTitle = "Reading the agent directory";
 
@@ -115,7 +114,7 @@ public sealed partial class AgentsPanelViewModel : PanelViewModelBase, IAcceptsN
     public override string Title => "Agents";
 
     public override string Description =>
-        "The agents DefenseClaw has seen, per connector: their subagents, what they did in order, and what the gateway blocked - read from the gateway's own correlation ledger.";
+        "Agents seen per connector, with their subagents, timeline and blocks.";
 
     /// <summary>Test seam: the gateway read, so a test feeds exact answers and opens no socket.</summary>
     internal Func<string, int, CancellationToken, Task<GatewayResult<JsonDocument>>>? Fetch { get; set; }
@@ -249,7 +248,7 @@ public sealed partial class AgentsPanelViewModel : PanelViewModelBase, IAcceptsN
         _ => string.Empty,
     };
 
-    public string StaleBanner => IsStale ? "The agents below are from the last successful read. " + StaleReason : string.Empty;
+    public string StaleBanner => IsStale ? "Showing the last successful read. " + StaleReason : string.Empty;
 
     public string SelectedTitle => SelectedAgent is { } row
         ? $"{row.Connector} agent {row.ShortId}"
@@ -286,20 +285,19 @@ public sealed partial class AgentsPanelViewModel : PanelViewModelBase, IAcceptsN
             }
 
             var shown = Timeline.Count(r => r.IsEntry);
-            var text = $"{shown.ToString(CultureInfo.InvariantCulture)} {(shown == 1 ? "entry" : "entries")} in time order, grouped by turn";
+            var text = $"{shown.ToString(CultureInfo.InvariantCulture)} {(shown == 1 ? "entry" : "entries")} by turn";
             if (_scopeEntries.Count(e => !ShowMetrics && e.IsMetric) is > 0 and var hidden)
             {
-                text += $"; {hidden.ToString(CultureInfo.InvariantCulture)} metric points hidden";
+                text += $" · {hidden.ToString(CultureInfo.InvariantCulture)} metric points hidden";
             }
 
             if (_listCapped > 0)
             {
-                text += $"; only the first {MaxTimelineRows.ToString(CultureInfo.InvariantCulture)} of {_listCapped.ToString(CultureInfo.InvariantCulture)} loaded entries are listed";
+                text += $" · first {MaxTimelineRows.ToString(CultureInfo.InvariantCulture)} of {_listCapped.ToString(CultureInfo.InvariantCulture)} listed{(CanLoadMore ? ", more events available" : string.Empty)}";
             }
-
-            if (CanLoadMore)
+            else if (CanLoadMore)
             {
-                text += "; more events are available";
+                text += " · more events available";
             }
 
             return IsPaging ? text + " (loading more)" : text;
@@ -319,8 +317,8 @@ public sealed partial class AgentsPanelViewModel : PanelViewModelBase, IAcceptsN
             }
 
             return CanLoadMore
-                ? "Counts cover the events loaded so far; load more to count the rest."
-                : "Counts cover every event the gateway returned for these agents.";
+                ? "Counts cover the events loaded so far. Load more to count the rest."
+                : "Counts cover all events returned.";
         }
     }
 
@@ -567,7 +565,7 @@ public sealed partial class AgentsPanelViewModel : PanelViewModelBase, IAcceptsN
         if (row.LastSessionId.Length == 0)
         {
             ClearLedger();
-            OpenMessage = "This agent has not reported a session yet, so the ledger has nothing to open it by. Open a specific agent id with the lookup box.";
+            OpenMessage = "This agent has not reported a session yet. Open it by id with the lookup box.";
             return Task.CompletedTask;
         }
 
@@ -629,7 +627,7 @@ public sealed partial class AgentsPanelViewModel : PanelViewModelBase, IAcceptsN
             if (!outcome.IsOk)
             {
                 OpenMessage = outcome.Status == CorrelationReadStatus.Unsupported
-                    ? "This gateway does not serve the correlation ledger, so this agent cannot be opened. " + UnsupportedDetail
+                    ? "This agent cannot be opened. " + UnsupportedDetail
                     : "The agent could not be read: " + outcome.Message;
                 return;
             }
@@ -661,17 +659,17 @@ public sealed partial class AgentsPanelViewModel : PanelViewModelBase, IAcceptsN
 
         if (outcome.Capped)
         {
-            Notes.Add($"The walk stopped at {AgentLedger.MaxAgents.ToString(CultureInfo.InvariantCulture)} agents; further subagents are not shown.");
+            Notes.Add($"Stopped at {AgentLedger.MaxAgents.ToString(CultureInfo.InvariantCulture)} agents. Further subagents are not shown.");
         }
 
         if (ledger.Capped)
         {
-            Notes.Add("The ledger view is full; later events are not shown.");
+            Notes.Add("The ledger view is full. Later events are not shown.");
         }
 
         if (ledger.Skipped > 0)
         {
-            Notes.Add($"{ledger.Skipped.ToString(CultureInfo.InvariantCulture)} entries from the gateway could not be read and were skipped.");
+            Notes.Add($"{ledger.Skipped.ToString(CultureInfo.InvariantCulture)} entries could not be read and were skipped.");
         }
 
         var agents = ledger.AgentIds;
@@ -692,7 +690,7 @@ public sealed partial class AgentsPanelViewModel : PanelViewModelBase, IAcceptsN
 
         if (agents.Count == 0)
         {
-            Notes.Add("No agent ids were reported in these events, so there is no tree; the timeline shows the session as a whole.");
+            Notes.Add("No agent ids in these events, so there is no tree. The timeline shows the whole session.");
         }
 
         HasLedger = true;
@@ -833,7 +831,7 @@ public sealed partial class AgentsPanelViewModel : PanelViewModelBase, IAcceptsN
 
     private void BuildKpis(AgentKpis k)
     {
-        Kpis.Add(new KpiTile("Enforced blocks", AgentKpis.Count(k.EnforcedBlocks), k.EnforcedBlocks > 0 ? "High" : "Neutral", "Blocks the gateway names as applied (tool call blocked, block applied).", true));
+        Kpis.Add(new KpiTile("Enforced blocks", AgentKpis.Count(k.EnforcedBlocks), k.EnforcedBlocks > 0 ? "High" : "Neutral", "Blocks the gateway reports as applied: tool call blocked, block applied.", true));
         Kpis.Add(new KpiTile("Observe-mode would-blocks", AgentKpis.NotReported, "Neutral", AgentKpis.WouldBlockNote, false));
         Kpis.Add(new KpiTile("Guardrail evaluations", AgentKpis.Count(k.GuardrailEvaluations), "Neutral", "Distinct guardrail and hook decisions recorded.", true));
         Kpis.Add(new KpiTile(

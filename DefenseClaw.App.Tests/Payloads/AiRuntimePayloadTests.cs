@@ -113,8 +113,8 @@ public sealed class AiRuntimePayloadTests : IDisposable
             Assert.Equal("Not supported", vm.RuntimeBadgeText);
             Assert.Equal("Neutral", vm.RuntimeBadgeKey);
             Assert.Equal("Runtime coverage is not supported by this DefenseClaw version", vm.RuntimeTitle);
-            Assert.Contains("not a problem with this machine", vm.RuntimeDetail, StringComparison.Ordinal);
-            Assert.Contains("absence of runtime findings says nothing about the host", vm.RuntimeDetail, StringComparison.Ordinal);
+            Assert.Contains("has no /api/v1/ai-usage/runtime route", vm.RuntimeDetail, StringComparison.Ordinal);
+            Assert.Contains("are not watched", vm.RuntimeDetail, StringComparison.Ordinal);
             Assert.False(vm.RuntimeHasSnapshot);
             Assert.Empty(vm.RuntimePlanes);
             Assert.Empty(vm.RuntimeFindings);
@@ -164,7 +164,7 @@ public sealed class AiRuntimePayloadTests : IDisposable
             var unauthorized = Ask(new StubGateway(HttpStatusCode.Unauthorized, "{\"error\":\"unauthorized\"}"));
             Assert.Equal(("Unknown", "Warn"), (unauthorized.RuntimeBadgeText, unauthorized.RuntimeBadgeKey));
             Assert.Contains("token not accepted", unauthorized.RuntimeTitle, StringComparison.Ordinal);
-            Assert.Contains("not a clean-host result", unauthorized.RuntimeDetail, StringComparison.Ordinal);
+            Assert.Contains("Runtime coverage is unknown", unauthorized.RuntimeDetail, StringComparison.Ordinal);
 
             var notConnected = Ask(new StubGateway(HttpStatusCode.OK, "{\"error\":\"gateway: not connected\"}"));
             Assert.Equal("Not connected", notConnected.RuntimeBadgeText);
@@ -192,9 +192,9 @@ public sealed class AiRuntimePayloadTests : IDisposable
             Assert.True(vm.RuntimeHasSnapshot);
             Assert.Contains("3 findings;", vm.RuntimeDetail, StringComparison.Ordinal);
             Assert.Contains("312 processes observed (4 skipped)", vm.RuntimeDetail, StringComparison.Ordinal);
-            Assert.Contains("88 connections (9 not attributed to a process)", vm.RuntimeDetail, StringComparison.Ordinal);
+            Assert.Contains("88 connections (9 unattributed)", vm.RuntimeDetail, StringComparison.Ordinal);
             Assert.Contains("polled", vm.RuntimeDetail, StringComparison.Ordinal);
-            Assert.Contains("No findings is not the same as a clean host", vm.RuntimeDetail, StringComparison.Ordinal);
+            Assert.DoesNotContain("clean host", vm.RuntimeDetail, StringComparison.Ordinal);
             Assert.DoesNotContain("Degraded:", vm.RuntimeDetail, StringComparison.Ordinal);
 
             // Planes: running is up, available but not running is idle, unavailable is blind (never quiet).
@@ -277,7 +277,7 @@ public sealed class AiRuntimePayloadTests : IDisposable
             var vm = Answer("ai-runtime.incomplete.json");
 
             Assert.Equal(("Incomplete", "Warn"), (vm.RuntimeBadgeText, vm.RuntimeBadgeKey));
-            Assert.Contains("Nothing here should be read as a clean host", vm.RuntimeDetail, StringComparison.Ordinal);
+            Assert.Contains("missing fields", vm.RuntimeDetail, StringComparison.Ordinal);
             Assert.False(vm.RuntimeHasSnapshot);
         });
     }

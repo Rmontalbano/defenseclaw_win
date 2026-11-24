@@ -32,15 +32,15 @@ public sealed partial class SettingsPanelViewModel
         var paths = Services.Paths;
         yield return NewRow(MessageCard.Files, "Config", "config.yaml", paths.ConfigFilePath, isDirectory: false, ConfigSource(paths));
         yield return NewRow(MessageCard.Files, "Data", "data directory", paths.DataDirectory, isDirectory: true, paths.DataDirectoryOrigin.Description);
-        yield return NewRow(MessageCard.Files, "Environment", ".env file", paths.EnvFilePath, isDirectory: false, "In the data directory. This page shows where it is and never opens it.");
-        yield return NewRow(MessageCard.Files, "Audit DB", "audit database", paths.AuditDatabasePath, isDirectory: false, "In the data directory: what Alerts, Audit and Logs read.");
+        yield return NewRow(MessageCard.Files, "Environment", ".env file", paths.EnvFilePath, isDirectory: false, "In the data directory.");
+        yield return NewRow(MessageCard.Files, "Audit DB", "audit database", paths.AuditDatabasePath, isDirectory: false, "In the data directory. Alerts, Audit and Logs read it.");
 
         // The installer script's layout keeps its Python in <data>\.venv; the Setup layout runs its own beside the program folder (CUST-329, SG15).
         _venvRow = NewRow(MessageCard.Files, "Virtual environment", "virtual environment", VenvDirectory(paths), isDirectory: true, note: null);
         ShowVenv(_venvRow, paths, venvExists: File.Exists(paths.VenvPythonPath), setupPythonExists: File.Exists(paths.SetupPythonPath));
         yield return _venvRow;
 
-        yield return NewRow(MessageCard.Files, "Gateway log", "gateway log", paths.GatewayLogPath, isDirectory: false, "In the data directory, where the gateway writes it.");
+        yield return NewRow(MessageCard.Files, "Gateway log", "gateway log", paths.GatewayLogPath, isDirectory: false, "In the data directory. The gateway writes it.");
     }
 
     private IEnumerable<SettingsPathRow> BuildCompanionFiles()
@@ -52,7 +52,7 @@ public sealed partial class SettingsPanelViewModel
             "settings file",
             settingsFile,
             isDirectory: false,
-            "This app's preferences: every switch on this page, and the appearance. Not DefenseClaw's configuration.");
+            "Every switch on this page, and the appearance.");
 
         if (Path.GetDirectoryName(settingsFile) is { Length: > 0 } folder)
         {
@@ -62,7 +62,7 @@ public sealed partial class SettingsPanelViewModel
                 "app folder",
                 folder,
                 isDirectory: true,
-                "This app's own folder: its settings, caches, logs and downloaded updates. Separate from DefenseClaw's installation, data and logs.");
+                "Settings, caches, logs and downloaded updates of this app.");
         }
     }
 
@@ -90,11 +90,11 @@ public sealed partial class SettingsPanelViewModel
     {
         row.IsAvailable = venvExists;
         row.Note = venvExists && setupPythonExists
-            ? "The installer script's .venv under the data directory. The Setup install's own Python is the one DefenseClaw runs."
-            : "The installer script's .venv under the data directory: the Python DefenseClaw runs.";
+            ? "The installer script's .venv under the data directory. DefenseClaw runs the Setup install's Python."
+            : "The installer script's .venv under the data directory. DefenseClaw runs this Python.";
         row.UnavailableNote = setupPythonExists
-            ? $"This installation has no virtual environment: DefenseClaw runs the Setup install's own Python, {paths.SetupPythonPath}."
-            : "No .venv under the data directory, and no Setup runtime either.";
+            ? $"This installation has no virtual environment. DefenseClaw runs the Setup install's Python, {paths.SetupPythonPath}."
+            : "No .venv under the data directory and no Setup runtime either.";
     }
 
     private SettingsPathRow NewRow(MessageCard card, string label, string noun, string path, bool isDirectory, string? note)

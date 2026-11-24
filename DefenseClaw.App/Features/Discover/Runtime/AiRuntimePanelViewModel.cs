@@ -67,23 +67,22 @@ public sealed partial class AiRuntimePanelViewModel : PanelViewModelBase
     public const string UnsupportedTitle = "Runtime planes are not supported by this gateway";
 
     public const string UnsupportedDetail =
-        "The selected gateway does not serve the runtime API (GET /api/v1/ai-usage/runtime). A matching version label alone is not enough: " +
-        "install a DefenseClaw build that has the runtime planes. This is a limit of the version, not a problem with this PC - and it means " +
-        "nothing is watching for shadow AI network traffic or unattributed agent actions through the planes.";
+        "This gateway does not serve GET /api/v1/ai-usage/runtime. Install a DefenseClaw build with the runtime planes. " +
+        "Until then nothing watches for shadow AI traffic or unattributed agent actions.";
 
     public const string UnavailableTitle = "Runtime coverage unavailable";
 
-    public const string UnavailableDetail = "No snapshot has been received, so nothing can be said about what the planes can see. This is not a clean-host result.";
+    public const string UnavailableDetail = "No snapshot has been received, so what the planes can see is unknown.";
 
     public const string DisabledTitle = "Runtime planes are disabled";
 
     public const string DisabledDetail =
-        "Nothing is watching for shadow AI network traffic or unattributed agent actions through the planes. " +
-        "Enable them with: defenseclaw agent discovery runtime enable";
+        "Nothing watches for shadow AI traffic or unattributed agent actions. " +
+        "Enable the planes with: defenseclaw agent discovery runtime enable";
 
     public const string NoPollTitle = "No poll yet";
 
-    public const string NoPollDetail = "The runtime planes are enabled but none has completed a poll. Poll now, or wait for the next interval. This is not a clean-host result.";
+    public const string NoPollDetail = "The runtime planes are enabled and none has polled yet. Select Poll now or wait for the next interval.";
 
     public const string NoFindingsTitle = "No findings";
 
@@ -92,7 +91,7 @@ public sealed partial class AiRuntimePanelViewModel : PanelViewModelBase
 
     /// <summary>Why the snapshot on screen is stale when config.yaml or .env changed after it was read: the twin of the gateway-away reason.</summary>
     public const string ConfigMovedReason =
-        "The config.yaml or .env file changed after this snapshot was read, so the coverage above may no longer be true.";
+        "config.yaml or .env changed after this snapshot was read.";
 
     private AiRuntimeSnapshot? _snapshot;
     private DateTimeOffset? _readAt;
@@ -127,7 +126,7 @@ public sealed partial class AiRuntimePanelViewModel : PanelViewModelBase
     public override string Title => "Runtime";
 
     public override string Description =>
-        "What the AI Discovery runtime planes can and cannot see on this PC - running AI processes, their network peers and agent actions - and what they found.";
+        "What the runtime planes see on this PC: AI processes, network peers and agent actions.";
 
     /// <summary>The confirm-and-run overlay every change on this panel goes through.</summary>
     public DiscoverActionReview Review { get; }
@@ -197,10 +196,7 @@ public sealed partial class AiRuntimePanelViewModel : PanelViewModelBase
     public bool ShowEnableInState => State == AiRuntimeState.Disabled;
 
     /// <summary>What the "No findings" state says: always the caveat, and what the planes were actually doing.</summary>
-    public string NoFindingsDetail =>
-        _snapshot is { } snapshot
-            ? AiRuntimeCoverage.NoFindingsCaveat + " " + snapshot.Coverage.Headline
-            : AiRuntimeCoverage.NoFindingsCaveat;
+    public string NoFindingsDetail => AiRuntimeCoverage.NoFindingsCaveat;
 
     public string StateTitle => State switch
     {
@@ -214,7 +210,7 @@ public sealed partial class AiRuntimePanelViewModel : PanelViewModelBase
 
     public string StateDetail => State switch
     {
-        AiRuntimeState.Loading => "Asking the gateway for the runtime planes' last snapshot.",
+        AiRuntimeState.Loading => "Reading the last runtime snapshot from the gateway.",
         AiRuntimeState.Unsupported => UnsupportedDetail,
         AiRuntimeState.Unavailable => (_unavailableReason.Length > 0 ? _unavailableReason + " " : string.Empty) + UnavailableDetail,
         AiRuntimeState.Disabled => DisabledDetail,
@@ -227,10 +223,10 @@ public sealed partial class AiRuntimePanelViewModel : PanelViewModelBase
     /// <summary>The banner above everything while the snapshot on screen is not the latest.</summary>
     public string StaleBanner =>
         IsStale
-            ? "STALE — the last successful snapshot" +
-              (_snapshot?.ScannedAt is { } at ? $" (polled {Time(at)})" : string.Empty) +
-              " is shown. " + (StaleReason.Length > 0 ? StaleReason + " " : string.Empty) +
-              "Nothing below is newer than that, and no change can be made until a read succeeds."
+            ? "STALE: showing the last successful snapshot" +
+              (_snapshot?.ScannedAt is { } at ? $", polled {Time(at)}" : string.Empty) +
+              ". " + (StaleReason.Length > 0 ? StaleReason + " " : string.Empty) +
+              "Changes are off until a read succeeds."
             : string.Empty;
 
     // ---- Coverage --------------------------------------------------------------------------------------------------------
@@ -246,7 +242,7 @@ public sealed partial class AiRuntimePanelViewModel : PanelViewModelBase
     public string CoverageTone => IsStale ? "Warn" : _coverageToneCore;
 
     public string CoverageHeadline =>
-        IsStale && _coverageHeadlineCore.Length > 0 ? "As of the last successful poll, which may no longer be true: " + _coverageHeadlineCore : _coverageHeadlineCore;
+        IsStale && _coverageHeadlineCore.Length > 0 ? "As of the last successful poll: " + _coverageHeadlineCore : _coverageHeadlineCore;
 
     [ObservableProperty]
     private string _countsText = string.Empty;
@@ -269,7 +265,7 @@ public sealed partial class AiRuntimePanelViewModel : PanelViewModelBase
     /// <summary>"6 findings", "2 of 6 findings", and what was not kept when the snapshot had more than the panel lists.</summary>
     public string FindingsCaption =>
         _snapshot is { FindingsNotShown: > 0 } snapshot
-            ? FindingsCount + $"; {snapshot.FindingsNotShown.ToString("N0", CultureInfo.InvariantCulture)} more were not kept (the worst {AiRuntimeReader.MaxFindings.ToString("N0", CultureInfo.InvariantCulture)} are listed)"
+            ? FindingsCount + $"; {snapshot.FindingsNotShown.ToString("N0", CultureInfo.InvariantCulture)} more not kept, worst {AiRuntimeReader.MaxFindings.ToString("N0", CultureInfo.InvariantCulture)} listed"
             : FindingsCount;
 
     /// <summary>"6 findings" or, while the filter hides some, "2 of 6 findings".</summary>
@@ -328,11 +324,10 @@ public sealed partial class AiRuntimePanelViewModel : PanelViewModelBase
             parts.Add("polled " + Time(at));
         }
 
-        parts.Add(snapshot.CoverageSummary);
         return string.Join(" · ", parts);
     }
 
-    /// <summary>"The snapshot was polled 10:04:30; this panel read it 10:05:02."</summary>
+    /// <summary>"Polled 10:04:30 · read 10:05:02".</summary>
     public string ReadText
     {
         get
@@ -342,8 +337,8 @@ public sealed partial class AiRuntimePanelViewModel : PanelViewModelBase
                 return string.Empty;
             }
 
-            var polled = _snapshot.ScannedAt is { } at ? $"polled {Time(at)}" : _snapshot.Polled ? "polled (time unreadable)" : "not polled yet";
-            return _readAt is { } read ? $"Snapshot {polled}; read by this app at {Time(read)}." : $"Snapshot {polled}.";
+            var polled = _snapshot.ScannedAt is { } at ? $"Polled {Time(at)}" : _snapshot.Polled ? "Polled, time unreadable" : "Not polled yet";
+            return _readAt is { } read ? $"{polled} · read {Time(read)}" : polled;
         }
     }
 
@@ -420,7 +415,7 @@ public sealed partial class AiRuntimePanelViewModel : PanelViewModelBase
 
         if (!reachable && _snapshot is not null)
         {
-            MarkStale("The gateway is not running, so the coverage above may no longer be true.");
+            MarkStale("The gateway is not running.");
         }
         else if (reachable && !wasReachable)
         {

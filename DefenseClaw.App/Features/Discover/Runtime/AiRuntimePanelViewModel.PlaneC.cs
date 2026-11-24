@@ -16,7 +16,7 @@ namespace DefenseClaw.App.ViewModels;
 public sealed partial class AiRuntimePanelViewModel
 {
     public const string PlaneCCopyOnlyNote =
-        "These lines are text to copy. This app never runs them. Run them yourself in an elevated prompt, on the side-by-side runtime only, then restart its gateway and check again.";
+        "Run these in an elevated prompt, on the side-by-side runtime only. Then restart its gateway and select Check again.";
 
     private IPlaneCProbes? _planeCCaptured;
     private bool _planeCReading;

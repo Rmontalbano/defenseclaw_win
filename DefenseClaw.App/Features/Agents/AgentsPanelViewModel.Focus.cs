@@ -9,7 +9,7 @@ namespace DefenseClaw.App.ViewModels;
 public sealed partial class AgentsPanelViewModel
 {
     /// <summary>The line shown when a link names an agent the directory on screen does not list. Quiet: no error, nothing is selected.</summary>
-    public const string AgentNotInViewMessage = "That agent is not in the current view. It may be on a later page of the directory, or no longer reported.";
+    public const string AgentNotInViewMessage = "That agent is not in the current view. It may be on a later page or no longer reported.";
 
     private string? _pendingAgentFocus;
 

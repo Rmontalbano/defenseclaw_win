@@ -263,8 +263,8 @@ public sealed class PlaneCReadinessPanelTests : IDisposable
                 Assert.Contains("Plane C readiness checks", names);
                 Assert.Contains(names, n => n.StartsWith("This app's token: Token elevation", StringComparison.Ordinal));
                 Assert.Contains(names, n => n.StartsWith("The gateway (runtime snapshot): Plane C", StringComparison.Ordinal));
-                Assert.Contains("Verify commands to copy (this app does not run them)", names);
-                Assert.Contains("Revert commands to copy (this app does not run them)", names);
+                Assert.Contains("Verify commands to copy", names);
+                Assert.Contains("Revert commands to copy", names);
 
                 if (Environment.GetEnvironmentVariable("DC_RENDER_DIR") is { Length: > 0 } dir)
                 {

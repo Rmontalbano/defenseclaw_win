@@ -91,7 +91,7 @@ public sealed class GatewayAdminSettingAndToggleTests : IDisposable
 
         Assert.Equal("Run gateway as administrator", GatewayAdminToggleViewModel.Heading);
         Assert.Equal(
-            "Runs your installed gateway with administrator rights (one Windows prompt per start). Needed only for runtime monitoring's agent-actions plane.",
+            "Runs the gateway as administrator. One Windows prompt per start. Only runtime monitoring's agent-actions plane needs it.",
             GatewayAdminToggleViewModel.Caption);
         Assert.True(vm.CanToggle);
         Assert.False(vm.IsOn);

@@ -223,9 +223,9 @@ public sealed class AiRuntimePanelViewTests : IDisposable
                 Assert.Contains("Partial coverage: 1 of 3 planes fully reporting.", texts);
 
                 // Not a tooltip: the whole reason, in the page.
-                Assert.Contains(texts, t => t.Contains("C · agent actions — blind: plane: Security event log unreadable: Access is denied. (the gateway needs an elevated token to read the Security channel)", StringComparison.Ordinal));
-                Assert.Contains(texts, t => t.Contains("B · shadow egress — partial: egress attribution is limited to this process's own sockets; run the gateway elevated for machine-wide coverage", StringComparison.Ordinal));
-                Assert.DoesNotContain(texts, t => t.StartsWith("A · inference heartbeat —", StringComparison.Ordinal));
+                Assert.Contains(texts, t => t.Contains("C · agent actions (blind): plane: Security event log unreadable: Access is denied. (the gateway needs an elevated token to read the Security channel)", StringComparison.Ordinal));
+                Assert.Contains(texts, t => t.Contains("B · shadow egress (partial): egress attribution is limited to this process's own sockets; run the gateway elevated for machine-wide coverage", StringComparison.Ordinal));
+                Assert.DoesNotContain(texts, t => t.StartsWith("A · inference heartbeat (", StringComparison.Ordinal));
 
                 // The unattributed share warns, and the badge is not the calm one.
                 Assert.Contains(vm.UnattributedWarning, texts.Concat(VisualTree.Descendants<Wpf.Ui.Controls.InfoBar>(view).Select(b => b.Message)));
@@ -292,7 +292,7 @@ public sealed class AiRuntimePanelViewTests : IDisposable
                 Assert.All(buttons.Where(b => (b.Content as string) is "Poll now…" or "Change settings…" or "Disable…"), b => Assert.False(b.IsEnabled, b.Content?.ToString()));
                 Assert.False(buttons.Single(b => AutomationProperties.GetName(b) == "Poll now").IsEnabled);
                 Assert.True(buttons.Single(b => AutomationProperties.GetName(b) == "Refresh").IsEnabled);
-                Assert.Contains(texts, t => t.Contains("is stale", StringComparison.Ordinal) && t.Contains("refresh it first", StringComparison.Ordinal));
+                Assert.Contains(texts, t => t.Contains("is stale", StringComparison.Ordinal) && t.Contains("Refresh it first", StringComparison.Ordinal));
 
                 RenderTo.Png(host, "cust309-runtime-stale");
             }
@@ -321,7 +321,7 @@ public sealed class AiRuntimePanelViewTests : IDisposable
                 Assert.All(enable, b => Assert.True(b.IsEnabled));
                 var poll = VisualTree.Descendants<Wpf.Ui.Controls.Button>(view).Single(b => (b.Content as string) == "Poll now…");
                 Assert.False(poll.IsEnabled);
-                Assert.Contains("Poll now and Disable are off: The runtime planes are disabled; enable them first.", texts);
+                Assert.Contains("Poll now and Disable are off: The runtime planes are disabled. Enable them first.", texts);
 
                 RenderTo.Png(host, "cust309-runtime-disabled");
             }

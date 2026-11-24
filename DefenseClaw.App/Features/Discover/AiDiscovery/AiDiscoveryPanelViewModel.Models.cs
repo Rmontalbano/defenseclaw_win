@@ -103,7 +103,7 @@ public sealed record DiscoveryHeaderCounts(
             {
                 DiscoveryCountsOrigin.Gateway when when is not null => $"The gateway's last scan: {kind}, {when}.",
                 DiscoveryCountsOrigin.AuditTrail when when is not null => $"The audit trail's last scan: {kind}, {when}.",
-                _ => "Counted from the signals listed below; no scan summary could be read.",
+                _ => "No scan summary. Counts are from the signals below.",
             };
         }
     }
@@ -282,8 +282,8 @@ public sealed partial class AiDiscoveryPanelViewModel
     /// had; where the column can show a model's own confidence it says which number the cut is made on.
     /// </summary>
     public string ConfidenceFilterHelp => HasRecommendedScope
-        ? "The number the Confidence column shows: the model's own discovery confidence when the runtime reports one, otherwise the strongest detection score among its signals (how sure the scanner was that something matched, not its confidence in the model). Every model is listed until you choose a cut."
-        : "The strongest detection score among the model's signals: how sure the scanner was that something matched, not its confidence in the model itself. Every model is listed until you choose a cut.";
+        ? "Cuts on the Confidence column: the model's own confidence when the runtime reports one, else the strongest detection score among its signals. All models are listed until you set a cut."
+        : "Cuts on the strongest detection score among the model's signals. All models are listed until you set a cut.";
 
     /// <summary>The screen-reader help of Reset filters: with the recommended view on offer, resetting also puts the list back to it.</summary>
     public string ResetFiltersHelp => HasRecommendedScope
@@ -513,8 +513,8 @@ public sealed partial class AiDiscoveryPanelViewModel
             {
                 IsDiagnostic = true,
                 Description = lookup
-                    ? "Online model lookup is on: the gateway may look up the model cards of the Hugging Face repositories it finds in local model metadata."
-                    : "Online model lookup is off (the default): a model's lineage comes from the runtime's built-in publisher catalogue and the model's own metadata only.",
+                    ? "Online model lookup is on. The gateway may look up Hugging Face model cards for repositories found in local model metadata."
+                    : "Online model lookup is off. Lineage comes only from the built-in publisher catalogue and the model's own metadata.",
             });
         }
 
@@ -564,7 +564,7 @@ public sealed partial class AiDiscoveryPanelViewModel
             {
                 return (signals, new DiscoverySourceInfo(
                     label,
-                    "inventory.db does not have the confidence snapshot tables this reads, so the cards show no identity or presence band.",
+                    "inventory.db lacks the confidence snapshot tables, so cards show no identity or presence band.",
                     null,
                     Available: false));
             }
@@ -600,7 +600,7 @@ public sealed partial class AiDiscoveryPanelViewModel
 
             return (enriched, new DiscoverySourceInfo(
                 label,
-                $"{Plural(bands.Count, "component")} with an identity and presence band, shown on {Plural(matched, "signal")}.",
+                $"{Plural(bands.Count, "component")} with identity and presence bands, on {Plural(matched, "signal")}.",
                 rollup.Scan?.ScannedAt,
                 Available: true));
         }
@@ -721,13 +721,13 @@ public sealed partial class AiDiscoveryPanelViewModel
 
         if (!snapshot.Enabled)
         {
-            return new DiscoverySourceInfo(label, "The gateway reports AI discovery off, so it has nothing to add to the files.", snapshot.ScannedAt, Available: true);
+            return new DiscoverySourceInfo(label, "The gateway reports AI discovery off. Nothing to add.", snapshot.ScannedAt, Available: true);
         }
 
-        var detail = new List<string> { $"{Plural(snapshot.Signals.Count, "signal")} read from the gateway." };
+        var detail = new List<string> { $"{Plural(snapshot.Signals.Count, "signal")} from the gateway." };
         detail.Add(enriched == 0
-            ? "No model gained anything from it: the files already say all it does."
-            : $"{Plural(enriched, "model signal")} gained an owner, relevance, confidence or lineage from it.");
+            ? "No new model data."
+            : $"{Plural(enriched, "model signal")} gained an owner, relevance, confidence or lineage.");
         if (snapshot.LookupModelProvenanceOnline is { } lookup)
         {
             detail.Add($"Online model lookup is {(lookup ? "on" : "off")}.");
@@ -740,7 +740,7 @@ public sealed partial class AiDiscoveryPanelViewModel
 
         if (snapshot.UnreadableEntries > 0)
         {
-            detail.Add($"{snapshot.UnreadableEntries.ToString(CultureInfo.InvariantCulture)} entr{(snapshot.UnreadableEntries == 1 ? "y" : "ies")} that {(snapshot.UnreadableEntries == 1 ? "was" : "were")} not a signal {(snapshot.UnreadableEntries == 1 ? "was" : "were")} skipped.");
+            detail.Add($"{snapshot.UnreadableEntries.ToString(CultureInfo.InvariantCulture)} unreadable entr{(snapshot.UnreadableEntries == 1 ? "y" : "ies")} skipped.");
         }
 
         return new DiscoverySourceInfo(label, string.Join(' ', detail), snapshot.ScannedAt, Available: true);

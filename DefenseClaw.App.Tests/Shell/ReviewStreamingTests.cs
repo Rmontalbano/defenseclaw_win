@@ -176,7 +176,7 @@ public sealed class ReviewStreamingTests : IDisposable
 
         Assert.Null(during);
         Assert.Null(outputDuring);
-        Assert.Equal("Done. The exact command and its full output are in the Activity panel.", review.ResultText);
+        Assert.Equal("Done. Full output is in the Activity panel.", review.ResultText);
         Assert.Equal("hello", review.ResultOutput);
     }
 

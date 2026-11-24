@@ -452,7 +452,7 @@ public sealed class DiscoveryModelRow
     /// <summary>"...and 12 more (use `defenseclaw agent usage --detail --json` for the full list)" past the 50th observation, else empty.</summary>
     public string ObservationOverflow =>
         Signals.Count > MaxObservations
-            ? $"...and {(Signals.Count - MaxObservations).ToString(CultureInfo.InvariantCulture)} more (use `defenseclaw agent usage --detail --json` for the full list)"
+            ? $"{(Signals.Count - MaxObservations).ToString(CultureInfo.InvariantCulture)} more. Full list: `defenseclaw agent usage --detail --json`"
             : string.Empty;
 
     public bool HasObservationOverflow => Signals.Count > MaxObservations;

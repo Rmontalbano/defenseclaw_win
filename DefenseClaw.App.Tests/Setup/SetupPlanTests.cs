@@ -182,7 +182,7 @@ public sealed class SetupPlanTests : IDisposable
         Assert.Equal("Bad", review.ResultKey);
         Assert.Equal(
             "Did not finish. 1 of 3 steps succeeded. Step 2 failed (exit 1). Step 3 was not run. The steps that succeeded are not undone. " +
-            "The exact commands and their full output are in the Activity panel.",
+            "Full output is in the Activity panel.",
             review.ResultText);
 
         var result = Assert.Single(finished);
@@ -210,7 +210,7 @@ public sealed class SetupPlanTests : IDisposable
         Assert.Single(ran);
         Assert.Equal(
             "Did not finish. 0 of 3 steps succeeded. Step 1 failed (exit 2). Steps 2 and 3 were not run. " +
-            "The exact commands and their full output are in the Activity panel.",
+            "Full output is in the Activity panel.",
             review.ResultText);
         Assert.DoesNotContain("not undone", review.ResultText, StringComparison.Ordinal);
         Assert.Equal(
@@ -298,9 +298,9 @@ public sealed class SetupPlanTests : IDisposable
         var (bad, _, _) = Open(Plan(Three[2]), (_, argv) => Done(argv, 1));
         await bad.ConfirmCommand.ExecuteAsync(null);
 
-        Assert.Equal("Done. The exact command and its full output are in the Activity panel.", ok.ResultText);
+        Assert.Equal("Done. Full output is in the Activity panel.", ok.ResultText);
         Assert.Equal(
-            "Did not finish. Steps after the failing one were not run. The exact command and its full output are in the Activity panel.",
+            "Did not finish. Later steps were not run. Full output is in the Activity panel.",
             bad.ResultText);
     }
 

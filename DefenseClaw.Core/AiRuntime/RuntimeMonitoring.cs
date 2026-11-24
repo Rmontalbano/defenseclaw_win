@@ -232,27 +232,27 @@ public sealed record RuntimeMonitoringState(
     IReadOnlyList<RuntimeMonitoringPlane> Planes)
 {
     public const string RecordsA =
-        "Plane A, inference heartbeat: process names, CPU use over each poll and resident memory, to spot a script runtime or a model server doing sustained inference. " +
-        "It reads the process list (Toolhelp32, GetProcessTimes, GetProcessMemoryInfo). It can also read a process's command line, which the AI Discovery inventory scan never does.";
+        "Process names, CPU use per poll and resident memory, to spot sustained inference. Also reads process command lines, which the inventory scan does not. " +
+        "Uses Toolhelp32, GetProcessTimes and GetProcessMemoryInfo.";
 
     public const string RecordsB =
-        "Plane B, shadow egress: which process holds which network connection (the TCP and UDP tables with owning process ids), matched to known AI providers. " +
-        "With DNS capture on it also reads the DNS Client operational log (event 3008) to name the peer from the answer this PC resolved; otherwise peers are named by reverse DNS.";
+        "Which process holds which TCP or UDP connection, matched to known AI providers. " +
+        "With DNS capture on, it also reads the DNS Client operational log, event 3008, to name the peer. Otherwise peers are named by reverse DNS.";
 
     public const string RecordsC =
-        "Plane C, agent actions: process creation, privileged logons and account events from the Windows Security event log. Every signal it raises is gated on an AI agent being in the process lineage, " +
-        "so a developer's own sudo-like action produces nothing and the same action under an agent does. File read and write events are not covered (they need an audit rule on each file).";
+        "Process creation, privileged logons and account events from the Windows Security event log. Signals are raised only when an AI agent is in the process lineage." +
+        "File read and write events are not covered: they need an audit rule on each file.";
 
     public const string PrivacyAB =
-        "Stays on this PC: findings go to the local audit store and to whatever observability destinations you have configured. Process command lines are classified as content and pass through each " +
+        "Findings go to the local audit store and the observability destinations you configured. Command lines are classified as content and pass through each " +
         "destination's redaction profile. Environment variable values are never read.";
 
     public const string PrivacyC =
-        "Reads other programs' process creation records, including command lines when Windows is set to include them. The Security log is a sensitive source: it is read by the gateway on this PC and handled like the other planes' data. " +
-        "Environment variable values are never read.";
+        "Reads other programs' process creation records, including command lines when Windows is set to include them. The Security log is sensitive. " +
+        "The gateway reads it on this PC and handles it like the other planes' data. Environment variable values are never read.";
 
     public const string PrivacyDns =
-        "DNS capture records the names this PC resolved (domains), locally, so egress peers are named exactly.";
+        "DNS capture records the domains this PC resolved, locally, to name egress peers.";
 
     /// <summary>The compact state for the Overview: <c>on · A running · B running · C off</c>.</summary>
     public string Summary
@@ -296,7 +296,7 @@ public sealed record RuntimeMonitoringState(
 
         var headline = config.Enabled
             ? "Runtime monitoring is on in config.yaml."
-            : "Runtime monitoring is off in config.yaml: nothing is watching processes or connections for AI use.";
+            : "Runtime monitoring is off in config.yaml. Nothing watches processes or connections for AI use.";
 
         return new RuntimeMonitoringState(config, health, headline, ApplyNoteFor(config, health, gatewayAnswered), rows);
     }
@@ -306,7 +306,7 @@ public sealed record RuntimeMonitoringState(
     {
         if (!gatewayAnswered)
         {
-            return "The gateway did not answer, so what it is running is not known. The settings above are what config.yaml says.";
+            return "The gateway did not answer. The settings above are from config.yaml.";
         }
 
         if (!health.Reported)
@@ -316,12 +316,12 @@ public sealed record RuntimeMonitoringState(
 
         if (config.Enabled && health.IsDisabled)
         {
-            return "config.yaml turns monitoring on but the gateway reports it disabled: restart the gateway to apply it.";
+            return "config.yaml turns monitoring on but the gateway reports it disabled. Restart the gateway to apply it.";
         }
 
         if (!config.Enabled && !health.IsDisabled && health.State.Length > 0)
         {
-            return "config.yaml turns monitoring off but the gateway still reports it " + health.State + ": restart the gateway to stop it.";
+            return "config.yaml turns monitoring off but the gateway still reports it " + health.State + ". Restart the gateway to stop it.";
         }
 
         if (health.State.Equals("error", StringComparison.OrdinalIgnoreCase))
@@ -404,14 +404,14 @@ public sealed record RuntimeMonitoringState(
             case "a":
                 rows.Add(new("Works without administrator rights for your own processes.", RuntimeRequirementState.Met));
                 rows.Add(new(
-                    "Gap without an elevated gateway: other users' processes and elevated processes (an agent started from an administrator terminal) are only partly visible, and are counted as reduced coverage.",
+                    "Gap without an elevated gateway: other users' processes and elevated processes are only partly visible. They count as reduced coverage.",
                     RuntimeRequirementState.Note));
                 break;
 
             case "b":
-                rows.Add(new("Works without administrator rights: Windows hands back the owning process id for every socket.", RuntimeRequirementState.Met));
+                rows.Add(new("Works without administrator rights. Windows gives the owning process id for every socket.", RuntimeRequirementState.Met));
                 rows.Add(new(
-                    "Gap without an elevated gateway: the process image path and owner can be refused for another user's or an elevated process, so some connections may be attributed by address only.",
+                    "Gap without an elevated gateway: image path and owner can be refused for other users' or elevated processes, so some connections are attributed by address only.",
                     RuntimeRequirementState.Note));
                 rows.Add(DnsRequirement(config, health));
                 break;
@@ -421,7 +421,7 @@ public sealed record RuntimeMonitoringState(
                 rows.Add(new(
                     optedIn
                         ? "Opted in: planes lists c and enable_host_plane is true."
-                        : "Not opted in: needs c in planes and enable_host_plane true (turning Plane C on here sets both).",
+                        : "Not opted in. Needs c in planes and enable_host_plane true. Turning Plane C on here sets both.",
                     optedIn ? RuntimeRequirementState.Met : RuntimeRequirementState.NotMet));
                 rows.Add(elevation switch
                 {
@@ -430,7 +430,7 @@ public sealed record RuntimeMonitoringState(
                     _ => new("Needs Run gateway as administrator. This app cannot start an elevated gateway yet, so this is not available here.", RuntimeRequirementState.Unavailable),
                 });
                 rows.Add(new(
-                    "Advanced Audit Policy, Detailed Tracking, Audit Process Creation (success): can't check without admin. Reading the policy needs an elevated prompt (auditpol), and this app does not guess.",
+                    "Advanced Audit Policy, Detailed Tracking, Audit Process Creation (success): can't check without admin. Reading it needs an elevated prompt with auditpol.",
                     RuntimeRequirementState.CannotCheck));
                 rows.Add(CommandLineRequirement(commandLineAudit));
                 rows.Add(new(
@@ -453,7 +453,7 @@ public sealed record RuntimeMonitoringState(
         if (mechanism.Contains("dns capture unavailable", StringComparison.OrdinalIgnoreCase))
         {
             return new(
-                "DNS capture is on but the gateway says it is unavailable. It reads the DNS Client operational log, which is off by default; enabling it (wevtutil sl Microsoft-Windows-DNS-Client/Operational /e:true) needs an elevated prompt.",
+                "DNS capture is on but the gateway says it is unavailable. The DNS Client operational log is off by default. Enable it in an elevated prompt: wevtutil sl Microsoft-Windows-DNS-Client/Operational /e:true",
                 RuntimeRequirementState.NotMet);
         }
 
@@ -463,7 +463,7 @@ public sealed record RuntimeMonitoringState(
         }
 
         return new(
-            "DNS capture is on. Whether it works depends on the DNS Client operational log being enabled (off by default); the gateway reports its state once plane B runs.",
+            "DNS capture is on. It needs the DNS Client operational log, which is off by default. The gateway reports its state once plane B runs.",
             RuntimeRequirementState.CannotCheck);
     }
 
@@ -472,12 +472,12 @@ public sealed record RuntimeMonitoringState(
         const string Subject = "Command lines in process creation events (Include command line in process creation events): ";
         if (reading is null || !reading.Read)
         {
-            return new(Subject + "could not be read" + (reading is { Problem.Length: > 0 } ? " (" + reading.Problem + ")" : string.Empty) + ". Without it lineage still works; argument-based detections do not.", RuntimeRequirementState.CannotCheck);
+            return new(Subject + "could not be read" + (reading is { Problem.Length: > 0 } ? " (" + reading.Problem + ")" : string.Empty) + ". Lineage still works. Argument-based detections do not.", RuntimeRequirementState.CannotCheck);
         }
 
         return reading.Value is { } value and not 0
             ? new(Subject + "on.", RuntimeRequirementState.Met)
-            : new(Subject + "off or not set. Lineage still works; argument-based detections do not.", RuntimeRequirementState.NotMet);
+            : new(Subject + "off or not set. Lineage still works. Argument-based detections do not.", RuntimeRequirementState.NotMet);
     }
 }
 
@@ -526,7 +526,7 @@ public static class RuntimeMonitoringPlan
             if (wanted.HostPlane != currentC)
             {
                 changes.Add(new(wanted.HostPlane
-                    ? "Plane C (agent actions): off → on. Needs an elevated gateway and the audit policy; until then it reports itself blind."
+                    ? "Plane C (agent actions): off → on. Needs an elevated gateway and the audit policy. Until then it reports itself blind."
                     : "Plane C (agent actions): on → off."));
             }
 

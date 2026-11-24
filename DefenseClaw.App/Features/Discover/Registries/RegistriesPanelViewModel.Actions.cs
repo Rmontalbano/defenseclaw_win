@@ -74,9 +74,9 @@ public sealed partial class RegistriesPanelViewModel
     {
         "http_yaml" => "HTTPS URL of a YAML manifest.",
         "http_json" => "HTTPS URL of a JSON manifest.",
-        "git" => "Git repository URL; the repository must contain defenseclaw-registry.yaml.",
+        "git" => "Git repository URL. It must contain defenseclaw-registry.yaml.",
         "file" => "Absolute path of a manifest file on this machine, for example C:\\registries\\catalog.yaml.",
-        _ => "Optional for this kind; leave empty to use its built-in address.",
+        _ => "Optional. Leave empty to use the built-in address.",
     };
 
     [RelayCommand]
@@ -144,10 +144,9 @@ public sealed partial class RegistriesPanelViewModel
 
         Review.Open(
             $"Add registry source “{id}”?",
-            "Registers a catalog source in config.yaml. Adding never fetches anything; a sync does " +
-            "(the second step, if you ticked “Sync after adding”). " +
+            "Adds the source to config.yaml without fetching it" + (syncAfter ? ", then step 2 syncs it. " : ". ") +
             (authEnv.Length > 0
-                ? $"The source will read its bearer token from the environment variable {authEnv}; the token itself is never entered here."
+                ? $"The bearer token is read from the environment variable {authEnv}."
                 : "No credentials are used."),
             steps,
             result => AfterAddAsync(result, id, syncAfter),
@@ -174,8 +173,8 @@ public sealed partial class RegistriesPanelViewModel
             result,
             success: synced ? $"Added “{id}” and synced it." : $"Added “{id}”. It has not been synced yet.",
             failure: addSucceeded
-                ? $"Added “{id}”, but the sync did not finish. See the result in the dialog and in Activity."
-                : $"“{id}” was not added. See the result in the dialog and in Activity.").ConfigureAwait(true);
+                ? $"Added “{id}”, but the sync did not finish. See the dialog and Activity."
+                : $"“{id}” was not added. See the dialog and Activity.").ConfigureAwait(true);
 
         if (addSucceeded)
         {
@@ -207,9 +206,9 @@ public sealed partial class RegistriesPanelViewModel
             var kind = SecretHeuristics.Explain(url);
             if (kind is not null || SecretInUrlPattern.IsMatch(url))
             {
-                return "That address looks like it carries a credential" +
-                    (kind is null ? " (user:password@ or a token in the query string). " : $" ({kind}). ") +
-                    "Put the token in an environment variable and enter that variable's name below instead.";
+                return "That address looks like it carries a credential: " +
+                    (kind ?? "user:password@ or a token in the query string") + ". " +
+                    "Put the token in an environment variable and enter its name below.";
             }
 
             if (AddKind == "file")
@@ -229,7 +228,7 @@ public sealed partial class RegistriesPanelViewModel
 
         if (authEnv.Length > 0 && !EnvNamePattern.IsMatch(authEnv))
         {
-            return "Enter the NAME of an environment variable in UPPER_SNAKE_CASE (for example CORP_REGISTRY_TOKEN), never the token itself.";
+            return "Enter the name of an environment variable in UPPER_SNAKE_CASE, such as CORP_REGISTRY_TOKEN.";
         }
 
         return null;
@@ -272,10 +271,8 @@ public sealed partial class RegistriesPanelViewModel
     }
 
     private const string SyncExplanation =
-        "Fetches the source's manifest over the network, scans each entry with the skill and MCP scanners, " +
-        "and promotes clean entries into asset_policy (config.yaml). It also rewrites the source's cache. " +
-        "MCP servers that run as a local process (stdio) are not scanned, because scanning them would start " +
-        "the publisher's package.";
+        "Fetches the manifest, scans each entry, promotes clean ones into asset_policy in config.yaml and rewrites " +
+        "the source's cache. Stdio MCP servers are not scanned, since that would start the publisher's package.";
 
     private static DiscoverStep SyncStep(string? id) =>
         new(
@@ -303,7 +300,7 @@ public sealed partial class RegistriesPanelViewModel
             enable ? $"Enable “{source.Id}”?" : $"Disable “{source.Id}”?",
             enable
                 ? "Turns the source back on so “Sync all” includes it. Nothing is fetched until a sync runs."
-                : "Turns the source off so “Sync all” skips it. Its cache and any policy rules it already promoted stay as they are.",
+                : "Turns the source off so “Sync all” skips it. Its cache and promoted policy rules stay.",
             new[] { new DiscoverStep(argv, "Change only the enabled flag of this source.") },
             result => AfterActionAsync(
                 result,
@@ -325,9 +322,8 @@ public sealed partial class RegistriesPanelViewModel
 
         Review.Open(
             $"Remove “{source.Id}”?",
-            "Deletes the source from config.yaml, removes the asset_policy rules it promoted (the ones whose " +
-            "reason is registry:" + DisplayNames.Visible(source.Id) + "), and deletes its cache folder. Skills and MCP servers " +
-            "that were only allowed because of those rules stop being allowed.",
+            "Deletes the source from config.yaml, deletes its cache folder, and removes the asset_policy rules with reason " +
+            "registry:" + DisplayNames.Visible(source.Id) + ". Skills and MCP servers allowed only by those rules stop being allowed.",
             new[] { new DiscoverStep(argv, "Remove the source, its promoted rules and its cache.", CommandTier.Destructive) },
             result => AfterActionAsync(result, $"Removed “{source.Id}”.", $"“{source.Id}” was not removed."),
             primaryText: "Remove source",
@@ -373,11 +369,10 @@ public sealed partial class RegistriesPanelViewModel
                 ? $"Approve {type} “{entry.Name}”?"
                 : $"Reject {type} “{entry.Name}”?",
             approve
-                ? "Marks the entry approved, even if the scanner has not run, and keeps it approved across syncs. " +
-                  "It then re-runs promotion from the cached manifest (no network), so an allow rule for it " +
-                  "lands in asset_policy now (config.yaml)."
-                : "Marks the entry rejected: it is never promoted and stays blocked in future syncs. Any rule " +
-                  "an earlier sync promoted for it is removed from asset_policy (config.yaml).",
+                ? "Approves the entry, even if it was not scanned, and keeps it approved across syncs. " +
+                  "Promotion re-runs from the cache with no network and adds an allow rule to asset_policy in config.yaml."
+                : "Rejects the entry. It is never promoted and stays blocked in future syncs, and any rule an earlier " +
+                  "sync promoted for it is removed from asset_policy in config.yaml.",
             new[]
             {
                 new DiscoverStep(
@@ -414,9 +409,8 @@ public sealed partial class RegistriesPanelViewModel
         Review.Open(
             enable ? $"Require a registry entry for {noun}?" : $"Make the registry optional for {noun}?",
             enable
-                ? $"Turns on asset_policy.{type}.registry_required for the whole install (every active connector " +
-                  $"is reconciled to inherit it). From then on a {(type == "skill" ? "skill" : "MCP server")} " +
-                  "must match a rule from a registry to be admitted; anything else falls back to the default action."
+                ? $"Turns on asset_policy.{type}.registry_required for the whole install. A {(type == "skill" ? "skill" : "MCP server")} " +
+                  "must then match a registry rule to be admitted, and anything else gets the default action."
                 : $"Turns off asset_policy.{type}.registry_required for the whole install, so {noun} no longer " +
                   "need a registry rule to be admitted.",
             new[] { new DiscoverStep(argv, $"Set registry_required for {noun}.") },
@@ -426,7 +420,7 @@ public sealed partial class RegistriesPanelViewModel
                 $"The setting for {noun} was not changed."),
             warning: enable
                 ? "With no approved registry entries, this blocks every " + (type == "skill" ? "skill" : "MCP server") +
-                  " that is not already covered by a rule. Sync and approve entries first."
+                  " not already covered by a rule. Sync and approve entries first."
                 : null,
             primaryText: enable ? "Require registry" : "Make optional");
     }

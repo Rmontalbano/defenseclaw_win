@@ -167,7 +167,7 @@ public sealed partial class InventoryBomBrowser
 
         _ide = read switch
         {
-            { IsOk: true, Value: { Enabled: false } off } => Empty(InventoryBomExtraState.Disabled, "AI discovery is off", off.Reason.Length > 0 ? off.Reason : "The gateway collects IDE plugins during AI discovery, which is switched off. Turn it on under AI Discovery."),
+            { IsOk: true, Value: { Enabled: false } off } => Empty(InventoryBomExtraState.Disabled, "AI discovery is off", off.Reason.Length > 0 ? off.Reason : "IDE plugins are collected during AI discovery, which is off. Turn it on under AI Discovery."),
             { IsOk: true, Value: { IsOff: true } } => Empty(InventoryBomExtraState.Off, "The IDE plugin inventory is turned off", "ai_discovery.ide_inventory is off in the gateway's configuration, so no IDE is read."),
             { IsOk: true, Value: { } page } => Ready(page),
             _ => Failed(_ide, read, "IDE plugins could not be read", "IDE plugins"),
@@ -201,7 +201,7 @@ public sealed partial class InventoryBomBrowser
             { IsOk: true, Value: { Enabled: false } } => new ExtraSection<AgentIdentityRow>(
                 InventoryBomExtraState.Disabled,
                 "Agent identities are not recorded on this host",
-                "The gateway reported that it keeps no agent identities here (a managed host does not).",
+                "The gateway keeps no agent identities here. Managed hosts do not keep them.",
                 [],
                 string.Empty,
                 0,
@@ -228,7 +228,7 @@ public sealed partial class InventoryBomBrowser
             return new ExtraSection<T>(
                 InventoryBomExtraState.Unsupported,
                 "Not available on this host",
-                $"{what} come from the gateway, and this gateway does not serve them: an older runtime does not, and a managed (Secure Client) host does not offer them. This is a limit of the host, not a problem with this PC.",
+                $"{what} come from the gateway. Older runtimes and managed Secure Client hosts do not serve them.",
                 [],
                 string.Empty,
                 0,
@@ -238,12 +238,12 @@ public sealed partial class InventoryBomBrowser
         // What was on screen stays, marked stale: an empty list would read as "none" when the truth is "the gateway did not answer".
         if (previous.IsReady && read.KeepsLastGood)
         {
-            return previous with { Note = $"Showing the last read; the latest failed: {read.Message}" };
+            return previous with { Note = $"Showing the last read. The latest read failed: {read.Message}" };
         }
 
         // The shared reader's wording for "not ready" is about the correlation ledger; these two routes have no ledger.
         var message = read.Status == CorrelationReadStatus.NotReady ? "The gateway is running but cannot answer yet." : read.Message;
-        return new ExtraSection<T>(InventoryBomExtraState.Unavailable, title, message + " This is not an empty list.", [], string.Empty, 0, false);
+        return new ExtraSection<T>(InventoryBomExtraState.Unavailable, title, message, [], string.Empty, 0, false);
     }
 
     private void AfterExtrasChanged(string tab)
@@ -314,7 +314,7 @@ public sealed partial class InventoryBomBrowser
         if (ide)
         {
             SetColumns(IdeColumns);
-            Section(_ide, "No IDE plugins found yet", "The gateway lists the extensions and plugins of the IDEs it finds during AI discovery scans. Nothing was found, or no scan has finished.", ref emptyTitle, ref emptyDetail);
+            Section(_ide, "No IDE plugins found yet", "IDE plugins are listed from AI discovery scans. Nothing was found, or no scan has finished.", ref emptyTitle, ref emptyDetail);
             if (_ide.IsReady)
             {
                 foreach (var row in _ide.Rows)
@@ -360,7 +360,7 @@ public sealed partial class InventoryBomBrowser
             else
             {
                 (emptyTitle, emptyDetail) = ide
-                    ? ("No IDE plugins found yet", "The gateway lists the extensions and plugins of the IDEs it finds during AI discovery scans.")
+                    ? ("No IDE plugins found yet", "IDE plugins are listed from AI discovery scans.")
                     : ("No agent identities seen yet", "An identity appears after an agent's first hook reaches the gateway.");
             }
         }
@@ -388,7 +388,7 @@ public sealed partial class InventoryBomBrowser
                 case InventoryBomExtraState.NotLoaded:
                 case InventoryBomExtraState.Loading:
                     title = "Reading from the gateway";
-                    detail = "This list is read-only and needs no scan.";
+                    detail = "No scan is needed.";
                     break;
                 case InventoryBomExtraState.Ready:
                     if (section.Rows.Count == 0)
@@ -442,7 +442,7 @@ public sealed partial class InventoryBomBrowser
             : string.Create(CultureInfo.CurrentCulture, $"{shown:N0} shown");
         if (section.Partial && section.Total <= section.Rows.Count)
         {
-            text += " · partial inventory (the scan reached its limits)";
+            text += " · partial inventory, scan limit reached";
         }
 
         return section.Note.Length > 0 ? text + " · " + section.Note : text;

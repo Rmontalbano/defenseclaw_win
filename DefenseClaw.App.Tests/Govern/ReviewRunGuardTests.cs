@@ -89,7 +89,7 @@ public sealed class ReviewRunGuardTests : IDisposable
         Assert.Equal(CommandReviewPhase.Finished, review.Phase);
         Assert.Equal("Bad", review.ResultKey);
         Assert.StartsWith("Not run. " + Reason, review.ResultText, StringComparison.Ordinal);
-        Assert.Contains("recorded in the Activity panel", review.ResultText, StringComparison.Ordinal);
+        Assert.Contains("in the Activity panel", review.ResultText, StringComparison.Ordinal);
         Assert.Null(review.ResultOutput);
 
         var steps = review.CommandReview!.Steps;

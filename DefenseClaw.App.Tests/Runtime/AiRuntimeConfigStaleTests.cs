@@ -112,8 +112,8 @@ public sealed class AiRuntimeConfigStaleTests : IDisposable
             Assert.Equal(rows, vm.Rows.Select(r => r.Id).ToArray());
             Assert.False(vm.CanPollNow || vm.CanEnable || vm.CanDisable);
             Assert.Contains("stale", vm.PollBlockedReason, StringComparison.Ordinal);
-            Assert.Contains("config.yaml or .env file changed after this snapshot was read", vm.PollBlockedReason, StringComparison.Ordinal);
-            Assert.Contains("refresh it first", vm.ActionsNote, StringComparison.Ordinal);
+            Assert.Contains("config.yaml or .env changed after this snapshot was read", vm.PollBlockedReason, StringComparison.Ordinal);
+            Assert.Contains("Refresh it first", vm.ActionsNote, StringComparison.Ordinal);
             Assert.Equal(reads, scene.Reads()); // hearing about it reads nothing
 
             await vm.RefreshCommand.ExecuteAsync(null);

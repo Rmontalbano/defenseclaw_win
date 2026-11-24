@@ -17,7 +17,7 @@ public sealed partial class GatewayAdminToggleViewModel : ObservableObject
 
     /// <summary>The Mac's sentence, for Windows: one Windows (UAC) prompt per start, and what it is for.</summary>
     public const string Caption =
-        "Runs your installed gateway with administrator rights (one Windows prompt per start). Needed only for runtime monitoring's agent-actions plane.";
+        "Runs the gateway as administrator. One Windows prompt per start. Only runtime monitoring's agent-actions plane needs it.";
 
     private readonly AppServices _services;
     private int _syncing;

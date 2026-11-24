@@ -32,7 +32,7 @@ public sealed class AgentsUsageNoteTests
         Assert.Equal(2, notes.Length);
         Assert.All(notes, n => Assert.Equal(AgentKpis.UsageNote, n));
         Assert.Equal(
-            "Not reported. The correlation ledger holds identifiers and event names only, so nothing is estimated.",
+            "Not reported: the ledger has no token counts or cost. Nothing is estimated.",
             AgentKpis.UsageNote);
     }
 

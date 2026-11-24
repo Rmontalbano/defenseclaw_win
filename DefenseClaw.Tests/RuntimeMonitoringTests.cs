@@ -172,7 +172,7 @@ public sealed class RuntimeMonitoringTests
 
         var state = RuntimeMonitoringState.Build(V9, RuntimeHealthView.From(disabled), true, GatewayElevation.Unknown, null);
 
-        Assert.Equal("config.yaml turns monitoring on but the gateway reports it disabled: restart the gateway to apply it.", state.ApplyNote);
+        Assert.Equal("config.yaml turns monitoring on but the gateway reports it disabled. Restart the gateway to apply it.", state.ApplyNote);
         Assert.All(state.Planes, p => Assert.Equal(RuntimePlaneRunState.NotRunning, p.Run));
         Assert.Equal("Not running: the gateway reports runtime monitoring disabled.", state.Planes[0].RunText);
     }
@@ -182,7 +182,7 @@ public sealed class RuntimeMonitoringTests
     {
         var state = Build(RuntimeMonitoringConfig.Off, "health.ai-runtime.ab-running.synthetic.json");
 
-        Assert.Equal("config.yaml turns monitoring off but the gateway still reports it running: restart the gateway to stop it.", state.ApplyNote);
+        Assert.Equal("config.yaml turns monitoring off but the gateway still reports it running. Restart the gateway to stop it.", state.ApplyNote);
         Assert.All(state.Planes, p => Assert.Contains("Off: runtime monitoring is off.", p.ConfigText, StringComparison.Ordinal));
     }
 
@@ -278,7 +278,7 @@ public sealed class RuntimeMonitoringTests
         Assert.Contains("DNS Client operational log", state.Planes[1].Records, StringComparison.Ordinal);
         Assert.Contains("domains", state.Planes[1].Privacy, StringComparison.Ordinal);
         Assert.Contains("Security event log", state.Planes[2].Records, StringComparison.Ordinal);
-        Assert.Contains("AI agent being in the process lineage", state.Planes[2].Records, StringComparison.Ordinal);
+        Assert.Contains("AI agent is in the process lineage", state.Planes[2].Records, StringComparison.Ordinal);
     }
 
     // ---- the changes and their argv ----

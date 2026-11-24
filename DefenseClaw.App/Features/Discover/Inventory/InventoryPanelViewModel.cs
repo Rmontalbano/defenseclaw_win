@@ -106,8 +106,8 @@ public sealed partial class InventoryTableSummary : ObservableObject
 
     /// <summary>The line under the table picker.</summary>
     public string Summary => IsView
-        ? "view · row count not computed (a view is evaluated on every read) · first 200 rows once loaded"
-        : $"table · {RowCountDisplay} rows (first 200 shown)";
+        ? "view · row count not computed · first 200 rows once loaded"
+        : $"table · {RowCountDisplay} rows · first 200 shown";
 
     public override string ToString() => $"{Kind} {Name}, {RowCountDisplay} rows";
 }
@@ -249,7 +249,7 @@ public sealed partial class InventoryPanelViewModel : PanelViewModelBase
     public override string Title => "Inventory";
 
     public override string Description =>
-        "AI components and SDKs from the latest full scan in inventory.db, with search and grouping; and the AI bill of materials a scan of your connectors' own configuration prints.";
+        "AI components from the latest full scan in inventory.db, and the AI BOM from a connector scan.";
 
     /// <summary>Filtered, grouped view over the loaded rollup; the grid binds to this.</summary>
     public ICollectionView ComponentsView { get; }
@@ -385,12 +385,9 @@ public sealed partial class InventoryPanelViewModel : PanelViewModelBase
 
     private static string DescribeViewCost(string name) =>
         string.Equals(name, "ai_components_v", StringComparison.OrdinalIgnoreCase)
-            ? "Aggregates all history. ai_components_v adds up every signal of every scan ever recorded, so " +
-              "it takes 15-20 s on a large inventory.db (measured on a 4.5 GB file) and its install counts are " +
-              "inflated history totals. The components grid above already shows the latest scan instead — load " +
-              "this view only if you specifically want the all-history rollup."
-            : "A view is computed from its definition on every read, and this inventory.db can be many " +
-              "gigabytes, so this may take a while. Load it only if you need it.";
+            ? "Adds up every signal of every scan ever recorded. It can take 15-20 s on a large inventory.db, " +
+              "and install counts are history totals."
+            : "A view is computed on every read, so this can take a while on a large inventory.db.";
 
     private void CancelBrowse()
     {
@@ -613,7 +610,7 @@ public sealed partial class InventoryPanelViewModel : PanelViewModelBase
     {
         if (scan is null)
         {
-            return "inventory.db has not recorded a scan yet, so there is nothing to roll up.";
+            return "inventory.db has not recorded a scan yet.";
         }
 
         var stamp = scan.ScannedAt is { } at
@@ -622,10 +619,8 @@ public sealed partial class InventoryPanelViewModel : PanelViewModelBase
         var what = $"{stamp} ({scan.Source}, {scan.Result})";
 
         return scan.IsFullScan
-            ? $"Showing the latest full scan: {what}. Install counts are what that scan found — the ai_components_v " +
-              "view in the table browser adds up every scan ever recorded, which inflates them."
-            : $"No completed scheduled or startup scan is recorded, so this is the newest scan of any kind: {what}. " +
-              "Install counts are what that scan found, not history totals.";
+            ? $"Latest full scan: {what}. Install counts come from that scan. The ai_components_v view in the table browser adds up every scan."
+            : $"No completed scheduled or startup scan is recorded. Showing the newest scan of any kind: {what}. Install counts come from that scan.";
     }
 
     private bool FilterComponent(object obj)

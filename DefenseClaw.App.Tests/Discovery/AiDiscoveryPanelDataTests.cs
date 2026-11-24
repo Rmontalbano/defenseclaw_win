@@ -65,7 +65,7 @@ public sealed class AiDiscoveryPanelDataTests
         {
             Assert.True(scene.ViewModel.HasHeader);
             Assert.Equal(new[] { "11 active", "2 new", "1 changed" }, scene.ViewModel.HeaderChips.Select(c => c.Text).ToArray());
-            Assert.Contains("Counted from the signals", scene.ViewModel.HeaderNote, StringComparison.Ordinal);
+            Assert.Contains("Counts are from the signals", scene.ViewModel.HeaderNote, StringComparison.Ordinal);
         });
     }
 
@@ -289,7 +289,7 @@ public sealed class AiDiscoveryPanelDataTests
             // The page says where the bands came from, right after the signal cache, and how many signals they reached.
             var source = Assert.Single(vm.Sources, s => s.Label == BandsLabel);
             Assert.True(source.Available);
-            Assert.Equal("1 component with an identity and presence band, shown on 1 signal.", source.Detail);
+            Assert.Equal("1 component with identity and presence bands, on 1 signal.", source.Detail);
             Assert.Equal(1, vm.Sources.IndexOf(source));
         });
     }
@@ -310,7 +310,7 @@ public sealed class AiDiscoveryPanelDataTests
             Assert.DoesNotContain(Cards(vm), c => c.HasBands);
             var source = Assert.Single(vm.Sources, s => s.Label == BandsLabel);
             Assert.False(source.Available);
-            Assert.Contains("does not have the confidence snapshot tables", source.Detail, StringComparison.Ordinal);
+            Assert.Contains("lacks the confidence snapshot tables", source.Detail, StringComparison.Ordinal);
         });
 
         // A file that is not a database at all.

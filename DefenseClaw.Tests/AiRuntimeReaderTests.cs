@@ -137,12 +137,12 @@ public class AiRuntimeReaderTests
         Assert.Equal(3, snapshot.Coverage.FullyUpPlanes);
         Assert.Empty(snapshot.Coverage.Gaps);
         Assert.Equal("All three planes are reporting.", snapshot.Coverage.Headline);
-        Assert.Equal("212 processes, 3 not fully readable, 148 connections, 6 with no owner", snapshot.CoverageSummary);
+        Assert.Equal("Processes: 212, 3 not fully readable\nConnections: 148, 6 with no owner", snapshot.CoverageSummary);
         Assert.Equal("host plane: 57 Security-log events classified, 41 excluded outside AI-agent lineage", snapshot.HostPlaneSummary);
 
         // The strongest thing the verdict says is that the sensors are reporting; it never says the host is clean.
         Assert.DoesNotContain("clean", snapshot.Coverage.Headline, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("not a clean host", AiRuntimeCoverage.NoFindingsCaveat, StringComparison.Ordinal);
+        Assert.Contains("does not mean the host is clean", AiRuntimeCoverage.NoFindingsCaveat, StringComparison.Ordinal);
     }
 
     [Fact]

@@ -47,7 +47,7 @@ public sealed partial class SettingsPanelViewModel
 
     /// <summary>The caption under the pickers.</summary>
     public string AppearanceCaption =>
-        $"Applies at once and is remembered. The title bar's Appearance button offers the same choices, and {ShellShortcuts.ToggleThemeText} switches between light and dark.";
+        $"{ShellShortcuts.ToggleThemeText} switches light and dark.";
 
     partial void OnAppearanceStyleChanged(string? value)
     {

@@ -158,7 +158,7 @@ public sealed class InventoryBomFlowTests : IDisposable
         var step = Assert.Single(vm.Review.CommandReview!.Steps);
         Assert.Equal(new[] { "aibom", "scan", "--json", "--only", "skills,plugins,mcp", "--connector", "codex" }, step.Argv);
         Assert.Contains("only the skills, plugins, MCP servers of the codex connector", vm.Review.CommandReview.Summary, StringComparison.Ordinal);
-        Assert.Contains("fails if the gateway is down", vm.Review.CommandReview.Summary, StringComparison.Ordinal);
+        Assert.Contains("Fails if the gateway is down", vm.Review.CommandReview.Summary, StringComparison.Ordinal);
 
         await vm.Review.ConfirmCommand.ExecuteAsync(null);
         Assert.Equal(step.Argv, Assert.Single(_ran).Argv);
@@ -270,7 +270,7 @@ public sealed class InventoryBomFlowTests : IDisposable
         Assert.Empty(_ran);
         Assert.True(vm.Review.IsFinished);
         Assert.Equal("Bad", vm.Review.ResultKey);
-        Assert.Equal("Not run. " + TestInstallations.ManagedReason + " Nothing was changed; the refusal is recorded in the Activity panel.", vm.Review.ResultText);
+        Assert.Equal("Not run. " + TestInstallations.ManagedReason + " Nothing was changed. The refusal is in the Activity panel.", vm.Review.ResultText);
         var recorded = Assert.Single(services.Cli.Activity);
         Assert.Equal(new[] { "aibom", "scan", "--json" }, recorded.Argv);
         Assert.Contains(TestInstallations.ManagedReason, recorded.FailureReason, StringComparison.Ordinal);
@@ -318,11 +318,11 @@ public sealed class InventoryBomFlowTests : IDisposable
         Assert.False(vm.BomBrowser.HasSnapshot);
         Assert.False(vm.CanSaveBom);
         Assert.StartsWith(
-            $"Too large to display: the AI BOM output ran past the {CliInvocation.MaxRetainedOutputLines.ToString("N0", System.Globalization.CultureInfo.CurrentCulture)} lines this app keeps of one command's output (",
+            $"Too large to display: the output ran past {CliInvocation.MaxRetainedOutputLines.ToString("N0", System.Globalization.CultureInfo.CurrentCulture)} lines and ",
             vm.BomStatus,
             StringComparison.Ordinal);
-        Assert.Contains(" were dropped), so none of it is shown here", vm.BomStatus, StringComparison.Ordinal);
-        Assert.Contains("Narrow the scan - one connector, or fewer categories under Scope", vm.BomStatus, StringComparison.Ordinal);
+        Assert.Contains(" were dropped (", vm.BomStatus, StringComparison.Ordinal);
+        Assert.Contains("Narrow the scan to one connector or fewer Scope categories", vm.BomStatus, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -340,7 +340,7 @@ public sealed class InventoryBomFlowTests : IDisposable
 
         Assert.True(vm.BomFailed);
         Assert.StartsWith(
-            $"Too large to display: the AI BOM output ran past the {CliInvocation.MaxFullOutputLines.ToString("N0", System.Globalization.CultureInfo.CurrentCulture)} lines this app keeps",
+            $"Too large to display: the output ran past {CliInvocation.MaxFullOutputLines.ToString("N0", System.Globalization.CultureInfo.CurrentCulture)} lines and ",
             vm.BomStatus,
             StringComparison.Ordinal);
     }
@@ -376,11 +376,11 @@ public sealed class InventoryBomFlowTests : IDisposable
         Assert.Equal(new[] { "claudecode", "codex" }, vm.BomBrowser.Snapshot!.Connectors.Select(c => c.Name).ToArray());
         Assert.True(vm.HasBomWarning);
         var warning = vm.BomWarning!;
-        Assert.Contains("Skipped 3 connectors the output named but this page could not read: ", warning, StringComparison.Ordinal);
+        Assert.Contains("Skipped 3 connectors that could not be read: ", warning, StringComparison.Ordinal);
         Assert.Contains("entry 2 (it is text, not an inventory object)", warning, StringComparison.Ordinal);
         Assert.Contains("entry 3 (it is not an inventory (no connector, summary or category list))", warning, StringComparison.Ordinal);
         Assert.Contains("entry 4 (it is null, not an inventory object)", warning, StringComparison.Ordinal);
-        Assert.Contains("codex: 2 inventory commands failed (codex:mcp, codex:plugins); what it did list is shown.", warning, StringComparison.Ordinal);
+        Assert.Contains("codex: 2 inventory commands failed (codex:mcp, codex:plugins). Reasons are on the Summary tab.", warning, StringComparison.Ordinal);
         Assert.DoesNotContain("claudecode:", warning, StringComparison.Ordinal);
 
         // The ones that were read are on the page.
@@ -418,7 +418,7 @@ public sealed class InventoryBomFlowTests : IDisposable
         await RunAsync(vm, PayloadFixtures.Read("aibom-scan.no-connectors.json"));
 
         Assert.True(vm.BomFailed);
-        Assert.Contains("listed no connector, so there is nothing to summarize", vm.BomStatus, StringComparison.Ordinal);
+        Assert.Contains("listed no connector.", vm.BomStatus, StringComparison.Ordinal);
         Assert.False(vm.BomBrowser.HasSnapshot);
     }
 
@@ -433,7 +433,7 @@ public sealed class InventoryBomFlowTests : IDisposable
         await RunAsync(vm, stdout);
 
         Assert.True(vm.BomFailed);
-        Assert.Contains("its output was not the JSON this page expected (", vm.BomStatus, StringComparison.Ordinal);
+        Assert.Contains("its output was not the expected JSON: ", vm.BomStatus, StringComparison.Ordinal);
         Assert.Contains("See the Activity panel", vm.BomStatus, StringComparison.Ordinal);
         Assert.False(vm.CanSaveBom);
     }

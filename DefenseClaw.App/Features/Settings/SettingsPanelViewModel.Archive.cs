@@ -100,7 +100,7 @@ public sealed partial class SettingsPanelViewModel
         ArchiveProblem = string.Empty;
         Write(settings => settings with { Archive = settings.Archive with { Path = null } });
         LoadArchiveFromSettings();
-        ArchiveMessage = "The archive is no longer used. The file itself was not touched.";
+        ArchiveMessage = "The archive is no longer used. The file was not changed.";
     }
 
     private bool HasSavedArchive() => SavedArchivePath.Length > 0;

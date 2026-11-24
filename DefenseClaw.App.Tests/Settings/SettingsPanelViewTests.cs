@@ -59,7 +59,7 @@ public sealed class SettingsPanelViewTests : IDisposable
     /// <summary>The headers of each area's cards, top to bottom: the Mac's sections, as Windows has them.</summary>
     private static readonly Dictionary<SettingsArea, string[]> Cards = new()
     {
-        [SettingsArea.General] = new[] { "General", "Appearance", "Updates — DefenseClaw for Windows (this app)", "Updates — DefenseClaw runtime (CLI and gateway)" },
+        [SettingsArea.General] = new[] { "General", "Appearance", "Updates: this app", "Updates: runtime, CLI and gateway" },
         [SettingsArea.Monitoring] = new[] { "Refresh cadence" },
         [SettingsArea.Notifications] = new[] { "Desktop notifications", "Seen-alert history" },
         [SettingsArea.Connection] = new[] { "Gateway", "Installation", "Files", "defenseclaw CLI", "Audit archive", "Companion app files" },
@@ -532,8 +532,8 @@ public sealed class SettingsPanelViewTests : IDisposable
             using var shell = Open(980, 692, SettingsArea.General, out var page);
             var headers = VisibleCardHeaders(page);
 
-            Assert.Contains("Updates — DefenseClaw for Windows (this app)", headers);
-            Assert.Contains("Updates — DefenseClaw runtime (CLI and gateway)", headers);
+            Assert.Contains("Updates: this app", headers);
+            Assert.Contains("Updates: runtime, CLI and gateway", headers);
 
             var buttons = VisualTree.Descendants<Wpf.Ui.Controls.Button>(page).Where(b => b.IsVisible).ToList();
             var labels = buttons.Select(b => b.Content as string).ToList();

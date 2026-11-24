@@ -315,7 +315,7 @@ public sealed class SettingsPanelViewModelTests : IDisposable
     {
         var model = Build(Create());
 
-        Assert.Equal("Notifications include target and severity only — never prompt or payload contents.", model.NotificationsNote);
+        Assert.Equal("Notifications show target and severity only, no prompt or payload contents.", model.NotificationsNote);
     }
 
     // ------------------------------------------------------------------ startup
@@ -543,7 +543,7 @@ public sealed class SettingsPanelViewModelTests : IDisposable
         Assert.Equal(row.FullPath, row.DisplayPath);
         Assert.True(row.IsDirectory);
         Assert.True(row.Exists);
-        Assert.Equal("The installer script's .venv under the data directory: the Python DefenseClaw runs.", row.Note);
+        Assert.Equal("The installer script's .venv under the data directory. DefenseClaw runs this Python.", row.Note);
         Assert.True(row.CopyCommand.CanExecute(null));
         Assert.True(row.OpenFolderCommand.CanExecute(null));
     }
@@ -696,7 +696,7 @@ public sealed class SettingsPanelViewModelTests : IDisposable
         await UiThread.Run(() => model.ReloadConfigCommand.ExecuteAsync(null));
 
         Assert.Equal("http://127.0.0.1:18991", model.EndpointText);
-        Assert.StartsWith("config.yaml could not be applied; the last good configuration is still in use.", model.ConnectionMessage, StringComparison.Ordinal);
+        Assert.StartsWith("config.yaml could not be applied. The last good configuration is still in use.", model.ConnectionMessage, StringComparison.Ordinal);
     }
 
     // ------------------------------------------------------------------ the CLI override

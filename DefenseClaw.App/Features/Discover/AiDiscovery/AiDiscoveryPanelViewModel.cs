@@ -185,7 +185,7 @@ public sealed class DiscoveryComponentCard
     public bool HasSignalOverflow => Signals.Count > MaxSignalLines;
 
     public string SignalOverflow => HasSignalOverflow
-        ? $"...and {(Signals.Count - MaxSignalLines).ToString(CultureInfo.InvariantCulture)} more (use `defenseclaw agent usage --detail --json` for the full list)"
+        ? $"{(Signals.Count - MaxSignalLines).ToString(CultureInfo.InvariantCulture)} more. Full list: `defenseclaw agent usage --detail --json`"
         : string.Empty;
 
     /// <summary>
@@ -240,9 +240,8 @@ public sealed class DiscoveryComponentCard
     public int EvidenceCount => Signals.Sum(s => s.Evidence.Count);
 
     public string EvidenceSummary => EvidenceCount == 0
-        ? "No evidence recorded by DefenseClaw for this component — confidence alone, nothing to inspect."
-        : $"{EvidenceCount} evidence entr{(EvidenceCount == 1 ? "y" : "ies")} — hashed fingerprints only " +
-          "(type, quality, match kind); DefenseClaw does not retain literal file paths.";
+        ? "No evidence recorded for this component."
+        : $"{EvidenceCount} evidence entr{(EvidenceCount == 1 ? "y" : "ies")}: hashed fingerprints (type, quality, match kind). File paths are not kept.";
 
     public string HeaderDisplay =>
         $"{Vendor} · {Product}  —  {(HasState ? State + (HasMixedStates ? $" ({StateTally})" : string.Empty) + ", " : string.Empty)}{ConfidenceDisplay} confidence, {Signals.Count} signal{(Signals.Count == 1 ? string.Empty : "s")}";
@@ -461,7 +460,7 @@ public sealed partial class AiDiscoveryPanelViewModel : PanelViewModelBase, IAcc
     public override string Title => "AI Discovery";
 
     public override string Description =>
-        "Discovered agents, AI components and local models, with the state, confidence, detector and evidence behind each one.";
+        "Agents, AI components and local models found on this machine.";
 
     public bool HasError => !string.IsNullOrEmpty(ErrorMessage);
 
@@ -551,18 +550,15 @@ public sealed partial class AiDiscoveryPanelViewModel : PanelViewModelBase, IAcc
         var argv = new[] { "agent", "discovery", "scan" };
         Review.Open(
             "Run an AI discovery scan?",
-            "It asks the running DefenseClaw gateway (sidecar) to scan this machine for AI tools right now: the " +
-            "same scan it already runs on its own schedule. The result is written to ai_discovery_state.json and " +
-            "inventory.db, which is what the cards on this page read, and the sidecar records it in the audit " +
-            "trail as an ai.discovery event like any scheduled scan (plus whatever telemetry export you have " +
-            "configured for those events).\n\n" +
-            "It needs the gateway running with AI discovery turned on; otherwise the command fails (HTTP 503 or " +
-            "\"sidecar unavailable\") and nothing changes. It does not refresh the connector table under Sources.",
+            "Asks the gateway to scan this machine for AI tools now. The result goes to ai_discovery_state.json and " +
+            "inventory.db, and is recorded as an ai.discovery audit event.\n\n" +
+            "Fails with HTTP 503 or \"sidecar unavailable\" if the gateway is down or AI discovery is off. " +
+            "The connector table under Sources is not refreshed.",
             new[]
             {
                 new DiscoverStep(
                     argv,
-                    "Ask the gateway for one immediate AI discovery scan.",
+                    "Ask the gateway for one AI discovery scan.",
                     CommandTier.StateChanging,
                     TimeSpan.FromMinutes(3)),
             },
@@ -584,12 +580,10 @@ public sealed partial class AiDiscoveryPanelViewModel : PanelViewModelBase, IAcc
         var argv = new[] { "agent", "discover", "--refresh", "--no-emit-otel" };
         Review.Open(
             "Re-detect installed agents?",
-            "It re-checks which agent CLIs (Claude Code, Codex, …) are installed on this machine and rewrites " +
-            "agent_discovery.json, the \"Connector discovery\" table under Sources. Without --refresh the CLI " +
-            "would hand back a cached result up to 24 hours old. --no-emit-otel keeps it from sending a discovery " +
-            "report through the sidecar.\n\n" +
-            "It does not change the AI component cards; use \"Run AI discovery scan\" for those.",
-            new[] { new DiscoverStep(argv, "Re-detect which agent CLIs are installed.", CommandTier.StateChanging) },
+            "Re-checks which agent CLIs (Claude Code, Codex, …) are installed and rewrites agent_discovery.json, " +
+            "the Connector discovery table under Sources. --refresh skips the 24-hour cache. --no-emit-otel sends no report.\n\n" +
+            "The AI component cards do not change. Use Run scan for those.",
+            new[] { new DiscoverStep(argv, "Re-detect installed agent CLIs.", CommandTier.StateChanging) },
             result => AfterRunAsync(result, argv),
             primaryText: "Re-detect");
     }
@@ -845,7 +839,7 @@ public sealed partial class AiDiscoveryPanelViewModel : PanelViewModelBase, IAcc
             if (!Services.Inventory.Exists)
             {
                 return (Array.Empty<DiscoverySignalRecord>(),
-                    new DiscoverySourceInfo("Signal cache", $"{note} inventory.db not found either — nothing to show.", null, Available: false));
+                    new DiscoverySourceInfo("Signal cache", $"{note} inventory.db not found either.", null, Available: false));
             }
 
             // The signals of the latest full scan. This used to browse ai_signals with no ORDER BY,
@@ -859,7 +853,7 @@ public sealed partial class AiDiscoveryPanelViewModel : PanelViewModelBase, IAcc
                 return (Array.Empty<DiscoverySignalRecord>(),
                     new DiscoverySourceInfo(
                         "Signal cache",
-                        $"{note} inventory.db does not have the scan tables this fallback reads (ai_scans, and a scan_id on ai_signals) — nothing to show.",
+                        $"{note} inventory.db lacks the scan tables it needs (ai_scans, and scan_id on ai_signals).",
                         null,
                         Available: false));
             }
@@ -870,7 +864,7 @@ public sealed partial class AiDiscoveryPanelViewModel : PanelViewModelBase, IAcc
             var detail = scan is null
                 ? $"{note} inventory.db has not recorded a scan yet."
                 : $"{note} {signals.Count} signal{(signals.Count == 1 ? string.Empty : "s")} from the " +
-                  (scan.IsFullScan ? "latest full scan" : "newest scan (no completed scheduled or startup scan is recorded)") +
+                  (scan.IsFullScan ? "latest full scan" : "newest scan (no completed scheduled or startup scan)") +
                   $": {scan.Source}, {scan.Result}.";
 
             return (signals, new DiscoverySourceInfo(

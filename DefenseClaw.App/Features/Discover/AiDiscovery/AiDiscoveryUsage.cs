@@ -101,16 +101,16 @@ internal static class AiUsageReader
             case GatewayStatus.Ok:
                 return result.Value is { } document
                     ? Parse(document.RootElement, options)
-                    : Fail(AiUsageReadStatus.Malformed, "The gateway's answer was empty.");
+                    : Fail(AiUsageReadStatus.Malformed, "The gateway answer was empty.");
 
             case GatewayStatus.Unreachable:
                 return Fail(AiUsageReadStatus.Unreachable, "The gateway is not answering.");
 
             case GatewayStatus.Unauthorized:
-                return Fail(AiUsageReadStatus.Unauthorized, "The gateway refused this app's API token.");
+                return Fail(AiUsageReadStatus.Unauthorized, "The gateway refused the API token.");
 
             case GatewayStatus.NotConnected:
-                return Fail(AiUsageReadStatus.NotConnected, "The gateway is running but its AI discovery service is not wired up.");
+                return Fail(AiUsageReadStatus.NotConnected, "The gateway is running, but its AI discovery service is not connected.");
 
             default:
                 if (result.HttpStatusCode is 404 or 405)
@@ -122,7 +122,7 @@ internal static class AiUsageReader
 
                 if (result.ErrorMessage == GatewayClient.TooLargeMessage(MaxBytes))
                 {
-                    return Fail(AiUsageReadStatus.TooLarge, "The gateway's answer is larger than 4 MiB, so none of it was read.");
+                    return Fail(AiUsageReadStatus.TooLarge, "The gateway answer is over 4 MiB and was not read.");
                 }
 
                 // A 2xx the client could not use is an answer that is not a report; anything else is the gateway failing.
@@ -148,7 +148,7 @@ internal static class AiUsageReader
         }
         catch (JsonException)
         {
-            return Fail(AiUsageReadStatus.Malformed, "The gateway's answer is not valid JSON.");
+            return Fail(AiUsageReadStatus.Malformed, "The gateway answer is not valid JSON.");
         }
     }
 
@@ -159,7 +159,7 @@ internal static class AiUsageReader
             !root.TryGetProperty("enabled", out var enabled) ||
             enabled.ValueKind is not (JsonValueKind.True or JsonValueKind.False))
         {
-            return Fail(AiUsageReadStatus.Malformed, "The gateway's answer is not an AI usage report: it has no enabled flag. Nothing here is a result.");
+            return Fail(AiUsageReadStatus.Malformed, "The gateway answer is not an AI usage report: no enabled flag.");
         }
 
         bool? lookup = root.TryGetProperty("lookup_model_provenance_online", out var lookupElement)

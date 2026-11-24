@@ -275,13 +275,13 @@ public sealed class AiDiscoveryUsagePanelTests
             Assert.Same(chip, vm.HeaderChips[^1]);
             Assert.True(vm.HasHeader);
             Assert.True(vm.HasHeaderNote);
-            Assert.Contains("Counted from the signals", vm.HeaderNote, StringComparison.Ordinal);
+            Assert.Contains("Counts are from the signals", vm.HeaderNote, StringComparison.Ordinal);
 
             // And Sources says what was read from where.
             var source = Assert.Single(vm.Sources, s => s.Label == "Gateway — GET /api/v1/ai-usage");
             Assert.True(source.Available);
             Assert.Equal(
-                "13 signals read from the gateway. 10 model signals gained an owner, relevance, confidence or lineage from it. Online model lookup is off.",
+                "13 signals from the gateway. 10 model signals gained an owner, relevance, confidence or lineage. Online model lookup is off.",
                 source.Detail);
             Assert.Equal(new DateTimeOffset(2030, 1, 15, 10, 4, 30, TimeSpan.Zero).AddTicks(1234568), source.LastUpdated);
         });
@@ -350,7 +350,7 @@ public sealed class AiDiscoveryUsagePanelTests
             Assert.Equal(before.Take(7), after.Take(7));
             var sourceLines = after[7].Split('|');
             Assert.Equal(before[7], string.Join("|", sourceLines.Take(sourceLines.Length - 1)));
-            Assert.StartsWith("Gateway — GET /api/v1/ai-usage=11 signals read from the gateway. No model gained anything from it", sourceLines[^1], StringComparison.Ordinal);
+            Assert.StartsWith("Gateway — GET /api/v1/ai-usage=11 signals from the gateway. No new model data.", sourceLines[^1], StringComparison.Ordinal);
 
             // The lists were not rebuilt: a card the operator had open is the same card.
             Assert.True(cardsBefore.SequenceEqual(vm.CardsView.Cast<DiscoveryComponentCard>(), ReferenceEqualityComparer.Instance));
@@ -368,7 +368,7 @@ public sealed class AiDiscoveryUsagePanelTests
         legacy.OnUi(() =>
         {
             Assert.Equal(
-                "The strongest detection score among the model's signals: how sure the scanner was that something matched, not its confidence in the model itself. Every model is listed until you choose a cut.",
+                "Cuts on the strongest detection score among the model's signals. All models are listed until you set a cut.",
                 legacy.ViewModel.ConfidenceFilterHelp);
             Assert.Equal("Set the modality and confidence filters back to all.", legacy.ViewModel.ResetFiltersHelp);
         });
@@ -376,7 +376,7 @@ public sealed class AiDiscoveryUsagePanelTests
         using var classified = OpenNewer();
         classified.OnUi(() =>
         {
-            Assert.StartsWith("The number the Confidence column shows:", classified.ViewModel.ConfidenceFilterHelp, StringComparison.Ordinal);
+            Assert.StartsWith("Cuts on the Confidence column:", classified.ViewModel.ConfidenceFilterHelp, StringComparison.Ordinal);
             Assert.Equal("Set the filters back to all and the list back to the recommended models.", classified.ViewModel.ResetFiltersHelp);
         });
     }
@@ -398,7 +398,7 @@ public sealed class AiDiscoveryUsagePanelTests
 
             var source = Assert.Single(vm.Sources, s => s.Label == "Gateway — GET /api/v1/ai-usage");
             Assert.True(source.Available);
-            Assert.Equal("The gateway reports AI discovery off, so it has nothing to add to the files.", source.Detail);
+            Assert.Equal("The gateway reports AI discovery off. Nothing to add.", source.Detail);
         });
     }
 
@@ -554,7 +554,7 @@ public sealed class AiDiscoveryUsagePanelTests
         using var scene = OpenFilesWithoutThem();
 
         scene.LoadUsage(() => GatewayResult<JsonDocument>.Unauthorized("unauthorized"));
-        scene.OnUi(() => Assert.Contains("refused this app's API token", scene.ViewModel.Sources.Single(s => s.Label.StartsWith("Gateway", StringComparison.Ordinal)).Detail, StringComparison.Ordinal));
+        scene.OnUi(() => Assert.Contains("refused the API token", scene.ViewModel.Sources.Single(s => s.Label.StartsWith("Gateway", StringComparison.Ordinal)).Detail, StringComparison.Ordinal));
 
         scene.LoadUsage(() => throw new InvalidOperationException("the script broke"));
         scene.OnUi(() =>

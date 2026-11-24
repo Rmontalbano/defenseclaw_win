@@ -151,7 +151,7 @@ public static class IdeInventoryReader
             return new CorrelationRead<IdePluginPage>(
                 CorrelationReadStatus.Malformed,
                 null,
-                "The IDE plugin answer is incomplete: it is missing plugins. Nothing here is an empty inventory.");
+                "The IDE plugin answer is incomplete: it is missing plugins.");
         }
 
         var installs = new List<IdeInstallationRow>();

@@ -40,7 +40,7 @@ public sealed partial class SettingsPanelViewModel : PanelViewModelBase
     internal static readonly TimeSpan IntervalCommitDelay = TimeSpan.FromMilliseconds(400);
 
     private const string SaveProblemText =
-        "Could not save to the settings file (it is locked or unreadable). The change holds until DefenseClaw closes.";
+        "Could not save the settings file. It is locked or unreadable. The change lasts until DefenseClaw closes.";
 
     private readonly ShellHooks? _hooks;
     private readonly SettingsPlatform _platform;
@@ -83,7 +83,7 @@ public sealed partial class SettingsPanelViewModel : PanelViewModelBase
     public override string Title => "Settings";
 
     public override string Description =>
-        "How this app behaves, in four areas: General (startup, appearance, updates), Monitoring, Notifications and Connection. These are the app's own settings; changing them never changes DefenseClaw's configuration.";
+        "This app's settings: General, Monitoring, Notifications and Connection.";
 
     // ------------------------------------------------------------------ the page
 
@@ -115,8 +115,8 @@ public sealed partial class SettingsPanelViewModel : PanelViewModelBase
     private bool _isMonitoringPaused;
 
     public string PauseCaption => IsMonitoringPaused
-        ? "Monitoring is paused: nothing polls the gateway or reads the audit database until you turn this off. The gateway itself keeps running."
-        : "Stops this app from polling the gateway and reading the audit database until you resume. The gateway itself keeps running. The tray flyout has the same switch.";
+        ? "Paused. No gateway polling or audit database reads. The gateway keeps running."
+        : "Stops gateway polling and audit database reads. The gateway keeps running. The tray flyout has the same switch.";
 
     partial void OnHealthIntervalSecondsChanged(double value)
     {
@@ -178,7 +178,7 @@ public sealed partial class SettingsPanelViewModel : PanelViewModelBase
     private bool _notifyGateway = true;
 
     /// <summary>The Mac's note, word for word: what a toast carries.</summary>
-    public string NotificationsNote => "Notifications include target and severity only — never prompt or payload contents.";
+    public string NotificationsNote => "Notifications show target and severity only, no prompt or payload contents.";
 
     /// <summary>What "Reset seen-alert history" last did, in a sentence; empty until it has.</summary>
     [ObservableProperty]
@@ -238,8 +238,8 @@ public sealed partial class SettingsPanelViewModel : PanelViewModelBase
     private bool _closeToTray = true;
 
     public string CloseToTrayCaption => CloseToTray
-        ? "Closing the dashboard hides it; DefenseClaw keeps watching from the tray. Choose Exit from the tray menu or flyout to quit."
-        : "Closing the dashboard exits DefenseClaw, after asking about an upgrade that is still running or config edits you have not saved.";
+        ? "Closing the dashboard hides it. DefenseClaw keeps watching from the tray. Exit from the tray menu or flyout quits."
+        : "Closing the dashboard exits DefenseClaw. It asks first about a running upgrade or config edits you have not saved.";
 
     [ObservableProperty]
     private bool _rememberLastPanel;
@@ -351,7 +351,7 @@ public sealed partial class SettingsPanelViewModel : PanelViewModelBase
             TokenSource.Environment => $"Read from the {token.VariableName} environment variable.",
             TokenSource.DotEnvFile => $"Read from {token.VariableName} in the .env file.",
             TokenSource.ConfigLiteral => "Read from gateway.token in config.yaml.",
-            _ => $"No token found for {token.VariableName} in the environment, the .env file or config.yaml; requests the gateway authenticates will be refused.",
+            _ => $"No token found for {token.VariableName} in the environment, the .env file or config.yaml. Authenticated gateway requests will be refused.",
         };
 
         if (token.Note is { Length: > 0 } note)
@@ -374,7 +374,7 @@ public sealed partial class SettingsPanelViewModel : PanelViewModelBase
             ShowGateway();
 
             Say(MessageCard.Cli, Services.ConfigLoadError is { Length: > 0 } error
-                ? $"config.yaml could not be applied; the last good configuration is still in use. {error}"
+                ? $"config.yaml could not be applied. The last good configuration is still in use. {error}"
                 : "config.yaml and .env re-read.");
         }
 #pragma warning disable CA1031 // ReloadConfig does not throw; should it, the page says so rather than fault the dispatcher.
@@ -430,7 +430,7 @@ public sealed partial class SettingsPanelViewModel : PanelViewModelBase
         var pinned = paths.CliPathOverride;
 
         CliFound = found is not null;
-        CliResolvedPath = found ?? "Not found (looked on PATH and in the install directory)";
+        CliResolvedPath = found ?? "Not found on PATH or in the install directory";
 
         if (paths.CliPathOverrideRefusal is { } refused)
         {
@@ -446,7 +446,7 @@ public sealed partial class SettingsPanelViewModel : PanelViewModelBase
         }
         else if (pinned is not null && string.Equals(found, pinned, StringComparison.OrdinalIgnoreCase))
         {
-            CliSourceNote = "The file you chose. Every command the app runs, and every review it shows, uses it.";
+            CliSourceNote = "The file you chose. Every command and review uses it.";
         }
         else if (pinned is not null)
         {
@@ -581,7 +581,7 @@ public sealed partial class SettingsPanelViewModel : PanelViewModelBase
             UpdateStatusTone = "Medium";
             UpdateDetail = Services.Installation.UpgradeBlockedReason is { } noUpgrade
                 ? "Open Updates… to read about it. " + noUpgrade
-                : "Open Updates… to review it. The upgrade itself is only ever run from there, after you have seen the exact command.";
+                : "Open Updates… to review it. The upgrade runs only from there.";
         }
         else if (watcher.Latest.State == UpdateCheckState.UpToDate)
         {

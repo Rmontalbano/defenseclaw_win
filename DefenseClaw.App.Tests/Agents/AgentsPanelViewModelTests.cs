@@ -148,7 +148,7 @@ public sealed class AgentsPanelViewModelTests : IDisposable
                 "Tool call",
             ],
             Entries());
-        Assert.StartsWith("11 entries in time order, grouped by turn", _scene.Ui(() => _scene.Vm.TimelineCaption), StringComparison.Ordinal);
+        Assert.StartsWith("11 entries by turn", _scene.Ui(() => _scene.Vm.TimelineCaption), StringComparison.Ordinal);
     }
 
     [Fact]
@@ -176,7 +176,7 @@ public sealed class AgentsPanelViewModelTests : IDisposable
     {
         var vm = await OpenWithRootAsync();
         Assert.True(_scene.Ui(() => vm.CanLoadMore));
-        Assert.Contains("more events are available", _scene.Ui(() => vm.TimelineCaption), StringComparison.Ordinal);
+        Assert.Contains("more events available", _scene.Ui(() => vm.TimelineCaption), StringComparison.Ordinal);
 
         _scene.Ui(() =>
         {
@@ -192,8 +192,8 @@ public sealed class AgentsPanelViewModelTests : IDisposable
             "&after_time=2026-10-01T10%3A00%3A07.000000000Z&after_id=01950000-0000-7000-8000-0000000000e8",
             _scene.Handler.Paths.Last(p => p.StartsWith("api/v1/correlation/graph?agent_id=" + AgentsScene.Root, StringComparison.Ordinal)),
             StringComparison.Ordinal);
-        Assert.Contains("Counts cover every event", _scene.Ui(() => vm.KpiCaption), StringComparison.Ordinal);
-        Assert.DoesNotContain("more events are available", _scene.Ui(() => vm.TimelineCaption), StringComparison.Ordinal);
+        Assert.Contains("Counts cover all events", _scene.Ui(() => vm.KpiCaption), StringComparison.Ordinal);
+        Assert.DoesNotContain("more events available", _scene.Ui(() => vm.TimelineCaption), StringComparison.Ordinal);
     }
 
     [Fact]
@@ -307,7 +307,7 @@ public sealed class AgentsPanelViewModelTests : IDisposable
         _scene.Select(CodexIdentity);
 
         Assert.Equal(AgentsState.Ready, _scene.Ui(() => vm.State));
-        Assert.Contains("does not serve the correlation ledger", _scene.Ui(() => vm.OpenMessage), StringComparison.Ordinal);
+        Assert.Contains("This agent cannot be opened", _scene.Ui(() => vm.OpenMessage), StringComparison.Ordinal);
         Assert.False(_scene.Ui(() => vm.HasLedger));
         Assert.Empty(_scene.Ui(() => vm.Timeline.ToArray()));
     }
@@ -337,7 +337,7 @@ public sealed class AgentsPanelViewModelTests : IDisposable
         var vm = await _scene.OpenAsync();
 
         Assert.Equal(AgentsState.Unavailable, _scene.Ui(() => vm.State));
-        Assert.Contains("not an empty directory", _scene.Ui(() => vm.StateDetail), StringComparison.Ordinal);
+        Assert.Contains("could not be read", _scene.Ui(() => vm.StateDetail), StringComparison.Ordinal);
         Assert.Contains("The gateway is not answering.", _scene.Ui(() => vm.StateDetail), StringComparison.Ordinal);
 
         _scene.Handler.Override = null;
@@ -365,7 +365,7 @@ public sealed class AgentsPanelViewModelTests : IDisposable
 
         Assert.Equal(AgentsState.Ready, _scene.Ui(() => vm.State));
         Assert.Equal(3, _scene.Ui(() => vm.Agents.Count));
-        Assert.StartsWith("The agents below are from the last successful read.", _scene.Ui(() => vm.StaleBanner), StringComparison.Ordinal);
+        Assert.StartsWith("Showing the last successful read.", _scene.Ui(() => vm.StaleBanner), StringComparison.Ordinal);
         Assert.EndsWith("(stale)", _scene.Ui(() => vm.CaptionText), StringComparison.Ordinal);
 
         _scene.Handler.Override = _ => new HttpResponseMessage(HttpStatusCode.NotFound);

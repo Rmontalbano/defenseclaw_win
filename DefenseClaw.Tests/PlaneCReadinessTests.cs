@@ -137,7 +137,7 @@ public sealed class PlaneCReadinessTests
                 var check = Find(checks, id);
                 Assert.Equal(PlaneCCheckState.CouldNotRead, check.State);
                 Assert.Equal("could not read", check.StateText);
-                Assert.Contains("Nothing is assumed", check.Detail, StringComparison.Ordinal);
+                Assert.EndsWith(".", check.Detail, StringComparison.Ordinal);
             }
         }
     }
@@ -150,7 +150,7 @@ public sealed class PlaneCReadinessTests
         var audit = Find(checks, "audit-policy");
         Assert.Equal(PlaneCCheckState.CouldNotRead, audit.State);
         Assert.Contains("unreadable without elevation", audit.Value, StringComparison.Ordinal);
-        Assert.Contains("never runs auditpol", audit.Detail, StringComparison.Ordinal);
+        Assert.Contains("Only an elevated prompt can read the audit policy", audit.Detail, StringComparison.Ordinal);
 
         // The probe interface is the whole of what the card can look at: four reads, none of them the audit policy.
         Assert.Equal(

@@ -161,7 +161,7 @@ public sealed class AgentsPanelViewTests : IDisposable
                 var bar = Assert.Single(VisualTree.Descendants<Wpf.Ui.Controls.InfoBar>(view), b => b.Title == "Stale");
 
                 Assert.True(bar.IsOpen);
-                Assert.StartsWith("The agents below are from the last successful read.", bar.Message, StringComparison.Ordinal);
+                Assert.StartsWith("Showing the last successful read.", bar.Message, StringComparison.Ordinal);
                 Assert.Contains("codex", VisibleTexts(view).ToArray());
             }
         });

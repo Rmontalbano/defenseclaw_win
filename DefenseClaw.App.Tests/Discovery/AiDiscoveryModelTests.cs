@@ -479,7 +479,7 @@ public sealed class AiDiscoveryModelTests
         Assert.Equal(50, card.SignalLines.Count);
         Assert.Equal("new", card.SignalLines[0].StateText);
         Assert.True(card.HasSignalOverflow);
-        Assert.Equal("...and 3 more (use `defenseclaw agent usage --detail --json` for the full list)", card.SignalOverflow);
+        Assert.Equal("3 more. Full list: `defenseclaw agent usage --detail --json`", card.SignalOverflow);
     }
 
     [Theory]
@@ -545,7 +545,7 @@ public sealed class AiDiscoveryModelTests
         var counts = DiscoveryHeaderCounts.FromSignals(FromFixture("ai-discovery-state.0.8.10.json"));
 
         Assert.Equal(new[] { "11 active", "2 new", "1 changed" }, counts.Chips.Select(c => c.Text).ToArray());
-        Assert.Contains("Counted from the signals", counts.Note, StringComparison.Ordinal);
+        Assert.Contains("Counts are from the signals", counts.Note, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -668,7 +668,7 @@ public sealed class AiDiscoveryModelTests
         Assert.Equal(50, row.Observations.Count);
         Assert.Equal("new", row.Observations[0].StateText);
         Assert.True(row.HasObservationOverflow);
-        Assert.Equal("...and 2 more (use `defenseclaw agent usage --detail --json` for the full list)", row.ObservationOverflow);
+        Assert.Equal("2 more. Full list: `defenseclaw agent usage --detail --json`", row.ObservationOverflow);
     }
 
     // ------------------------------------------------------------------------------------------ the filter

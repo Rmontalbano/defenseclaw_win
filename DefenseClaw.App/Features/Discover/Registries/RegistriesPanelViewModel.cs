@@ -265,7 +265,7 @@ public sealed class RegistryEntryRow
 
             if (FindingLines.Count == 0)
             {
-                lines.Add("The cached index keeps the count and the worst severity, not the individual findings.");
+                lines.Add("The cached index keeps only the count and the worst severity.");
             }
             else if (Findings > FindingLines.Count)
             {
@@ -438,7 +438,7 @@ public sealed partial class RegistriesPanelViewModel : PanelViewModelBase
     public override string Title => "Registries";
 
     public override string Description =>
-        "External skill / MCP catalog sources DefenseClaw can sync from: add, sync, approve and require them.";
+        "Skill and MCP catalog sources you can add, sync, approve and require.";
 
     /// <summary>The shared confirm-and-run dialog every change on this panel goes through.</summary>
     public DiscoverActionReview Review { get; }
@@ -552,11 +552,11 @@ public sealed partial class RegistriesPanelViewModel : PanelViewModelBase
     public bool McpsRegistryOptional => !McpsRegistryRequired;
 
     public string SkillsRegistryText => SkillsRegistryRequired
-        ? "Skills: registry required (a skill must match an approved registry entry)"
+        ? "Skills: registry required. A skill must match an approved registry entry."
         : "Skills: registry optional";
 
     public string McpsRegistryText => McpsRegistryRequired
-        ? "MCP servers: registry required (a server must match an approved registry entry)"
+        ? "MCP servers: registry required. A server must match an approved registry entry."
         : "MCP servers: registry optional";
 
     /// <summary>The default-deny switches only matter once there are sources (or one is already on and needs turning off).</summary>
@@ -1195,7 +1195,7 @@ public sealed partial class RegistriesPanelViewModel : PanelViewModelBase
     {
         if (string.IsNullOrWhiteSpace(json))
         {
-            CliErrorMessage = "'defenseclaw registry list --json' printed nothing (expected a JSON array, [] when there are no sources).";
+            CliErrorMessage = "'defenseclaw registry list --json' printed nothing. Expected a JSON array, or [] when there are no sources.";
             return;
         }
 

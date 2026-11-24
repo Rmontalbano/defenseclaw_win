@@ -15,24 +15,21 @@ namespace DefenseClaw.App.ViewModels;
 public sealed partial class AiRuntimePanelViewModel
 {
     public const string PollExplanation =
-        "Asks the running DefenseClaw gateway to poll the runtime planes right now instead of waiting for its interval, and replaces the snapshot " +
-        "on this page with the result. A poll reads this PC's process table and connection table (and, with plane C on, the Security-log events " +
-        "it has collected). It changes no setting.\n\n" +
-        "It needs the gateway running with the runtime planes enabled; otherwise the command fails (HTTP 503) and nothing changes.";
+        "Polls the runtime planes now and updates this page. Reads this PC's process and connection tables, and Security-log events when plane C is on. " +
+        "Changes no setting.\n\n" +
+        "Fails with HTTP 503 unless the gateway is running with the planes enabled.";
 
     public const string EnableExplanation =
-        "Turns the AI Discovery runtime planes on in config.yaml (ai_discovery.runtime) and, unless you untick the restart, restarts the gateway so " +
-        "they start. Plane A (inference heartbeat) and plane B (shadow egress) read this PC's process and connection tables and need no elevation " +
-        "for your own processes. Plane C (agent actions) reads the Windows Security event log; it needs a gateway token that can read that log (in practice an elevated one) and the Advanced Audit " +
-        "Policy (see Prerequisites below) and is only turned on if you choose it here. A plane that cannot run says why on this page.";
+        "Turns the runtime planes on in ai_discovery.runtime in config.yaml, then restarts the gateway unless you untick the restart. " +
+        "Planes A and B need no elevation for your own processes. Plane C reads the Security event log, needs an elevated gateway and the Advanced Audit Policy, and turns on only if you choose it here.";
 
     public const string DisableExplanation =
-        "Turns the runtime planes off in config.yaml (ai_discovery.runtime) and, unless you untick the restart, restarts the gateway so they stop. " +
-        "Findings already recorded are kept. While they are off, nothing is watching for shadow AI network traffic or unattributed agent actions.";
+        "Turns the runtime planes off in ai_discovery.runtime in config.yaml, then restarts the gateway unless you untick the restart. " +
+        "Recorded findings are kept. While the planes are off, nothing watches for shadow AI traffic or unattributed agent actions.";
 
     public const string PlaneCWarning =
-        "Plane C reads process, file and identity events from the Security event log, and every signal it raises is gated on an AI agent in the process lineage. " +
-        "Without an elevated gateway and the audit policy it stays blind and reports why; it never reports a quiet host in its place.";
+        "Plane C reads process, file and identity events from the Security event log and raises signals only when an AI agent is in the process lineage. " +
+        "Without an elevated gateway and the audit policy it stays blind and says why.";
 
     private int _hostPlaneIndex;
     private int _dnsCaptureIndex;
@@ -78,7 +75,7 @@ public sealed partial class AiRuntimePanelViewModel
     public string? ReadOnlyReason =>
         Services.Installation.BlockedReason
         ?? (Services.Paths.DataDirectoryReadOnly
-            ? "This runtime's data folder is a read-only copy (the developer container runtime), so changes from here are off."
+            ? "This is the developer container runtime. Its data folder is a read-only copy, so changes are off."
             : null);
 
     /// <summary>The installation turned read-only (or writable) while the page was open: Poll now, Enable and Disable are asked again.</summary>
@@ -158,7 +155,7 @@ public sealed partial class AiRuntimePanelViewModel
 
         if (_snapshot is null)
         {
-            return IsLoading ? "The snapshot is still being read." : "No snapshot has been read yet, so the state of the planes is not known.";
+            return IsLoading ? "The snapshot is still being read." : "No snapshot has been read yet, so the state of the planes is unknown.";
         }
 
         if (IsStale)
@@ -178,7 +175,7 @@ public sealed partial class AiRuntimePanelViewModel
 
         if (requiresEnabled && !_snapshot.Enabled)
         {
-            return "The runtime planes are disabled; enable them first.";
+            return "The runtime planes are disabled. Enable them first.";
         }
 
         return null;
@@ -186,7 +183,7 @@ public sealed partial class AiRuntimePanelViewModel
 
     /// <summary>Why a change is off while the snapshot is stale: what made it stale, and what to do about it.</summary>
     private string StaleBlockedReason =>
-        "The snapshot on screen is stale" + (StaleReason.Length > 0 ? " (" + StaleReason.TrimEnd('.') + ")" : string.Empty) + "; refresh it first.";
+        "The snapshot is stale." + (StaleReason.Length > 0 ? " " + StaleReason.TrimEnd('.') + "." : string.Empty) + " Refresh it first.";
 
     /// <summary>
     /// The review's last question, asked when the operator confirms: has the snapshot it was opened on gone stale while the dialog was up
@@ -339,12 +336,12 @@ public sealed partial class AiRuntimePanelViewModel
         {
             true => "turned on.",
             false => "turned off.",
-            _ => "left as it is (off unless it was turned on before).",
+            _ => "left as it is. Off unless turned on before.",
         });
         text.Append("\n- DNS capture: ").Append(options.DnsCapture switch
         {
             true => "turned on, so peers are named from the answers this PC resolved.",
-            false => "turned off, so peers are named by reverse DNS (less direct).",
+            false => "turned off. Peers are named by reverse DNS.",
             _ => "left as it is.",
         });
         text.Append("\n- Poll interval: ").Append(options.PollIntervalSeconds is { } interval
@@ -355,7 +352,7 @@ public sealed partial class AiRuntimePanelViewModel
             : "left as it is.");
         text.Append("\n- Gateway restart: ").Append(options.Restart
             ? "yes, so the change takes effect now."
-            : "no (--no-restart): the setting is saved and applies the next time the gateway restarts.");
+            : "no, with --no-restart. The setting applies at the next gateway restart.");
         return text.ToString();
     }
 

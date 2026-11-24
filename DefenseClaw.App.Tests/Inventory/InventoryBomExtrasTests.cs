@@ -288,7 +288,7 @@ public sealed class InventoryBomExtrasTests : IDisposable
         fresh.ShowIdePlugins(new CorrelationRead<IdePluginPage>(CorrelationReadStatus.Unauthorized, null, "The gateway refused this app's API token."));
         Assert.Equal(InventoryBomExtraState.Unavailable, fresh.IdeState);
         Assert.Equal("IDE plugins could not be read", fresh.EmptyTitle);
-        Assert.Contains("This is not an empty list.", fresh.EmptyDetail, StringComparison.Ordinal);
+        Assert.Contains("The gateway refused this app's API token.", fresh.EmptyDetail, StringComparison.Ordinal);
     }
 
     [Fact]
