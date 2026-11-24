@@ -230,7 +230,7 @@
                             <CheckBox Content="Also turn the judge on"
                                       AutomationProperties.HelpText="Adds --enable: the gate has no effect while the judge is off"
                                       IsChecked="{Binding AlsoEnableJudge, Mode=TwoWay}" />
-                            <TextBlock Style="{StaticResource DcToolbarLabel}" Text="Timeout (s)" />
+                            <TextBlock Style="{StaticResource DcToolbarLabel}" Text="Timeout in seconds" />
                             <TextBox Width="70"
                                      AutomationProperties.Name="Judge hook timeout in seconds, optional"
                                      AutomationProperties.HelpText="Optional cap on the hook lane. Hook scripts allow 10 seconds in all."
@@ -255,7 +255,7 @@
                                    Visibility="{Binding HasTimeoutProblem, Converter={StaticResource BoolToVisibility}}"
                                    Text="{Binding TimeoutProblem}" />
                         <TextBlock Margin="0,6,0,0" Style="{StaticResource DcCaption}"
-                                   Text="The judge adds latency and an LLM call to each inspected hook event, so it is opt-in per connector. Proxy-backed connectors are always judged while it is on." />
+                                   Text="The judge adds an LLM call per inspected hook event, so it is opt-in per connector. Proxy-backed connectors are always judged." />
                     </StackPanel>
                 </Border>
 
