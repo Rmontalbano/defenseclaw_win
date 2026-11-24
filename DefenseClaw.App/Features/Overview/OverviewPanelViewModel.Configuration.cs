@@ -25,6 +25,12 @@ public sealed record ConfigRow
     /// <summary>Neutral; Ok for a protection that is on (human approval); Warn for a value that is not what was asked for (a hook fail mode that has drifted).</summary>
     public string ToneKey { get; init; } = "Neutral";
 
+    /// <summary>The longer facts behind <see cref="Value"/>, shown as the value's tooltip and help text; empty when there are none.</summary>
+    public string Detail { get; init; } = string.Empty;
+
+    /// <summary>True when <see cref="Detail"/> has something to show.</summary>
+    public bool HasDetail => Detail.Length > 0;
+
     public override string ToString() => $"{Label}: {Value}";
 }
 
@@ -47,6 +53,9 @@ public sealed partial class OverviewPanelViewModel
     internal static readonly string[] StatusArgv = { "status", "--json" };
 
     private readonly List<ConfigRow> _allConfigurationRows = new();
+
+    /// <summary>Tooltip detail per Configuration row label, filled while the rows are built.</summary>
+    private readonly Dictionary<string, string> _configurationDetails = new(StringComparer.Ordinal);
     private DefenseClawStatus _status = DefenseClawStatus.Empty;
     private string? _statusProblem;
     private DateTimeOffset? _statusLoadedAt;
@@ -178,6 +187,7 @@ public sealed partial class OverviewPanelViewModel
     {
         var scope = Services.ConnectorScope.Current;
         var rows = new List<(string Label, string Value, string Tone)>();
+        _configurationDetails.Clear();
 
         if (scope is not null)
         {
@@ -192,12 +202,19 @@ public sealed partial class OverviewPanelViewModel
         _allConfigurationRows.Clear();
         for (var i = 0; i < rows.Count; i++)
         {
-            _allConfigurationRows.Add(new ConfigRow { Label = rows[i].Label, Value = rows[i].Value, ToneKey = rows[i].Tone, Alternate = i % 2 == 1 });
+            _allConfigurationRows.Add(new ConfigRow
+            {
+                Label = rows[i].Label,
+                Value = rows[i].Value,
+                ToneKey = rows[i].Tone,
+                Detail = _configurationDetails.TryGetValue(rows[i].Label, out var detail) ? detail : string.Empty,
+                Alternate = i % 2 == 1,
+            });
         }
 
         ConfigurationSourceNote = _statusProblem is { Length: > 0 } problem
             ? problem
-            : _statusLoadedAt is { } at ? $"Fail mode and deployment rows from defenseclaw status --json, read {Relative(at)}." : "Reading defenseclaw status --json…";
+            : _statusLoadedAt is { } at ? $"Fail mode and deployment from defenseclaw status --json, read {Relative(at)}." : "Reading defenseclaw status --json…";
 
         RenderConfigurationRows();
         BuildPolicyCards();
@@ -254,8 +271,10 @@ public sealed partial class OverviewPanelViewModel
         {
             foreach (var name in roster)
             {
-                var (text, tone) = FailModeText(name);
-                rows.Add((roster.Count > 1 ? $"Hook fail mode ({name})" : "Hook fail mode", text, tone));
+                var (text, tone, detail) = FailModeText(name);
+                var label = roster.Count > 1 ? $"Hook fail mode ({name})" : "Hook fail mode";
+                rows.Add((label, text, tone));
+                _configurationDetails[label] = detail;
             }
 
             AddCoworkRow(rows);
@@ -379,8 +398,9 @@ public sealed partial class OverviewPanelViewModel
         rows.Add(("Rule pack", RulePackLabel(scope), "Neutral"));
         rows.Add(("Guardrail", Services.Config.Config.Guardrail.Enabled ? "enabled" : "disabled", "Neutral"));
 
-        var (failMode, tone) = FailModeText(scope);
+        var (failMode, tone, failDetail) = FailModeText(scope);
         rows.Add(("Hook fail mode", failMode, tone));
+        _configurationDetails["Hook fail mode"] = failDetail;
         rows.Add(("Status", connector?.StateText ?? "unknown", "Neutral"));
         rows.Add(("Last activity", connector is { LastActivity.Length: > 0 } ? connector.LastActivity.Replace("last activity ", string.Empty, StringComparison.Ordinal) : "none", "Neutral"));
     }
@@ -390,7 +410,7 @@ public sealed partial class OverviewPanelViewModel
     /// obeys, who decided it, what config.yaml asked for and where the sources disagree. Without it: what config.yaml or the gateway says, labelled
     /// as that (the hook may obey something else, which only the status read can tell).
     /// </summary>
-    private (string Text, string Tone) FailModeText(string name)
+    private (string Text, string Tone, string Detail) FailModeText(string name)
     {
         if (_status.Connector(name)?.FailMode is { Effective.Length: > 0 } mode)
         {
@@ -405,19 +425,20 @@ public sealed partial class OverviewPanelViewModel
                 parts.Add("drift: " + string.Join(", ", mode.Drift));
             }
 
-            // 1.0.5 per-user (CUST-397): which saved value, or the policy tier, decides the outage mode.
+            // 1.0.5 per-user (CUST-397): which saved value, or the policy tier, decides the outage mode. 1.0.10: what the hook does in each failure, from
+            // the app's own fixed text (absent before 1.0.10 and for proxy connectors). Both go to the row's tooltip so the value stays at 3 parts.
+            var details = new List<string>(2);
             if (FailModeDecider(name) is { } decidedBy)
             {
-                parts.Add(decidedBy);
+                details.Add(decidedBy);
             }
 
-            // 1.0.10: what the hook does in each failure, from the app's own fixed text (absent before 1.0.10 and for proxy connectors).
             if (FailureOutcomes.Sentence(mode.OnFailure) is { } outcomes)
             {
-                parts.Add(outcomes);
+                details.Add(outcomes);
             }
 
-            return (string.Join(" · ", parts), mode.HasDrift ? "Warn" : "Neutral");
+            return (string.Join(" · ", parts), mode.HasDrift ? "Warn" : "Neutral", string.Join("\n", details));
         }
 
         Services.Config.Config.Guardrail.Connectors.TryGetValue(name, out var settings);
@@ -427,11 +448,11 @@ public sealed partial class OverviewPanelViewModel
         var value = runtime?.HookFailMode ?? settings?.HookFailMode ?? (decider is null ? null : Services.Config.Config.Guardrail.HookFailMode);
         if (value is not { Length: > 0 })
         {
-            return (decider ?? "not set", "Neutral");
+            return ("not set", "Neutral", decider ?? string.Empty);
         }
 
         var text = $"{value} ({(runtime?.HookFailMode is null ? "config.yaml" : "gateway")})";
-        return (decider is null ? text : text + " · " + decider, "Neutral");
+        return (text, "Neutral", decider ?? string.Empty);
     }
 
     private string PolicyPosture(IReadOnlyList<string> roster)

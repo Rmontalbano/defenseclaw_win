@@ -23,7 +23,7 @@ public sealed partial class AppearanceFlyout : UserControl
     public AppearanceFlyout()
     {
         InitializeComponent();
-        HintText.Text = $"Applies immediately and is remembered. {ShellShortcuts.ToggleThemeText} switches between light and dark.";
+        HintText.Text = $"{ShellShortcuts.ToggleThemeText} switches between light and dark.";
     }
 
     /// <summary>Raised when the operator presses Esc inside the flyout.</summary>

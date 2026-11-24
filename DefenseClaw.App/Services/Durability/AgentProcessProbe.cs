@@ -16,8 +16,8 @@ public sealed class AgentProcessProbe
 {
     /// <summary>The sentence a review carries while Codex is running.</summary>
     public const string CodexRunningMessage =
-        "Codex is running. DefenseClaw rewrites Codex's config.toml when the gateway starts, and Codex rewrites it too; a collision can leave a " +
-        "stuck pending write that stops the gateway. Quit Codex first.";
+        "Codex is running. Both Codex and DefenseClaw rewrite Codex's config.toml, and a collision can leave a stuck pending write that stops the gateway. " +
+        "Quit Codex first.";
 
     /// <summary>The heading of the warning bar that carries <see cref="CodexRunningMessage"/>.</summary>
     public const string CodexRunningTitle = "Codex is running";

@@ -224,8 +224,8 @@ public sealed class GatewayLifecycleDurabilityTests : IDisposable
         var warning = Assert.Single(review.Warnings);
         Assert.Equal("Codex is running", warning.Title);
         Assert.Equal(
-            "Codex is running. DefenseClaw rewrites Codex's config.toml when the gateway starts, and Codex rewrites it too; a collision can leave a stuck pending write " +
-            "that stops the gateway. Quit Codex first.",
+            "Codex is running. Both Codex and DefenseClaw rewrite Codex's config.toml, and a collision can leave a stuck pending write that stops the gateway. " +
+            "Quit Codex first.",
             warning.Message);
         Assert.Equal(new[] { GatewayControl.Verb(action) }, review.Steps[0].Argv);
         Assert.DoesNotContain(_events, e => e.StartsWith("plain-review", StringComparison.Ordinal));

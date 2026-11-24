@@ -41,7 +41,7 @@ public sealed class EffectivePolicyRefusalCardTests : IDisposable
         Assert.Equal("strict", rows["Profile"]);
         var sandbox = rows["Sandbox runs"];
         Assert.StartsWith("Refused (" + Reason + ").", sandbox, StringComparison.Ordinal);
-        Assert.Contains("does not support sandboxes", sandbox, StringComparison.Ordinal);
+        Assert.Contains("Sandboxes are not supported on Windows", sandbox, StringComparison.Ordinal);
 
         // The gateway's own sentence about it is the row now, not a second copy in the caption.
         Assert.Equal(string.Empty, vm.EffectivePolicyNote);

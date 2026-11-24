@@ -170,7 +170,7 @@ public sealed class CommandRerunTests : IDisposable
         var handedOff = _services.Cli.RecordHandOff(Cli, new[] { "keys", "set", "OPENAI_API_KEY" }, "Run this in a terminal.");
 
         Assert.False(CommandRerun.StateOf(refused).Offered);
-        Assert.Contains("refused", CommandRerun.StateOf(refused).Hint, StringComparison.Ordinal);
+        Assert.Contains("Refused", CommandRerun.StateOf(refused).Hint, StringComparison.Ordinal);
         Assert.False(CommandRerun.StateOf(handedOff).Offered);
         Assert.Contains("terminal", CommandRerun.StateOf(handedOff).Hint, StringComparison.Ordinal);
     }
@@ -304,7 +304,7 @@ public sealed class CommandRerunTests : IDisposable
         InvocationFactory.Fail(stopped, "timed out after 120 s — process tree killed");
         var timedOut = _rerun.ReviewFor(stopped);
 
-        Assert.Contains("This runs the same command again, exactly as it ran at", ok.Summary, StringComparison.Ordinal);
+        Assert.Contains("This runs the same command again. Last run:", ok.Summary, StringComparison.Ordinal);
         Assert.Contains("(exit 0)", ok.Summary, StringComparison.Ordinal);
         Assert.Contains("(exit 3)", failed.Summary, StringComparison.Ordinal);
         Assert.Contains("(timed out after 120 s)", timedOut.Summary, StringComparison.Ordinal);
@@ -352,12 +352,12 @@ public sealed class CommandRerunTests : IDisposable
         Assert.Equal("defenseclaw", run.Tool);
         Assert.Equal(new[] { "skill", "block", "--connector", "claudecode", "--", "pdf-tools" }, run.Argv);
         Assert.Equal(
-            "Ran defenseclaw skill block --connector claudecode -- pdf-tools again: finished (exit 0). The new entry is at the top of the Activity list.",
+            "Ran defenseclaw skill block --connector claudecode -- pdf-tools again: finished (exit 0). The new entry is at the top of Activity.",
             message);
 
         _exit = 2;
         var failed = await _rerun.RunAsync(Finished(Cli, 0, "doctor"));
-        Assert.Equal("Ran defenseclaw doctor again: exited with code 2. The new entry is at the top of the Activity list.", failed);
+        Assert.Equal("Ran defenseclaw doctor again: exited with code 2. The new entry is at the top of Activity.", failed);
     }
 
     [Fact]

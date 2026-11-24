@@ -115,7 +115,7 @@ public sealed class AppearanceCommandsTests
     {
         var command = Build(new FakeAppearance { IsDark = isDark }).Single(c => c.Id == "appearance.toggle");
 
-        Assert.Contains($"Switch to the {goesTo} look", command.Description, StringComparison.Ordinal);
+        Assert.Contains($"Switch to {goesTo}.", command.Description, StringComparison.Ordinal);
         Assert.Equal(ShellShortcuts.ToggleThemeText, command.Shortcut);
     }
 

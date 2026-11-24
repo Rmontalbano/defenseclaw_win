@@ -339,7 +339,7 @@ public sealed class InstallationRerunTests : IDisposable
 
         var message = await scene.Rerun.RunAsync(Finished(tool, 0, argv));
 
-        Assert.Equal("Not run. " + TestInstallations.ManagedReason + " Nothing was changed; the refusal is in the Activity list.", message);
+        Assert.Equal("Not run. " + TestInstallations.ManagedReason + " Nothing was changed. The refusal is in Activity.", message);
         Assert.Empty(scene.Ran);
 
         // A confirmed stop is taken for the operator's word that the gateway stays down; this one stopped nothing.
@@ -378,7 +378,7 @@ public sealed class InstallationRerunTests : IDisposable
         var text = CommandRerun.Describe(Cli, refused.Argv, refused);
 
         Assert.StartsWith("Not run. DefenseClaw for Windows runs only read-only commands against this installation. " + TestInstallations.ManagedReason, text, StringComparison.Ordinal);
-        Assert.EndsWith("Nothing was changed; the refusal is in the Activity list.", text, StringComparison.Ordinal);
+        Assert.EndsWith("Nothing was changed. The refusal is in Activity.", text, StringComparison.Ordinal);
         Assert.DoesNotContain("Ran ", text, StringComparison.Ordinal);
     }
 

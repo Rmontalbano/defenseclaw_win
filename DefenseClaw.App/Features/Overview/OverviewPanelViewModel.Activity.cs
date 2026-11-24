@@ -83,7 +83,7 @@ public sealed partial class OverviewPanelViewModel
                 HourlyBuckets = Array.Empty<HourlyBucket>();
                 HasHourlyData = false;
                 HourlyAutomationSummary = string.Empty;
-                ActivityNote = $"The hourly chart needs the {HourlyActivityReader.IndexName} index, which this audit.db does not have; reading it without would scan every row.";
+                ActivityNote = $"The hourly chart needs the {HourlyActivityReader.IndexName} index, which this audit.db does not have.";
                 break;
 
             default:
@@ -91,7 +91,7 @@ public sealed partial class OverviewPanelViewModel
                 HasHourlyData = hourly.Total > 0;
                 HourlyAutomationSummary = Summarize(hourly);
                 ActivityNote = hourly.Total > 0
-                    ? "Hook decisions per hour (connector-hook events): allowed and blocked. The scale is the busiest hour."
+                    ? "Hook decisions per hour, allowed and blocked. The scale is the busiest hour."
                     : "No hook decisions in the last 24 hours.";
                 break;
         }

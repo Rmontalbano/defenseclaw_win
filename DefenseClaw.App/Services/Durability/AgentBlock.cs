@@ -31,7 +31,7 @@ internal static class AgentBlock
     public static string Body(DurabilityFacts facts)
     {
         ArgumentNullException.ThrowIfNull(facts);
-        return "The hooks block every action while the gateway is not running. Start the gateway, or switch to fail open, from the Overview.";
+        return "Hooks block every action while the gateway is stopped. Start the gateway or switch to fail open on the Overview.";
     }
 }
 

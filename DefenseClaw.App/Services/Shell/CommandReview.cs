@@ -59,16 +59,15 @@ public sealed record CommandReviewWarning(string Title, string Message)
             .ToArray();
         return new CommandReviewWarning(
             ArgumentExpansionTitle,
-            "The DefenseClaw CLI expands %VARIABLES%, $VARIABLES, ~ and wildcards in every argument on Windows - even after --. " +
-            "It will not run exactly what is shown above: " + string.Join(' ', lines));
+            "The CLI expands %VARIABLES%, $VARIABLES, ~ and wildcards in every argument on Windows, even after --. " +
+            "What runs differs from the command above: " + string.Join(' ', lines));
     }
 
     /// <summary>The bar a command carries when it asks the CLI to print values it normally masks.</summary>
     public static CommandReviewWarning SecretOutput() =>
         new(
             SecretOutputTitle,
-            "This command prints secret values the CLI normally masks. The output lands in the Activity panel, in any log you " +
-            "export and on the clipboard if you copy it.");
+            "This command prints secret values the CLI normally masks. They appear in Activity, in exported logs and on the clipboard if you copy them.");
 
     /// <summary>
     /// The bar a review carries when a name it acts on - a skill, plugin, MCP server, registry entry or tool, which came from outside - has
@@ -96,8 +95,7 @@ public sealed record CommandReviewWarning(string Title, string Message)
             : $"{described.Length} names contain unusual characters ({string.Join("; ", described)}).";
         return new CommandReviewWarning(
             UnusualCharactersTitle,
-            lead + " It can look like a different name, so compare it with the command above, where such characters are spelled out. " +
-            "The command that runs is exactly the one shown.");
+            lead + " Compare it with the command above, where such characters are spelled out.");
     }
 }
 
@@ -218,7 +216,7 @@ public sealed record CommandReview
 
     /// <summary>The restart paragraph shown in the "Gateway restart" bar.</summary>
     public const string RestartNotice =
-        RestartSentence + " Agents that use DefenseClaw hooks may lose the gateway for a few seconds while it comes back.";
+        RestartSentence + " Agents that use DefenseClaw hooks may lose the gateway for a few seconds.";
 
     /// <summary>
     /// The restart paragraph for <c>setup cowork</c>, which restarts the gateway only when it has to set up the Claude Code connector first
@@ -226,9 +224,8 @@ public sealed record CommandReview
     /// alone cannot say which, so the review keeps the restart badge and this paragraph says "may".
     /// </summary>
     public const string CoworkRestartNotice =
-        "This may restart the DefenseClaw gateway: when the Claude Code connector is not set up yet, setup cowork sets it up first, and that " +
-        "restarts the gateway. When Claude Code is already set up, it builds the plugin only and nothing restarts. " +
-        "Agents that use DefenseClaw hooks may lose the gateway for a few seconds while it comes back.";
+        "This may restart the DefenseClaw gateway. If the Claude Code connector is missing, setup cowork sets it up first, which restarts the gateway. Otherwise nothing restarts. " +
+        "Agents that use DefenseClaw hooks may lose the gateway for a few seconds.";
 
     /// <summary>
     /// The restart paragraph for <paramref name="argv"/>: <see cref="RestartNotice"/> for every command that restarts the gateway for certain,
@@ -409,7 +406,7 @@ public sealed record CommandReview
     public bool HasMultipleSteps => Steps.Count > 1;
 
     /// <summary>The sentence every review of more than one command opens its summary with (CUST-379).</summary>
-    public const string SequenceSentence = "These commands will run in order; stops on first failure.";
+    public const string SequenceSentence = "These commands run in order and stop on the first failure.";
 
     /// <summary>
     /// What the summary line shows: <see cref="Summary"/>, led by <see cref="SequenceSentence"/> when the review runs more than one command. A summary

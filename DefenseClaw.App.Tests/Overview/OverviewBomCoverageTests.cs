@@ -36,7 +36,7 @@ public sealed class OverviewBomCoverageTests : IDisposable
         Assert.False(vm.HasBomCoverage);
         Assert.Empty(vm.BomCoverageRows);
         Assert.Equal(OverviewPanelViewModel.NoBomYet, vm.BomCoverageNote);
-        Assert.Contains("does not run one", vm.BomCoverageNote, StringComparison.Ordinal);
+        Assert.Contains("Generate one from Inventory", vm.BomCoverageNote, StringComparison.Ordinal);
         Assert.Empty(_scene.Services.Cli.Activity);
     }
 

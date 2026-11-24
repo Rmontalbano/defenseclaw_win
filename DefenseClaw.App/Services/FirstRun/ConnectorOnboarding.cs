@@ -13,9 +13,9 @@ public sealed record OfferedConnector(string Id, string Label, string Alias, Pla
     /// <summary>Why the operator should hesitate (not certified, or a preview, on Windows), or empty. A caution, never a block: both can be added.</summary>
     public string Caution => Platform switch
     {
-        PlatformStatus.NotCertified => $"{Label} is not certified on Windows. It can be added; expect rough edges.",
+        PlatformStatus.NotCertified => $"{Label} is not certified on Windows. You can still add it.",
         // 1.0.6: the CLI offers a preview connector (platform_support.py "Preview connectors are deliberately available") but does not certify it.
-        PlatformStatus.Preview => $"{Label} is a preview on Windows. It can be added, but it has not completed Windows certification; expect rough edges.",
+        PlatformStatus.Preview => $"{Label} is a preview on Windows and not yet certified. You can still add it.",
         _ => string.Empty,
     };
 

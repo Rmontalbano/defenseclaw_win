@@ -46,18 +46,18 @@ public sealed partial class OverviewPanelViewModel
 
         if (view.Reasons.Count == 0)
         {
-            return "The gateway reports runtime monitoring degraded and gives no reason.";
+            return "Runtime monitoring degraded. The gateway gives no reason.";
         }
 
-        var text = "The gateway reports runtime monitoring degraded: " + string.Join("; ", view.Reasons) + ".";
+        var text = "Runtime monitoring degraded: " + string.Join("; ", view.Reasons) + ".";
         if (dropLatch && view.Reasons.Any(static r => r.Contains(DroppedEventsReason, StringComparison.Ordinal) && r.Contains(BackPressureReason, StringComparison.Ordinal)))
         {
             // HostSensorDropLatch (1.0.9): the sensor keeps the count of events it dropped for the life of the gateway process.
-            text += " The dropped-events count stays until the gateway restarts.";
+            text += " The dropped-events count resets when the gateway restarts.";
         }
 
         return view.Reasons.All(static r => r.Contains(OwnSocketsReason, StringComparison.Ordinal))
-            ? text + " That is how a gateway that runs as you normally works; this app keeps the gateway unelevated, so nothing needs to change."
+            ? text + " Expected for a gateway that is not elevated. No action needed."
             : text;
     }
 

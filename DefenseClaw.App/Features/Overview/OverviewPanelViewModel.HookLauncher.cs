@@ -12,7 +12,7 @@ namespace DefenseClaw.App.ViewModels;
 public sealed partial class OverviewPanelViewModel
 {
     /// <summary>The installer step doctor gives, in words (hook_integrity.py LAUNCHER_REINSTALL_STEP); not a command the app offers to copy or run.</summary>
-    internal const string HookLauncherReinstallText = "Run the DefenseClaw installer again the way you installed it; setup cannot recreate the launcher.";
+    internal const string HookLauncherReinstallText = "Run the DefenseClaw installer again the way you installed it. Setup cannot recreate the launcher.";
 
     private IReadOnlyList<(HookLauncherFinding Finding, DoctorCheckRow Check)> CurrentHookLauncherFindings()
     {
@@ -50,7 +50,7 @@ public sealed partial class OverviewPanelViewModel
                 ? new AttentionRow
                 {
                     Title = $"{finding.Agent}: the DefenseClaw {what} is not the installed copy",
-                    Detail = $"Doctor found that the {what} does not match the copy the installer recorded, so " +
+                    Detail = $"The {what} does not match the copy the installer recorded, so " +
                              (finding.Program == "guard"
                                  ? $"{finding.Agent} prompts and tool calls may run without DefenseClaw. "
                                  : $"every {finding.Agent} hook call fails. ") +
@@ -60,7 +60,7 @@ public sealed partial class OverviewPanelViewModel
                 : new AttentionRow
                 {
                     Title = $"{finding.Agent}: the DefenseClaw {what} is not verified",
-                    Detail = $"Doctor could not check the {what} because the installer recorded no copy of it to compare with. Running the installer again records one. {shown}{ran}",
+                    Detail = $"Doctor could not check the {what}: the installer recorded no copy to compare with. Run the installer again to record one. {shown}{ran}",
                     SeverityKey = "Medium",
                 });
         }

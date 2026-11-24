@@ -49,13 +49,12 @@ public sealed partial class OverviewPanelViewModel
         {
             // OpenClaw runs alone in 1.0.10: setup openclaw refuses while hook connectors are configured (cmd_setup.py@1.0.10:15501-15524).
             var alone = configured.Any()
-                ? " OpenClaw runs alone in this release: its setup refuses while other connectors are configured, and 'setup openclaw --replace' removes them."
+                ? " In this release OpenClaw runs alone: 'setup openclaw' refuses while other connectors are configured, and --replace removes them."
                 : string.Empty;
             rows.Add(new AttentionRow
             {
                 Title = "OpenClaw found, not set up",
-                Detail = "DefenseClaw found OpenClaw on this machine, but no connector is configured for it, so its tool calls are not checked. " +
-                         "Set it up from Setup -> OpenClaw. Discovery alone never changes enforcement." + alone,
+                Detail = "OpenClaw is installed but has no connector, so its tool calls are not checked. Set it up from Setup -> OpenClaw." + alone,
                 SeverityKey = "Info",
             });
         }
@@ -74,15 +73,14 @@ public sealed partial class OverviewPanelViewModel
             return;
         }
 
-        const string restart = "Restart the OpenClaw gateway so it loads the DefenseClaw plugin; run the command below. The app never runs it.";
+        const string restart = "Restart the OpenClaw gateway so it loads the DefenseClaw plugin. Run the command below.";
         if (age is { } ago)
         {
             var minutes = Math.Max(1, (int)ago.TotalMinutes);
             rows.Add(new AttentionRow
             {
                 Title = "The OpenClaw plugin has stopped calling in",
-                Detail = $"The OpenClaw plugin last called in {minutes.ToString(CultureInfo.CurrentCulture)} min ago (it normally calls in every minute), " +
-                         "so OpenClaw's tool calls may not be checked. " + restart,
+                Detail = $"The OpenClaw plugin last called in {minutes.ToString(CultureInfo.CurrentCulture)} min ago, so OpenClaw's tool calls may not be checked. " + restart,
                 SeverityKey = "High",
                 Command = OpenClawGatewayRestartCommand,
             });

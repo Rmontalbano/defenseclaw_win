@@ -30,14 +30,13 @@ public sealed partial class OverviewPanelViewModel
 
         var roots = admission.RootsUnavailable.ToString("N0", CultureInfo.CurrentCulture);
         var detail = $"The watcher cannot watch {roots} skill or plugin folder{(admission.RootsUnavailable == 1 ? string.Empty : "s")} for {admission.ConnectorLabel}, " +
-                     "so new skills and plugins there are not scanned before they are admitted. " +
-                     "On Windows a skill or plugin folder that is a junction or a symbolic link is not scanned (a linked folder is refused); use a real folder instead. " +
-                     "The gateway log names each folder.";
+                     "so new skills and plugins there are not scanned before admission. " +
+                     "A junction or a symbolic link is refused on Windows; use a real folder. The gateway log names each folder.";
 
         if (admission.WritableFolders.Count > 0)
         {
             var more = admission.FoldersOmitted > 0 ? $" and {admission.FoldersOmitted.ToString("N0", CultureInfo.CurrentCulture)} more" : string.Empty;
-            detail += " Folders other accounts can write, as the gateway reports them: " + string.Join("; ", admission.WritableFolders) + more + ".";
+            detail += " Writable by other accounts: " + string.Join("; ", admission.WritableFolders) + more + ".";
         }
 
         return new AttentionRow

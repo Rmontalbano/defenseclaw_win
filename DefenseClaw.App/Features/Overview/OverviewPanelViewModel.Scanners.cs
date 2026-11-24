@@ -21,7 +21,7 @@ public sealed partial class OverviewPanelViewModel
         Name = "aibom",
         StateText = "built-in",
         StateKey = "Ok",
-        Detail = "Ships in the defenseclaw CLI (aibom scan); nothing to install. Inventory generates it.",
+        Detail = "Built into the defenseclaw CLI (aibom scan). Generate it from Inventory.",
     };
 
     /// <summary>
@@ -59,7 +59,7 @@ public sealed partial class OverviewPanelViewModel
             Name = "keys",
             StateText = string.Create(CultureInfo.InvariantCulture, $"{missing.Count} missing"),
             StateKey = "Warn",
-            Detail = string.Join(", ", missing.Take(KeysNamed)) + more + ": doctor found them unset. Fill missing keys sets them.",
+            Detail = string.Join(", ", missing.Take(KeysNamed)) + more + ": doctor found them unset. Use Fill missing keys.",
         };
     }
 }

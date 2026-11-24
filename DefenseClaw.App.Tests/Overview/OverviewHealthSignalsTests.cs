@@ -152,10 +152,10 @@ public sealed class OverviewHealthSignalsTests : IDisposable
         var detail = Assert.Single(vm.ObservabilityRows).Detail;
         Assert.StartsWith("activated · 5 accepted · 3 delivered · 2 retried · 0 dropped · 0 rejected", detail, StringComparison.Ordinal);
         Assert.Contains("counters: log and trace records", detail, StringComparison.Ordinal);
-        Assert.Contains("circuit open: the gateway is not sending to this collector. On a standard install it keeps these records queued and sends them again when the collector answers", detail, StringComparison.Ordinal);
+        Assert.Contains("circuit open: not sending to this collector. A standard install keeps records queued and resends when it answers", detail, StringComparison.Ordinal);
 
         // dispatch.go sets RetryUntilClosed only off a Secure Client install and /health does not say which this is, so the sentence says both.
-        Assert.Contains("a Secure Client install does not retry without limit", detail, StringComparison.Ordinal);
+        Assert.Contains("a Secure Client install may drop some", detail, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -193,8 +193,8 @@ public sealed class OverviewHealthSignalsTests : IDisposable
 
         Assert.True(vm.ShowRuntimeMonitoring);
         var text = vm.RuntimeMonitoringDegradedText;
-        Assert.StartsWith("The gateway reports runtime monitoring degraded: shadow egress partially covered:", text, StringComparison.Ordinal);
-        Assert.Contains("this app keeps the gateway unelevated, so nothing needs to change.", text, StringComparison.Ordinal);
+        Assert.StartsWith("Runtime monitoring degraded: shadow egress partially covered:", text, StringComparison.Ordinal);
+        Assert.Contains("Expected for a gateway that is not elevated. No action needed.", text, StringComparison.Ordinal);
         Assert.DoesNotContain("Warning", text, StringComparison.Ordinal);
         Assert.True(vm.HasRuntimeMonitoringDegraded);
     }
@@ -211,12 +211,12 @@ public sealed class OverviewHealthSignalsTests : IDisposable
         var text = vm.RuntimeMonitoringDegradedText;
         Assert.Contains("shadow egress partially covered", text, StringComparison.Ordinal);
         Assert.Contains("security event log reader failed: access denied", text, StringComparison.Ordinal);
-        Assert.DoesNotContain("nothing needs to change", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("No action needed", text, StringComparison.Ordinal);
 
         vm.Apply(Snapshot(
             "\"destination_count\":0",
             "{\"state\":\"running\",\"details\":{\"degraded\":true,\"degraded_reasons\":[\"" + OwnSockets + "\",\"" + OwnSockets + "\"]}}"));
-        Assert.Contains("nothing needs to change", vm.RuntimeMonitoringDegradedText, StringComparison.Ordinal);
+        Assert.Contains("No action needed", vm.RuntimeMonitoringDegradedText, StringComparison.Ordinal);
     }
 
     [Theory]
@@ -241,10 +241,10 @@ public sealed class OverviewHealthSignalsTests : IDisposable
         var vm = await PanelAsync("1.0.7");
 
         vm.Apply(Snapshot("\"destination_count\":0", "{\"state\":\"running\",\"details\":{\"degraded\":true,\"degraded_reasons\":[\"process table unreadable: access denied\"]}}"));
-        Assert.Equal("The gateway reports runtime monitoring degraded: process table unreadable: access denied.", vm.RuntimeMonitoringDegradedText);
+        Assert.Equal("Runtime monitoring degraded: process table unreadable: access denied.", vm.RuntimeMonitoringDegradedText);
 
         vm.Apply(Snapshot("\"destination_count\":0", "{\"state\":\"running\",\"details\":{\"degraded\":true}}"));
-        Assert.Equal("The gateway reports runtime monitoring degraded and gives no reason.", vm.RuntimeMonitoringDegradedText);
+        Assert.Equal("Runtime monitoring degraded. The gateway gives no reason.", vm.RuntimeMonitoringDegradedText);
     }
 
     [Fact]

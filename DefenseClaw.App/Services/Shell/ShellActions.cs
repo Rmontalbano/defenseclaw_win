@@ -309,14 +309,14 @@ internal sealed partial class ShellActions
 
         try
         {
-            ShowToast("Diagnose", "Running the doctor in the background. Nothing is changed.");
+            ShowToast("Diagnose", "Running the doctor in the background.");
             var invocation = await _services.Cli.RunAsync(DiagnoseArgv).ConfigureAwait(true);
             ShowToast(
                 "Diagnose",
                 invocation.ExitCode == 0
-                    ? "The doctor finished with no failures. Details are in the Activity panel."
+                    ? "The doctor finished with no failures. Details are in Activity."
                     : invocation.ExitCode is { } code
-                        ? $"The doctor reported problems (exit code {code}). Details are in the Activity panel."
+                        ? $"The doctor reported problems (exit code {code}). Details are in Activity."
                         : $"{invocation.FailureReason ?? "The doctor did not finish"}. See the Activity panel.");
         }
 #pragma warning disable CA1031 // A diagnosis that cannot start (no CLI) is reported, not thrown into a key handler.
@@ -493,7 +493,7 @@ internal sealed partial class ShellActions
                 false,
                 running.All(i => i.SurvivesShutdown)
                     ? "The upgrade installer cannot be cancelled from here: killing it part-way can leave DefenseClaw half-installed."
-                    : "Already cancelling: waiting for the process tree to exit.",
+                    : "Already cancelling.",
                 LineOf(running[0]));
         }
     }
@@ -513,7 +513,7 @@ internal sealed partial class ShellActions
         }
 
         var accepted = _services.Cli.Cancel(target, out var why);
-        ShowToast(title, accepted ? $"Cancelling {LineOf(target)}: the process tree is being killed." : why);
+        ShowToast(title, accepted ? $"Cancelling {LineOf(target)}." : why);
     }
 
     /// <summary>
@@ -536,7 +536,7 @@ internal sealed partial class ShellActions
         if (argument is null || command.Form is not { } form)
         {
             CopyCurated(command);
-            ShowToast(command.Title, $"Needs {string.Join(", ", command.RequiredArguments)}. Copied the command for you to complete in a terminal.");
+            ShowToast(command.Title, $"Needs {string.Join(", ", command.RequiredArguments)}. Copied the command to complete in a terminal.");
             return;
         }
 
@@ -548,7 +548,7 @@ internal sealed partial class ShellActions
 
         if (!WizardCredentials.IsValidName(name))
         {
-            ShowToast(command.Title, "That is not the NAME of an environment variable: letters, digits and underscores, starting with a letter or an underscore.");
+            ShowToast(command.Title, "Not a variable NAME. Use letters, digits and underscores, starting with a letter or underscore.");
             return;
         }
 
@@ -605,7 +605,7 @@ internal sealed partial class ShellActions
             CopyCurated(command);
             ShowToast(
                 command.Title,
-                "It asks questions at a prompt, which needs a terminal. Copied the command for you to paste into one" +
+                "It needs a terminal. Copied the command to paste into one" +
                 (command.NeedsArguments ? $", then add {string.Join(", ", command.RequiredArguments)}." : "."));
             return;
         }
@@ -626,7 +626,7 @@ internal sealed partial class ShellActions
             if (command.Form is not { } form || argument is null)
             {
                 CopyCurated(command);
-                ShowToast(command.Title, $"Needs {string.Join(", ", command.RequiredArguments)}. Copied the command for you to complete in a terminal.");
+                ShowToast(command.Title, $"Needs {string.Join(", ", command.RequiredArguments)}. Copied the command to complete in a terminal.");
                 return;
             }
 
@@ -666,8 +666,8 @@ internal sealed partial class ShellActions
                 // a change, and says why a command that sounds harmless is being asked about.
                 var notListed = CommandReview.ResolveTier(argv) == CommandTier.ReadOnly
                     ? command.NeedsArguments
-                        ? " It names something you typed, so it is reviewed first, even where the command alone is on DefenseClaw for Windows' list of read-only commands."
-                        : " It is not on DefenseClaw for Windows' list of commands known to be read-only, so it is reviewed first."
+                        ? " It names something you typed, so it is reviewed first."
+                        : " It is not on the app's list of read-only commands, so it is reviewed first."
                     : RoutingReadReview.Note(argv);
 
                 // The local stack's rows say what the verb really does (the same sentences the Setup wizard's review uses): the registry's one-line
@@ -708,10 +708,10 @@ internal sealed partial class ShellActions
             ShowToast(
                 command.Title,
                 invocation.ExitCode == 0
-                    ? "Finished. Output is in the Activity panel."
+                    ? "Finished. Output is in Activity."
                     : invocation.ExitCode is { } code
-                        ? $"Exit code {code}. See the Activity panel for output."
-                        : $"{invocation.FailureReason ?? "The command did not finish"}. See the Activity panel.");
+                        ? $"Exit code {code}. Output is in Activity."
+                        : $"{invocation.FailureReason ?? "The command did not finish"}. See Activity.");
         }
 #pragma warning disable CA1031 // A command that cannot start (no CLI, refused argument) is reported, not thrown into the palette.
         catch (Exception ex)

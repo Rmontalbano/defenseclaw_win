@@ -183,14 +183,14 @@ public sealed partial class OverviewPanelViewModel
     }
 
     /// <summary>The honest half of the sandbox row: the refusal is real, and it changes nothing here.</summary>
-    internal const string SandboxNotSupported = "DefenseClaw for Windows does not support sandboxes, so this has no effect on this PC.";
+    internal const string SandboxNotSupported = "Sandboxes are not supported on Windows, so this has no effect here.";
 
     private static List<ConfigRow> EffectivePolicyRowsOf(EffectivePolicy policy, string connector)
     {
         var rows = new List<(string Label, string Value)>
         {
             ("Applies to", (EffectivePolicyUser.Length > 0 ? EffectivePolicyUser : "this account") + (connector.Length > 0 ? " on " + connector : string.Empty)),
-            ("Profile", policy.ProfilesConfigured ? policy.Profile : "none configured (the base configuration applies)"),
+            ("Profile", policy.ProfilesConfigured ? policy.Profile : "none configured; base configuration applies"),
         };
         Add(rows, "Matched by", policy.Match);
         Add(rows, "Mode", policy.Mode);

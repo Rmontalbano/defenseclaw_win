@@ -87,7 +87,7 @@ public sealed class UnreviewedAllowListTests : IDisposable
 
         await actions.RunCuratedAsync(Curated("plan apply"));
 
-        Assert.Contains("not on DefenseClaw for Windows' list of commands known to be read-only", shown!.Summary, StringComparison.Ordinal);
+        Assert.Contains("not on the app's list of read-only commands", shown!.Summary, StringComparison.Ordinal);
         Assert.StartsWith("What it does.", shown.Summary, StringComparison.Ordinal);
 
         // A command that is a change by its own verb is reviewed as one, and gets no sentence about a list.

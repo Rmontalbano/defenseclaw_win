@@ -75,7 +75,7 @@ public sealed class Agent360AvailabilityTests
 
         Assert.False(availability.Reachable);
         Assert.False(availability.Decision.IsAvailable);
-        Assert.Contains("Local OTel wizard", availability.Decision.Reason, StringComparison.Ordinal);
+        Assert.Contains("Start the local observability stack from Setup", availability.Decision.Reason, StringComparison.Ordinal);
         Assert.Contains("http://localhost:3000", availability.Decision.Reason, StringComparison.Ordinal);
         Assert.Null(availability.UrlFor("codex", null));
     }

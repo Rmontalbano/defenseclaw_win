@@ -468,7 +468,7 @@ public class TrayFlyoutViewModelTests
             Assert.False(viewModel.IsLive);
             Assert.Equal("Monitoring paused", viewModel.HeaderCaption);
             Assert.Equal("Monitoring paused · no counts read", viewModel.UpdatedText);
-            Assert.Equal("Monitoring is paused; findings have not been read", viewModel.FindingsEmptyText);
+            Assert.Equal("Monitoring is paused. Findings have not been read.", viewModel.FindingsEmptyText);
             Assert.All(viewModel.Metrics, m => Assert.Equal("—", m.Value));
             Assert.Equal(0, viewModel.MetricsReader.ReadCount);
             Assert.Equal(0, scene.Services.AlertQueue.ReadCount);

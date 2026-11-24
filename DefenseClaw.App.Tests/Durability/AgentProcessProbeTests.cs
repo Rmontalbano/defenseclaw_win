@@ -126,8 +126,8 @@ public sealed class AgentProcessProbeTests
         Assert.NotNull(warning);
         Assert.Equal("Codex is running", warning!.Title);
         Assert.Equal(
-            "Codex is running. DefenseClaw rewrites Codex's config.toml when the gateway starts, and Codex rewrites it too; a collision can leave a stuck pending write " +
-            "that stops the gateway. Quit Codex first.",
+            "Codex is running. Both Codex and DefenseClaw rewrite Codex's config.toml, and a collision can leave a stuck pending write that stops the gateway. " +
+            "Quit Codex first.",
             warning.Message);
         Assert.Null(new AgentProcessProbe(() => new[] { "explorer" }).CodexWarning());
         Assert.Null(AgentProcessProbe.None.CodexWarning());

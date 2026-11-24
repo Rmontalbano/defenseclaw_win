@@ -12,10 +12,11 @@ namespace DefenseClaw.App.ViewModels;
 internal sealed record FailureOutcomes(string? GatewayDown, string? NoAnswer, string? HookError)
 {
     /// <summary>The line the runtime always adds (fail_mode.py@1.0.10:997).</summary>
-    internal const string NeverBlockedLine = "stop and session-end events: never blocked";
+    internal const string NeverBlockedLine = "Stop and session-end events: never blocked";
 
     /// <summary>
-    /// One line for a connector: <c>gateway down: allow with a warning; no answer: block; hook or answer error: block; stop and session-end events: never blocked</c>.
+    /// One line per case for a connector, for the fail-mode row's tooltip: <c>Gateway down: allow with a warning</c>, <c>No answer: block</c>, <c>Hook or answer error: block</c>,
+    /// <c>Stop and session-end events: never blocked</c>.
     /// A value outside the closed set leaves its part out; null when nothing known is left (no outcomes, or none the app recognises).
     /// </summary>
     internal static string? Sentence(FailureOutcomes? outcomes)
@@ -26,16 +27,16 @@ internal sealed record FailureOutcomes(string? GatewayDown, string? NoAnswer, st
         }
 
         var parts = new List<string>(4);
-        Add(parts, "gateway down", outcomes.GatewayDown, GatewayDownText);
-        Add(parts, "no answer", outcomes.NoAnswer, NoAnswerText);
-        Add(parts, "hook or answer error", outcomes.HookError, HookErrorText);
+        Add(parts, "Gateway down", outcomes.GatewayDown, GatewayDownText);
+        Add(parts, "No answer", outcomes.NoAnswer, NoAnswerText);
+        Add(parts, "Hook or answer error", outcomes.HookError, HookErrorText);
         if (parts.Count == 0)
         {
             return null;
         }
 
         parts.Add(NeverBlockedLine);
-        return string.Join("; ", parts);
+        return string.Join("\n", parts);
     }
 
     private static void Add(List<string> parts, string label, string? value, Func<string, string?> text)
@@ -49,14 +50,14 @@ internal sealed record FailureOutcomes(string? GatewayDown, string? NoAnswer, st
     private static string? GatewayDownText(string value) => value switch
     {
         "allow" => "allow with a warning",
-        "allow-if-service-stopped" => "allow with a warning when the hook proves the gateway service is stopped",
+        "allow-if-service-stopped" => "allow with a warning if the hook confirms the gateway service is stopped",
         "block" => "block",
         _ => null,
     };
 
     private static string? NoAnswerText(string value) => value switch
     {
-        "allow-ordinary" => "tool calls allow with a warning unless the call may reach a protected file, prompts and tool results allow with a warning when the gateway is frozen and block when a running gateway answers too late",
+        "allow-ordinary" => "tool calls allow with a warning unless they may reach a protected file. Prompts and tool results allow with a warning if the gateway is frozen, block if a running gateway answers too late",
         "block" => "block",
         _ => null,
     };

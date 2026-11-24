@@ -111,9 +111,8 @@ public sealed partial class OverviewPanelViewModel
                 ? new AttentionRow
                 {
                     Title = OpenCodeV1NotGuardedTitle,
-                    Detail = $"OpenCode {v1.Version} ({v1.Location}) is installed, and DefenseClaw {release} guards OpenCode V2 only: its gateway refuses V1, so this OpenCode's " +
-                             "tool calls are not checked, and doctor fails the OpenCode hooks row. Install V2 with the command below, then run 'opencode service restart'. " +
-                             "The app never runs either command.",
+                    Detail = $"OpenCode {v1.Version} ({v1.Location}) is V1, but DefenseClaw {release} guards OpenCode V2 only, so its tool calls are not checked. " +
+                             "Install V2 with the command below, then run 'opencode service restart'.",
                     SeverityKey = "High",
                     Command = OpenCodeInstallEvidence.InstallV2Command,
                 }
@@ -124,9 +123,8 @@ public sealed partial class OverviewPanelViewModel
             ? new AttentionRow
             {
                 Title = OpenCodeV2UncheckedTitle,
-                Detail = $"OpenCode {v2.Version} ({v2.Location}) is installed, but DefenseClaw {release} guards OpenCode V1 only: V2 does not load its plugin, so its tool " +
-                         "calls run unchecked, even though status shows OpenCode protected and doctor passes. Upgrade DefenseClaw to 1.0.6 or later (open Updates), " +
-                         "which guards V2 and refuses V1.",
+                Detail = $"OpenCode {v2.Version} ({v2.Location}) is V2, but DefenseClaw {release} guards OpenCode V1 only, so its tool calls run unchecked " +
+                         "although status shows OpenCode protected. Upgrade DefenseClaw to 1.0.6 or later in Updates.",
                 SeverityKey = "High",
             }
             : null;

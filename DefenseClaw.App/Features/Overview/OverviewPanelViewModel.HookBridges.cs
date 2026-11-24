@@ -89,16 +89,15 @@ public sealed partial class OverviewPanelViewModel
             rows.Add(new AttentionRow
             {
                 Title = $"{repair.Agent} hooks need to be set up again",
-                Detail = $"Doctor found that {repair.Agent}'s hook registration is an older Windows PowerShell EncodedCommand bridge. If the hook launcher cannot " +
-                         "start, that bridge exits 0 in Constrained Language mode, so the call goes through unchecked instead of being blocked. Setup writes the " +
-                         $"bridge again in the current form and restarts the gateway. Quit {repair.Agent} first. {shown}{ran}",
+                Detail = $"{repair.Agent} still uses the older PowerShell EncodedCommand hook. If the launcher cannot start, it exits 0 in Constrained " +
+                         $"Language mode and calls go through unchecked. Setup replaces it and restarts the gateway. Quit {repair.Agent} first. {shown}{ran}",
                 SeverityKey = "High",
                 Actions = new AttentionActions(new[]
                 {
                     new AttentionAction(
                         repair.ActionId,
                         "Re-run setup",
-                        blocked ?? $"Opens a review of {repair.Command}; nothing runs until you confirm.",
+                        blocked ?? $"Opens a review of {repair.Command}. Nothing runs until you confirm.",
                         Enabled: blocked is null),
                 }),
             });
@@ -115,7 +114,7 @@ public sealed partial class OverviewPanelViewModel
 
         Review.Open(
             $"Set up {found.Agent} hooks again?",
-            $"Runs {found.Command}: setup replaces {found.Agent}'s older PowerShell EncodedCommand hook with the current native registration, then restarts the " +
+            $"Runs {found.Command}. Replaces {found.Agent}'s older PowerShell EncodedCommand hook with the native registration and restarts the " +
             $"gateway. Quit {found.Agent} first.",
             new[]
             {

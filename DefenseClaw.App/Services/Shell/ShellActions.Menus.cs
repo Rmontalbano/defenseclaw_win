@@ -47,7 +47,7 @@ internal sealed partial class ShellActions
             }
 
             return update.IsBusy
-                ? (false, "An app update is being prepared or installed; its window shows the progress.")
+                ? (false, "An app update is being prepared or installed. Its window shows the progress.")
                 : (true, null);
         }
     }

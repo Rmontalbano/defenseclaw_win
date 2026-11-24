@@ -97,7 +97,7 @@ public sealed class DurabilityAttentionTests
         Assert.Equal("Codex's executable moved after an update", row.Title);
         Assert.Equal("High", row.SeverityKey);
         Assert.Contains(OldExe, row.Detail, StringComparison.Ordinal);
-        Assert.Contains("will fail the next time it starts", row.Detail, StringComparison.Ordinal);
+        Assert.Contains("will fail at its next start", row.Detail, StringComparison.Ordinal);
         Assert.Equal(AttentionActionIds.ReselectCodex, Assert.Single(row.Actions.Items).Id);
         Assert.Equal("Re-select Codex", row.Actions.Items[0].Label);
     }
@@ -142,8 +142,8 @@ public sealed class DurabilityAttentionTests
         Assert.Contains(Toml, row.Detail, StringComparison.Ordinal);
         Assert.Contains("12 minutes", row.Detail, StringComparison.Ordinal);
         Assert.Contains("068ff1aa", row.Detail, StringComparison.Ordinal);
-        Assert.Contains("DefenseClaw has no command to recover from this", row.Detail, StringComparison.Ordinal);
-        Assert.Contains("nothing is deleted", row.Detail, StringComparison.Ordinal);
+        Assert.Contains("No DefenseClaw command recovers this", row.Detail, StringComparison.Ordinal);
+        Assert.Contains("deletes nothing", row.Detail, StringComparison.Ordinal);
         var action = Assert.Single(row.Actions.Items);
         Assert.Equal(AttentionActionIds.ClearStuckWrite, action.Id);
         Assert.Equal("Clear the stuck pending write", action.Label);
@@ -167,7 +167,7 @@ public sealed class DurabilityAttentionTests
 
         Assert.Equal("Info", row.SeverityKey);
         Assert.Equal(new[] { AttentionActionIds.PutBack, AttentionActionIds.ReselectCodex }, row.Actions.Items.Select(a => a.Id).ToArray());
-        Assert.Contains("3 file(s)", row.Detail, StringComparison.Ordinal);
+        Assert.Contains("3 files moved to", row.Detail, StringComparison.Ordinal);
     }
 
     [Fact]

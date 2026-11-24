@@ -127,7 +127,7 @@ public sealed class Runtime104Tests : IDisposable
 
         var row = Assert.Single(vm.Attention, r => r.Title == OverviewPanelViewModel.InterruptedInstallTitle);
         Assert.Equal("High", row.SeverityKey);
-        Assert.Contains("agent hooks are blocking until it's cleared", row.Detail, StringComparison.Ordinal);
+        Assert.Contains("Agent hooks are blocking until the lock is cleared", row.Detail, StringComparison.Ordinal);
         var action = Assert.Single(row.Actions.Items);
         Assert.Equal(OverviewPanelViewModel.OpenInstallerActionId, action.Id);
 
@@ -168,7 +168,7 @@ public sealed class Runtime104Tests : IDisposable
             vm.Apply(Snapshot());
 
             var row = Assert.Single(vm.Attention, r => r.Title == "claudecode: observe mode with a fail-closed hook");
-            Assert.Contains("Pair observe with hook_fail_mode: open", row.Detail, StringComparison.Ordinal);
+            Assert.Contains("Set hook_fail_mode: open", row.Detail, StringComparison.Ordinal);
             Assert.DoesNotContain(vm.Attention, r => r.Title.Contains("is not applied", StringComparison.Ordinal));
         }
     }
@@ -183,7 +183,7 @@ public sealed class Runtime104Tests : IDisposable
         Assert.DoesNotContain(vm.Attention, r => r.Title == "claudecode: observe mode with a fail-closed hook");
         var row = Assert.Single(vm.Attention, r => r.Title == "claudecode: hook_fail_mode: closed is not applied");
         Assert.Equal("defenseclaw guardrail use-pack strict", row.Command);
-        Assert.Contains("follows the policy tier", row.Detail, StringComparison.Ordinal);
+        Assert.Contains("follows the policy tier", row.Reference, StringComparison.Ordinal);
     }
 
     [Fact]

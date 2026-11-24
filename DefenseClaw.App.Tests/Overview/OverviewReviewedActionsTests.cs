@@ -109,7 +109,7 @@ public sealed class OverviewReviewedActionsTests : IDisposable
         Assert.True(vm.ShowScanAiDiscovery);
         Assert.False(vm.ShowEnableAiDiscovery);
         Assert.True(vm.ScanAiDiscoveryCommand.CanExecute(null));
-        Assert.StartsWith("Ask the running gateway for one AI discovery scan now: defenseclaw agent discovery scan.", vm.ScanAiDiscoveryTip, StringComparison.Ordinal);
+        Assert.StartsWith("Runs defenseclaw agent discovery scan: one scan now.", vm.ScanAiDiscoveryTip, StringComparison.Ordinal);
         Assert.EndsWith("Asks for confirmation first.", vm.ScanAiDiscoveryTip, StringComparison.Ordinal);
     }
 
@@ -124,7 +124,7 @@ public sealed class OverviewReviewedActionsTests : IDisposable
         Assert.False(vm.ShowScanAiDiscovery);
         Assert.True(vm.EnableAiDiscoveryCommand.CanExecute(null));
         Assert.Contains("defenseclaw agent discovery enable --yes", vm.EnableAiDiscoveryTip, StringComparison.Ordinal);
-        Assert.Contains("restarts the gateway", vm.EnableAiDiscoveryTip, StringComparison.Ordinal);
+        Assert.Contains("Restarts the gateway", vm.EnableAiDiscoveryTip, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -157,7 +157,7 @@ public sealed class OverviewReviewedActionsTests : IDisposable
 
         Assert.True(vm.ShowScanAiDiscovery);
         Assert.False(vm.ScanAiDiscoveryCommand.CanExecute(null));
-        Assert.Equal("The gateway is not running, so there is nothing to ask for a scan. Start it first.", vm.ScanAiDiscoveryTip);
+        Assert.Equal("The gateway is not running. Start it first.", vm.ScanAiDiscoveryTip);
 
         var off = Panel(AiOff, Stopped());
         Assert.True(off.EnableAiDiscoveryCommand.CanExecute(null));
@@ -184,7 +184,7 @@ public sealed class OverviewReviewedActionsTests : IDisposable
         Assert.True(review.RestartsGateway);
         Assert.Contains(review.Warnings, w => w.Title == CommandReviewWarning.GatewayRestart().Title);
         Assert.Contains("ai_discovery.enabled to true", review.Summary, StringComparison.Ordinal);
-        Assert.Contains("asks it for a first scan", review.Summary, StringComparison.Ordinal);
+        Assert.Contains("asks for a first scan", review.Summary, StringComparison.Ordinal);
         Assert.Empty(Services.Cli.Activity);
     }
 
@@ -224,7 +224,7 @@ public sealed class OverviewReviewedActionsTests : IDisposable
         Assert.Equal("defenseclaw agent discovery scan", step.CommandText);
         Assert.Equal(CommandTier.StateChanging, review.Tier);
         Assert.False(review.RestartsGateway);
-        Assert.Contains("ai.discovery event", review.Summary, StringComparison.Ordinal);
+        Assert.Contains("ai.discovery audit event", review.Summary, StringComparison.Ordinal);
         Assert.Empty(Services.Cli.Activity);
     }
 
@@ -328,7 +328,7 @@ public sealed class OverviewReviewedActionsTests : IDisposable
         Assert.True(vm.FillKeysInConsoleCommand.CanExecute(null));
         Assert.StartsWith("Changes state.", vm.FillMissingKeysTip, StringComparison.Ordinal);
         Assert.Contains("defenseclaw keys fill-missing --yes", vm.FillMissingKeysTip, StringComparison.Ordinal);
-        Assert.Contains("never through this app", vm.FillMissingKeysTip, StringComparison.Ordinal);
+        Assert.Contains("DefenseClaw's .env file only", vm.FillMissingKeysTip, StringComparison.Ordinal);
 
         await LoadDoctorAsync(vm, MissingKeys());
         Assert.False(vm.ShowFillMissingKeys);

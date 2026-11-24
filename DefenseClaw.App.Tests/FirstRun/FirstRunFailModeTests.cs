@@ -132,7 +132,7 @@ public sealed class FirstRunFailModeTests : IDisposable
     {
         // tui/panels/first_run.py at 1.0.0 to 1.0.4, the "Hook Fail Mode" field.
         Assert.Equal(
-            "Action profile only. If a check can't finish: closed = block where supported, open = allow and log.",
+            "Action profile only. If a check cannot finish: closed blocks where supported, open allows and logs.",
             FirstRunFailMode.ActionOnlyHint);
     }
 

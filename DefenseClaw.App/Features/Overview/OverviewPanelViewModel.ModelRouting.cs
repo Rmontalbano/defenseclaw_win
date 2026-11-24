@@ -30,7 +30,7 @@ public sealed partial class OverviewPanelViewModel
     /// Why the usage figure is smaller than what an agent used when the agent is in hook mode. The runtime records the model calls it carries itself
     /// (its judge and decision-model calls) and, with route-only or the proxy, the agents' calls; a hook sees none of an agent's own calls.
     /// </summary>
-    internal const string HookModeUsageNote = "DefenseClaw records only the model calls it carries itself (its own judge calls, for instance), not the agents' own model calls in hook mode.";
+    internal const string HookModeUsageNote = "In hook mode, only DefenseClaw's own model calls (such as judge calls) are counted.";
 
     private static readonly string[] ModelProxyConnectors = { "openclaw", "zeptoclaw" };
 
@@ -79,7 +79,7 @@ public sealed partial class OverviewPanelViewModel
 
         if (!localStore)
         {
-            return "on, but the local usage store is off, so no usage is kept to show";
+            return "on, local usage store off, no usage kept";
         }
 
         var usage = _modelUsage;
@@ -93,7 +93,7 @@ public sealed partial class OverviewPanelViewModel
             case ModelUsageStatus.Unreadable:
                 return "on, usage could not be read";
             case ModelUsageStatus.StoreOff:
-                return "on in config.yaml, but the running gateway reports its usage store off";
+                return "on in config.yaml, gateway reports usage store off";
             default:
                 var text = "on, " + ModelUsageReader.Describe(usage);
 

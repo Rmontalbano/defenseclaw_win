@@ -49,17 +49,17 @@ internal static class ShortcutCatalog
                     new ShortcutRow(ShellShortcuts.RefreshText, "Refresh the current panel (or the gateway status)"),
                     new ShortcutRow(ShellShortcuts.RefreshAliasText, "Refresh, the same as F5"),
                     new ShortcutRow(ShellShortcuts.SettingsText, "Open Settings: monitoring, notifications, startup, connection, updates"),
-                    new ShortcutRow(ShellShortcuts.ToggleThemeText, "Switch between light and dark (the title bar's Appearance button picks a style)"),
+                    new ShortcutRow(ShellShortcuts.ToggleThemeText, "Switch between light and dark. The Appearance button picks a style."),
                     new ShortcutRow(ShellShortcuts.HealthCheckText, "Run health check: the Overview's Doctor card"),
                     new ShortcutRow(ShellShortcuts.ScanAiText, "Scan AI components: AI Discovery's scan, reviewed first"),
                     new ShortcutRow(ShellShortcuts.DiagnoseText, "Diagnose in background: the read-only doctor, result as a notification"),
                     new ShortcutRow(ShellShortcuts.CopyOutputText, "Copy the last command's output"),
                     new ShortcutRow(ShellShortcuts.ExportOutputText, "Export the last command's output to a file"),
-                    new ShortcutRow(ShellShortcuts.CycleConnectorText, "Step the connector scope: all connectors, then each one in turn (with more than one connector)"),
+                    new ShortcutRow(ShellShortcuts.CycleConnectorText, "Step the connector scope: all, then each connector (needs 2 or more)"),
                     new ShortcutRow(ShellShortcuts.HelpText, "Show this list (also ? outside a text box)"),
 
                     // The menu bar's own key (CUST-384): WPF's main menu takes F10 and Alt itself, so the shell's key handler claims neither.
-                    new ShortcutRow("F10", "Menu bar: File, View, Monitor, Commands, Go, Help (Alt too); arrows or a menu's underlined letter"),
+                    new ShortcutRow("F10", "Menu bar: File, View, Monitor, Commands, Go, Help. Alt works too. Use arrows or a menu's underlined letter."),
                     new ShortcutRow(ShellShortcuts.CloseText, "Close the open overlay, detail pane or dialog"),
                 }),
             new(
@@ -68,11 +68,11 @@ internal static class ShortcutCatalog
                 {
                     new ShortcutRow(ShellShortcuts.FindText, "Focus the panel's search or filter box, where it has one"),
                     new ShortcutRow(ShellShortcuts.AuditExportText, "Audit: export the list to a JSON or CSV file"),
-                    new ShortcutRow(ShellShortcuts.LogsErrorsText, "Logs: show only errors; again to show everything (not in a text box)"),
-                    new ShortcutRow(ShellShortcuts.LogsWarningsText, "Logs: show warnings and above; again to show everything (not in a text box)"),
+                    new ShortcutRow(ShellShortcuts.LogsErrorsText, "Logs: show only errors, again for everything (not in a text box)"),
+                    new ShortcutRow(ShellShortcuts.LogsWarningsText, "Logs: show warnings and above, again for everything (not in a text box)"),
                     new ShortcutRow(ShellShortcuts.LogsFirstRowText, "Logs: go to the first row and pause"),
                     new ShortcutRow(ShellShortcuts.LogsNewestRowText, "Logs: go to the newest row and follow it again"),
-                    new ShortcutRow("Tab","Move to the next control; Shift+Tab goes back"),
+                    new ShortcutRow("Tab","Next control; Shift+Tab goes back"),
                 }),
         };
 

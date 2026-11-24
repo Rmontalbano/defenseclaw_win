@@ -74,7 +74,7 @@ public sealed partial class OverviewPanelViewModel
         ShowOperatorLists = rows.Count > 0;
         OperatorListsNote = rows.Count == 0
             ? string.Empty
-            : string.Create(CultureInfo.CurrentCulture, $"{lists.Total} rule{(lists.Total == 1 ? string.Empty : "s")} in config.yaml asset_policy. Change them with Block and Allow on the Tools, Skills, MCPs and Plugins panels.");
+            : string.Create(CultureInfo.CurrentCulture, $"{lists.Total} rule{(lists.Total == 1 ? string.Empty : "s")} in config.yaml asset_policy. Change them in Tools, Skills, MCPs and Plugins.");
     }
 
     internal static string PolicyListLabel(string type) => type switch

@@ -124,8 +124,7 @@ public sealed partial class OverviewPanelViewModel
                 rows.Add(new AttentionRow
                 {
                     Title = $"{left.Label}: {left.Items.Count.ToString(CultureInfo.CurrentCulture)} leftover{(left.Items.Count == 1 ? string.Empty : "s")} from an older setup",
-                    Detail = notice + " DefenseClaw removed what it could and none of this blocks your agents; what it could not remove is listed here, " +
-                             "to remove by hand if you want to. " + string.Join(" ", steps),
+                    Detail = notice + " None of this blocks your agents. Remove the items below by hand if you want. " + string.Join(" ", steps),
                     SeverityKey = "Info",
                 });
                 continue;
@@ -134,7 +133,7 @@ public sealed partial class OverviewPanelViewModel
             rows.Add(new AttentionRow
             {
                 Title = $"{left.Label} was removed; {left.Items.Count.ToString(CultureInfo.CurrentCulture)} leftover{(left.Items.Count == 1 ? string.Empty : "s")} to remove by hand",
-                Detail = $"{left.Label} support was removed in DefenseClaw 1.0.4. DefenseClaw does not delete what it left; remove it yourself. " +
+                Detail = $"{left.Label} support was removed in DefenseClaw 1.0.4. Remove what it left by hand. " +
                          string.Join(" ", steps),
                 SeverityKey = "High",
             });
@@ -165,15 +164,15 @@ public sealed partial class OverviewPanelViewModel
         rows.Add(new AttentionRow
         {
             Title = InterruptedInstallTitle,
-            Detail = $"An interrupted install left a lock; agent hooks are blocking until it's cleared. The lock is {found.Path}.{holder} " +
-                     "Running the installer again clears it: open it from here, review the command, and let it finish. Calls from your agents are blocked until then.",
+            Detail = $"Agent hooks are blocking until the lock is cleared. The lock is {found.Path}.{holder} " +
+                     "Run the installer again to clear it.",
             SeverityKey = "High",
             Actions = new AttentionActions(new[]
             {
                 new AttentionAction(
                     OpenInstallerActionId,
                     "Open the installer",
-                    blocked ?? "Opens the Updates window: the installer is downloaded, verified and shown in a review before anything runs.",
+                    blocked ?? "Opens the Updates window. The installer is verified and reviewed before it runs.",
                     Enabled: blocked is null),
             }),
         });
@@ -204,8 +203,8 @@ public sealed partial class OverviewPanelViewModel
                     rows.Add(new AttentionRow
                     {
                         Title = $"{name}: observe mode with a fail-closed hook",
-                        Detail = "The connector only observes, but a hook failure blocks the agent anyway. " +
-                                 "Pair observe with hook_fail_mode: open, or move to enforce.",
+                        Detail = "Observe mode, but a hook failure still blocks the agent. " +
+                                 "Set hook_fail_mode: open, or move to enforce.",
                         SeverityKey = "High",
                     });
                 }
@@ -231,8 +230,9 @@ public sealed partial class OverviewPanelViewModel
                 rows.Add(new AttentionRow
                 {
                     Title = $"{name}: observe mode with a fail-closed hook",
-                    Detail = "The connector only observes, but its rule pack is strict, so a gateway outage blocks the agent anyway. " +
-                             "Use the default or permissive rule pack, or move to enforce. " + HookFailModeRule.PerUserOutageRule,
+                    Detail = "Observe mode, but the strict rule pack makes a gateway outage block the agent. " +
+                             "Use the default or permissive rule pack, or move to enforce.",
+                    Reference = HookFailModeRule.PerUserOutageRule,
                     SeverityKey = "High",
                 });
             }
@@ -241,8 +241,9 @@ public sealed partial class OverviewPanelViewModel
                 rows.Add(new AttentionRow
                 {
                     Title = $"{name}: hook_fail_mode: closed is not applied",
-                    Detail = $"config.yaml saves hook_fail_mode: closed for {name}, but this runtime does not apply a saved per-user fail mode. " +
-                             HookFailModeRule.PerUserOutageRule + " To fail closed during an outage, use the strict rule pack.",
+                    Detail = $"config.yaml saves hook_fail_mode: closed for {name}, but this runtime ignores a saved per-user fail mode. " +
+                             "To fail closed during an outage, use the strict rule pack.",
+                    Reference = HookFailModeRule.PerUserOutageRule,
                     SeverityKey = "Medium",
                     Command = HookFailModeRule.StrictPackCommand,
                 });

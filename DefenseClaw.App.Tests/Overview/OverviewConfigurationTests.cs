@@ -185,7 +185,7 @@ public sealed class OverviewConfigurationTests : IDisposable
         Assert.Equal("global user config", Row(vm, "Scope").Value);
         Assert.Equal("not available", Row(vm, "Sandbox").Value);
         Assert.Equal("off (disabled)", Row(vm, "Application protection").Value);
-        Assert.StartsWith("Fail mode and deployment rows from defenseclaw status --json, read", vm.ConfigurationSourceNote, StringComparison.Ordinal);
+        Assert.StartsWith("Fail mode and deployment from defenseclaw status --json, read", vm.ConfigurationSourceNote, StringComparison.Ordinal);
     }
 
     [Fact]

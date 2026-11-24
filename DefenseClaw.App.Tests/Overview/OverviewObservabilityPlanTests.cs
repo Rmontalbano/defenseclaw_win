@@ -573,7 +573,7 @@ public sealed class OverviewObservabilityPlanTests : IDisposable
         Assert.False(after.HasObservabilityPlan);
         Assert.False(after.HasLocalStorage);
         Assert.True(after.HasObservabilityNote);
-        Assert.Equal($"Observability plan unavailable: {message}. The card shows what the gateway reports.", after.ObservabilityNote);
+        Assert.Equal($"Observability plan unavailable: {message}.", after.ObservabilityNote);
         Assert.DoesNotContain('\n', after.ObservabilityNote);
         Assert.Equal("Warn", after.ObservabilityNoteToneKey);
         Assert.False(before.HasObservabilityNote);
@@ -592,8 +592,8 @@ public sealed class OverviewObservabilityPlanTests : IDisposable
         Assert.True(vm.HasObservabilityPlan);
         Assert.True(vm.HasLocalStorage);
         Assert.Equal("Neutral", vm.ObservabilityNoteToneKey);
-        Assert.StartsWith("Policy, buckets, redaction and limits are from defenseclaw observability plan, read ", vm.ObservabilityNote, StringComparison.Ordinal);
-        Assert.EndsWith("state, queue and last result are from the gateway.", vm.ObservabilityNote, StringComparison.Ordinal);
+        Assert.StartsWith("Policy, buckets, redaction and limits from defenseclaw observability plan, read ", vm.ObservabilityNote, StringComparison.Ordinal);
+        Assert.EndsWith("defenseclaw observability plan, read just now.", vm.ObservabilityNote, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -605,7 +605,7 @@ public sealed class OverviewObservabilityPlanTests : IDisposable
 
         await vm.RefreshObservabilityPlanAsync(force: true, CancellationToken.None);
 
-        Assert.Equal("Observability plan unavailable: 'defenseclaw' was not found. The card shows what the gateway reports.", vm.ObservabilityNote);
+        Assert.Equal("Observability plan unavailable: 'defenseclaw' was not found.", vm.ObservabilityNote);
         Assert.Equal(rowsBefore, vm.ObservabilityRows.ToArray());
         Assert.False(vm.HasObservabilityPlan);
         Assert.Empty(_services!.Cli.Activity);

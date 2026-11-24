@@ -13,10 +13,10 @@ public sealed partial class OverviewPanelViewModel
     /// The words added to the row's detail when the gateway left part of the repair out, or the app did not show all of it (a fix over
     /// <see cref="ConnectorStartHealth.MaxFixDisplayLength"/> or not plain text is dropped, a manual step over <see cref="ConnectorStartHealth.MaxByHandDisplayLength"/> is cut).
     /// </summary>
-    internal const string RepairTooLongText = "Part of the repair is too long or not plain text to show here; the gateway log has it.";
+    internal const string RepairTooLongText = "Part of the repair is too long or not plain text to show. See the gateway log.";
 
     /// <summary>What the row says about the box when it holds the gateway's repair.</summary>
-    internal const string RepairBoxSentence = "The command below is the gateway's repair; the app never runs it.";
+    internal const string RepairBoxSentence = "The command below is the gateway's repair.";
 
     /// <summary>What is left of the setup-failed row's closing words when the box holds the gateway's repair.</summary>
     internal const string SetupFailedLogSentence = " Read gateway.log for the cause.";

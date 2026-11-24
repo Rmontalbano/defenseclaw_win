@@ -68,11 +68,11 @@ public sealed class JudgeFallbackAndSizeCapOverviewTests : IDisposable
         vm.Apply(Snapshot(Health(Fallbacks)));
 
         var row = Assert.Single(vm.Attention, IsFallbackRow);
-        Assert.Equal("Judge fallbacks: the rules decided 12 hook check(s)", row.Title);
+        Assert.Equal("Judge fallbacks: the rules decided 12 hook checks", row.Title);
         Assert.Equal("Medium", row.SeverityKey);
-        Assert.Contains("The rules decided 12 hook check(s) because the judge gave no verdict in time (claudecode 3, codex 9); last: timeout (codex).", row.Detail, StringComparison.Ordinal);
+        Assert.Contains("The judge gave no verdict in time (claudecode 3, codex 9); last: timeout (codex).", row.Detail, StringComparison.Ordinal);
         Assert.Contains("Counted since the judge started.", row.Detail, StringComparison.Ordinal);
-        Assert.Contains("a slow judge model: set guardrail.judge.max_parallel", row.Detail, StringComparison.Ordinal);
+        Assert.Contains("If the judge is slow, set guardrail.judge.max_parallel.", row.Detail, StringComparison.Ordinal);
     }
 
     [Theory]
@@ -99,10 +99,10 @@ public sealed class JudgeFallbackAndSizeCapOverviewTests : IDisposable
         var vm = Panel(Config());
 
         vm.Apply(Snapshot(Health("\"judge_fallbacks\":1")));
-        Assert.Equal("Judge fallbacks: the rules decided 1 hook check(s)", Assert.Single(vm.Attention, IsFallbackRow).Title);
+        Assert.Equal("Judge fallbacks: the rules decided 1 hook check", Assert.Single(vm.Attention, IsFallbackRow).Title);
 
         vm.Apply(Snapshot(Health("\"judge_fallbacks\":1500")));
-        Assert.Equal("Judge fallbacks: the rules decided 1,500 hook check(s)", Assert.Single(vm.Attention, IsFallbackRow).Title);
+        Assert.Equal("Judge fallbacks: the rules decided 1,500 hook checks", Assert.Single(vm.Attention, IsFallbackRow).Title);
 
         vm.Apply(Snapshot(Health(string.Empty)));
         Assert.DoesNotContain(vm.Attention, IsFallbackRow);
@@ -145,7 +145,7 @@ public sealed class JudgeFallbackAndSizeCapOverviewTests : IDisposable
         vm.Apply(Snapshot(Health("\"judge_fallbacks\":7,\"judge_fallbacks_by_connector\":\"codex\",\"judge_last_fallback\":false")));
 
         var row = Assert.Single(vm.Attention, IsFallbackRow);
-        Assert.Contains("The rules decided 7 hook check(s) because the judge gave no verdict in time.", row.Detail, StringComparison.Ordinal);
+        Assert.Contains("The judge gave no verdict in time.", row.Detail, StringComparison.Ordinal);
     }
 
     // ------------------------------------------------------------------ audit size cap: the Telemetry card

@@ -17,7 +17,7 @@ namespace DefenseClaw.Core.Gateway.Models;
 public sealed record JudgeFallbackHealth(long Total, IReadOnlyList<KeyValuePair<string, long>> ByConnector, string Last)
 {
     /// <summary>What <c>guardrail.judge.max_parallel</c> is suggested for (cmd_status.py <c>JUDGE_MAX_PARALLEL_HINT</c>).</summary>
-    public const string MaxParallelHint = "a slow judge model: set guardrail.judge.max_parallel";
+    public const string MaxParallelHint = "If the judge is slow, set guardrail.judge.max_parallel.";
 
     private const int MaxConnectors = 33;
     private const int MaxNameChars = 40;
@@ -53,14 +53,15 @@ public sealed record JudgeFallbackHealth(long Total, IReadOnlyList<KeyValuePair<
     }
 
     /// <summary>
-    /// The CLI's sentence (cmd_status.py <c>judge_fallback_summary</c>): <c>the rules decided 12 hook check(s) because the judge gave no verdict in time
+    /// The CLI's sentence without its count (cmd_status.py <c>judge_fallback_summary</c>): <c>the judge gave no verdict in time
     /// (claudecode 3, codex 9); last: timeout (codex)</c>.
     /// </summary>
     public string Summary
     {
         get
         {
-            var text = $"the rules decided {Total.ToString(CultureInfo.InvariantCulture)} hook check(s) because the judge gave no verdict in time";
+            // The row's title already says how many hook checks the rules decided.
+            var text = "the judge gave no verdict in time";
             if (ByConnector.Count > 0)
             {
                 text += " (" + string.Join(", ", ByConnector.Select(static pair => pair.Key + " " + pair.Value.ToString(CultureInfo.InvariantCulture))) + ")";

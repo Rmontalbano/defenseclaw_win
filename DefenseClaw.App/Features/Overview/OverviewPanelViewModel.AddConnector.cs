@@ -116,7 +116,7 @@ public sealed partial class OverviewPanelViewModel
         var label = row.Friendly.Length > 0 ? row.Friendly : row.Name;
         Review.Open(
             $"Add {label}?",
-            $"Configures DefenseClaw for {label} in observe mode, alongside any connector already configured. " + DefenseClaw.Core.Runtime.ObserveModeCopy.AddConnectorSentence(DefenseClaw.Core.Runtime.ObserveModeCopy.BlocksSelfChange(Services.Runtime.Capabilities)),
+            $"Configures {label} in observe mode alongside your other connectors. " + DefenseClaw.Core.Runtime.ObserveModeCopy.AddConnectorSentence(DefenseClaw.Core.Runtime.ObserveModeCopy.BlocksSelfChange(Services.Runtime.Capabilities)),
             new[]
             {
                 new DiscoverStep(

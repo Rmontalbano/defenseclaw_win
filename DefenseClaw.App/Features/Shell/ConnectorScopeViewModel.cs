@@ -63,8 +63,8 @@ public sealed partial class ConnectorScopeViewModel : ObservableObject
 
     /// <summary>The chip's tooltip and accessible name.</summary>
     public string Description => IsScoped
-        ? $"Connector scope: {Label}. Every list is narrowed to this connector. Click to change; Ctrl+Shift+M steps to the next."
-        : "Connector scope: all connectors. Click to narrow every list to one; Ctrl+Shift+M steps to the next.";
+        ? $"Connector scope: {Label}. Click to change. Ctrl+Shift+M steps to the next."
+        : "Connector scope: all connectors. Click to narrow to one. Ctrl+Shift+M steps to the next.";
 
     /// <summary>Scopes the app to the entry's connector (null: All).</summary>
     [RelayCommand]

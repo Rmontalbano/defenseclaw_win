@@ -197,7 +197,7 @@ public sealed partial class OverviewPanelViewModel
     private bool _hasEventHistoryFailure;
 
     [ObservableProperty]
-    private string _observabilityEmptyText = "Nothing has been read from the gateway yet.";
+    private string _observabilityEmptyText = "Nothing read from the gateway yet.";
 
     [ObservableProperty]
     private bool _hasObservabilityRows;
@@ -262,7 +262,7 @@ public sealed partial class OverviewPanelViewModel
 
         if (health is null)
         {
-            ObservabilityEmptyText = "The gateway is not answering, so its destinations cannot be listed.";
+            ObservabilityEmptyText = "The gateway is not answering, so no destinations are listed.";
         }
         else
         {
@@ -300,7 +300,7 @@ public sealed partial class OverviewPanelViewModel
             }
 
             failure = EventHistoryFailureText(health);
-            ObservabilityEmptyText = "No runtime-loaded destinations. Configure one in Setup, then restart the gateway.";
+            ObservabilityEmptyText = "No destinations loaded. Add one in Setup, then restart the gateway.";
         }
 
         // Without a plan the card is what /health gives, exactly as before the plan existed; with one, the plan's destinations come first, each
@@ -402,8 +402,8 @@ public sealed partial class OverviewPanelViewModel
             StateKey = ObservabilityTone(state),
             Signals = signals,
             Detail = entry?.Row.Detail ?? (destination.Enabled
-                ? "The gateway does not report this destination: it is not running, or it has not loaded it yet."
-                : "Off in the policy: the gateway does not run it."),
+                ? "The gateway does not report this destination. It may not be running or loaded yet."
+                : "Off in the policy."),
             Policy = destination.Enabled ? "enabled" : "disabled",
             Buckets = $"{destination.RoutedBuckets.ToString(CultureInfo.InvariantCulture)}/{plan.BucketCount.ToString(CultureInfo.InvariantCulture)}",
             Redaction = destination.RedactionLabel,
@@ -482,12 +482,12 @@ public sealed partial class OverviewPanelViewModel
         var tone = "Neutral";
         if (_planRead is { IsOk: false } failed)
         {
-            note = $"Observability plan unavailable: {failed.Message}. The card shows what the gateway reports.";
+            note = $"Observability plan unavailable: {failed.Message}.";
             tone = "Warn";
         }
         else if (_planRead is { Plan: not null } read)
         {
-            note = $"Policy, buckets, redaction and limits are from defenseclaw observability plan, read {ReadAge(read.ReadAt)}; state, queue and last result are from the gateway.";
+            note = $"Policy, buckets, redaction and limits from defenseclaw observability plan, read {ReadAge(read.ReadAt)}.";
         }
         else
         {
@@ -684,7 +684,7 @@ public sealed partial class OverviewPanelViewModel
             var circuit = Text(item, "circuit_state");
             if (Text(item, "kind") == "otlp" && retried > 0 && circuit is "open" or "half_open")
             {
-                parts.Add($"circuit {circuit}: the gateway is not sending to this collector. On a standard install it keeps these records queued and sends them again when the collector answers; a Secure Client install does not retry without limit, so some may be dropped. retried counts the attempts, dropped counts what could not be kept");
+                parts.Add($"circuit {circuit}: not sending to this collector. A standard install keeps records queued and resends when it answers; a Secure Client install may drop some");
             }
         }
 

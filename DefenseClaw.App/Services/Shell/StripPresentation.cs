@@ -57,7 +57,7 @@ internal static class StripPresentation
 
         var count = missing.Count.ToString(CultureInfo.InvariantCulture);
         var lead = missing.Count == 1 ? "1 required credential is not set" : $"{count} required credentials are not set";
-        return $"{lead}: {string.Join(", ", missing)}. Set each in Setup, Credentials: a console window asks for the value, so it is never typed or shown in this app.";
+        return $"{lead}: {string.Join(", ", missing)}. Set each in Setup, Credentials. A console window asks for the value.";
     }
 
     /// <summary>The sentence a screen reader says for the Keys chip: every name, without the instructions.</summary>
@@ -95,8 +95,8 @@ internal static class StripPresentation
         }
 
         parts.Add(paused
-            ? "Monitoring is paused, so this is the last reading, not the current state."
-            : "From the gateway's /health, the same reading as the Overview's Services card.");
+            ? "Monitoring is paused. This is the last reading."
+            : "From the gateway's /health, as on the Overview's Services card.");
         return string.Join(' ', parts);
     }
 
@@ -135,12 +135,12 @@ internal static class StripPresentation
         var parts = new List<string> { $"Policy posture: {mode}." };
         if (enforcing is { } enforced)
         {
-            parts.Add(enforced ? "Enforcement is on." : "Enforcement is off: the guardrail observes only.");
+            parts.Add(enforced ? "Enforcement is on." : "Enforcement is off. The guardrail only observes.");
         }
 
         parts.Add(fromGateway
             ? "Reported by the gateway (/health, guardrail policy_mode)."
-            : "From config.yaml: the gateway did not report a mode, so this is what was asked for, not necessarily what is running.");
+            : "From config.yaml because the gateway reported no mode. It may differ from what is running.");
         return string.Join(' ', parts);
     }
 
@@ -186,25 +186,25 @@ internal static class StripPresentation
     /// <summary>What the label means, in a sentence.</summary>
     public static string RedactionDetail(string label)
     {
-        const string Source = "From the Overview's Observability card (defenseclaw observability plan).";
+        const string Source = "Source: defenseclaw observability plan.";
         if (string.Equals(label, ObservabilityRedaction.Loading, StringComparison.Ordinal))
         {
-            return $"The observability plan has not been read yet, so the redaction posture is not known. {Source}";
+            return $"The observability plan has not been read yet, so the redaction posture is unknown. {Source}";
         }
 
         if (string.Equals(label, ObservabilityRedaction.Unavailable, StringComparison.Ordinal))
         {
-            return $"The observability plan could not be read, so the redaction posture is not known. The Overview says why. {Source}";
+            return $"The observability plan could not be read, so the redaction posture is unknown. The Overview says why. {Source}";
         }
 
         if (string.Equals(label, UnredactedLabel, StringComparison.Ordinal))
         {
-            return $"Every route that sends events sends them unredacted (profile none). {Source}";
+            return $"Every route sends events unredacted (profile none). {Source}";
         }
 
         var profiles = label.StartsWith(RoutePrefix, StringComparison.Ordinal) ? label[RoutePrefix.Length..] : label;
         var warning = SendsUnredacted(label) ? " At least one route sends events unredacted (profile none)." : string.Empty;
-        return $"Redaction is set per route, and the routes of this install use: {profiles}.{warning} {Source}";
+        return $"Redaction is set per route. Profiles in use: {profiles}.{warning} {Source}";
     }
 
     // ---- Connector ----------------------------------------------------------------------------------------------------------------------
@@ -238,8 +238,8 @@ internal static class StripPresentation
         }
 
         return string.IsNullOrWhiteSpace(scope)
-            ? $"All {roster.Count.ToString(CultureInfo.InvariantCulture)} connectors: {string.Join(", ", roster)}. Every screen shows all of them; Ctrl+Shift+M narrows the whole app to one."
-            : $"The whole app is narrowed to {scope} (of {string.Join(", ", roster)}). Ctrl+Shift+M steps to the next connector, and then back to all of them.";
+            ? $"All {roster.Count.ToString(CultureInfo.InvariantCulture)} connectors: {string.Join(", ", roster)}. Ctrl+Shift+M narrows every screen to one."
+            : $"The app is narrowed to {scope} (of {string.Join(", ", roster)}). Ctrl+Shift+M steps to the next connector, then back to all.";
     }
 
     /// <summary>The connectors of this install, without blanks or repeats (without case): what <see cref="ConnectorScope"/> offers.</summary>
@@ -266,8 +266,8 @@ internal static class StripPresentation
 
     /// <summary>The version chip's tooltip.</summary>
     public static string VersionDetail(GatewaySnapshot snapshot) => snapshot.PeerUnverified
-        ? $"Something that is not the verified gateway answers on the port and reports DefenseClaw version {snapshot.BinaryVersion}. Unverified."
-        : $"The running gateway reports DefenseClaw version {snapshot.BinaryVersion}.";
+        ? $"A process that is not the verified gateway reports DefenseClaw version {snapshot.BinaryVersion}. Unverified."
+        : $"The gateway reports DefenseClaw version {snapshot.BinaryVersion}.";
 
     // ---- Running and stale --------------------------------------------------------------------------------------------------------------
 
@@ -281,13 +281,13 @@ internal static class StripPresentation
     /// <summary>The sentence for the running chip, its tooltip and its automation name.</summary>
     public static string RunningDetail(int count) =>
         count == 1
-            ? "1 command has been running for more than a moment. Its output is in Activity."
-            : $"{count.ToString(CultureInfo.InvariantCulture)} commands have been running for more than a moment. Their output is in Activity.";
+            ? "1 command is still running. Its output is in Activity."
+            : $"{count.ToString(CultureInfo.InvariantCulture)} commands are still running. Their output is in Activity.";
 
     /// <summary>What the Stale chip says it means: how long since the last good poll, against the interval it is counted in.</summary>
     public static string StaleDetail(TimeSpan since, TimeSpan cadence) =>
-        $"No gateway poll has finished cleanly for {Span(since)}, more than {PollFreshness.IntervalsBeforeStale.ToString(CultureInfo.InvariantCulture)} times the {Span(cadence)} check interval. " +
-        "What this strip shows may be out of date. Refresh polls the gateway now.";
+        $"No gateway poll has finished cleanly for {Span(since)}, over {PollFreshness.IntervalsBeforeStale.ToString(CultureInfo.InvariantCulture)} times the {Span(cadence)} check interval. " +
+        "This strip may be out of date. Refresh polls the gateway now.";
 
     /// <summary><c>12 s</c>, <c>2 min 5 s</c>, <c>1 h 3 min</c>.</summary>
     public static string Span(TimeSpan span)

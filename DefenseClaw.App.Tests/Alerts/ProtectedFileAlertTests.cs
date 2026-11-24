@@ -469,8 +469,8 @@ public sealed class ProtectedFileAlertTests : IDisposable
         var row = UiThread.Run(() => vm.Attention.Single(r => r.Title.Contains("protected-file changes", StringComparison.Ordinal)));
         Assert.Equal("High", row.SeverityKey);
         Assert.Contains("authorized_keys2", row.Detail, StringComparison.Ordinal);
-        Assert.Contains("One more change", row.Detail, StringComparison.Ordinal);
-        Assert.Contains("Attribution is by time", row.Detail, StringComparison.Ordinal);
+        Assert.Contains("1 more change is waiting", row.Detail, StringComparison.Ordinal);
+        Assert.Contains("Attribution is by time", row.Reference, StringComparison.Ordinal);
         var action = Assert.Single(row.Actions.Items);
         Assert.Equal(OverviewPanelViewModel.OpenProtectedFileAlertsActionId, action.Id);
 

@@ -47,8 +47,8 @@ public sealed partial class OverviewPanelViewModel
     {
         var friendly = FriendlyConnectorName(skip.Name);
         var reason = skip.Reason.EndsWith('.') ? skip.Reason : skip.Reason + ".";
-        var detail = $"{friendly} updated itself, so its executable no longer matches what setup recorded. The gateway is still running, " +
-                     $"but it is not checking {friendly}'s calls until setup is run again, which admits the new version. The gateway says: {reason}";
+        var detail = $"{friendly} updated itself and no longer matches what setup recorded. The gateway is running but not checking {friendly}'s calls " +
+                     $"until setup runs again. The gateway says: {reason}";
         var severity = NoConnectorEnforced(skip) ? "Critical" : "High";
 
         if (skip.Name == "codex")
@@ -57,7 +57,7 @@ public sealed partial class OverviewPanelViewModel
             return new AttentionRow
             {
                 Title = $"{friendly} updated itself; DefenseClaw is not checking it",
-                Detail = detail + " Re-select Codex runs setup again, keeping Codex's current mode. Quit Codex first.",
+                Detail = detail + " Quit Codex, then re-select it to run setup with Codex's current mode.",
                 SeverityKey = severity,
                 Actions = new AttentionActions(new[]
                 {
@@ -73,7 +73,7 @@ public sealed partial class OverviewPanelViewModel
         return new AttentionRow
         {
             Title = $"{friendly} updated itself; DefenseClaw is not checking it",
-            Detail = detail + " Run the command below in a terminal. The app never runs it.",
+            Detail = detail + " Run the command below in a terminal.",
             SeverityKey = severity,
             Command = AgentUpdatedCommand(skip.Name),
         };

@@ -46,8 +46,8 @@ public sealed partial class OverviewPanelViewModel
         var more = changes.Count switch
         {
             1 => string.Empty,
-            2 => " One more change is waiting too.",
-            _ => $" {(changes.Count - 1).ToString("N0", CultureInfo.CurrentCulture)} more changes are waiting too.",
+            2 => " 1 more change is waiting.",
+            _ => $" {(changes.Count - 1).ToString("N0", CultureInfo.CurrentCulture)} more changes are waiting.",
         };
 
         rows.Add(new AttentionRow
@@ -55,15 +55,15 @@ public sealed partial class OverviewPanelViewModel
             Title = changes.Count == 1
                 ? "A protected file changed during an agent call"
                 : $"{changes.Count.ToString("N0", CultureInfo.CurrentCulture)} protected-file changes during agent calls",
-            Detail = $"{ProtectedFileAlert.FileLabel(newest.Target)} changed while a tool call of {agent} was running.{more} " +
-                     ProtectedFileWatchFacts.Attribution + " " + ProtectedFileWatchFacts.BlocksNothing,
+            Detail = $"{ProtectedFileAlert.FileLabel(newest.Target)} changed while a tool call of {agent} was running.{more}",
+            Reference = ProtectedFileWatchFacts.Attribution + " " + ProtectedFileWatchFacts.BlocksNothing,
             SeverityKey = "High",
             Actions = new AttentionActions(new[]
             {
                 new AttentionAction(
                     OpenProtectedFileAlertsActionId,
                     "Review in Alerts",
-                    "Opens the Alerts panel on protected-file changes: the file, the agent, the session, the tool call and the hashes before and after."),
+                    "Opens Alerts on protected-file changes, with the file, agent, session, tool call and hashes."),
             }),
         });
     }

@@ -45,15 +45,15 @@ public enum FirstRunFailModeQuestion
 public static class FirstRunFailMode
 {
     /// <summary>The TUI's hint for the field on 1.0.x (<c>tui/panels/first_run.py</c>, the "Hook Fail Mode" field).</summary>
-    public const string ActionOnlyHint = "Action profile only. If a check can't finish: closed = block where supported, open = allow and log.";
+    public const string ActionOnlyHint = "Action profile only. If a check cannot finish: closed blocks where supported, open allows and logs.";
 
     /// <summary>The value of <see cref="FirstRunFailModeQuestion.SavedOrPolicy"/>'s first choice: save nothing, so the policy tier (or a mode saved earlier) decides.</summary>
     public const string Policy = "policy";
 
     /// <summary>The 1.0.5 TUI's hint for the field (<c>tui/panels/first_run.py</c>), with what <see cref="Policy"/> does to a mode saved earlier.</summary>
     public const string SavedOrPolicyHint =
-        "Action profile only. While the gateway is down: policy = save nothing (a mode saved earlier is kept; with none, default and permissive allow with a warning, " +
-        "strict blocks); open = allow with a warning; closed = block. A saved choice wins over the policy tier, and every other hook failure blocks.";
+        "Action profile only. While the gateway is down: policy = save nothing and let the policy tier decide, open = allow with a warning, closed = block. " +
+        "A saved choice wins over the policy tier.";
 
     /// <summary>The first release whose first run asks the fail mode for the Action profile only (the 1.0.0 TUI and <c>cmd_init.py</c>).</summary>
     private static readonly Version ActionOnlyRelease = new(1, 0, 0);

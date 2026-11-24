@@ -318,7 +318,7 @@ public sealed class TuiRegistryPaletteTests : IDisposable
 
         var review = Assert.Single(h.Reviews);
         Assert.NotEqual(CommandTier.ReadOnly, review.Tier);
-        Assert.Contains("not on DefenseClaw for Windows' list of commands known to be read-only", review.Summary, StringComparison.Ordinal);
+        Assert.Contains("not on the app's list of read-only commands", review.Summary, StringComparison.Ordinal);
     }
 
     // ------------------------------------------------------------------ a value typed for a command
@@ -365,7 +365,7 @@ public sealed class TuiRegistryPaletteTests : IDisposable
             Assert.True(CommandTiers.IsUnreviewedRead(Command(Baseline, name).Argv), name);
             var review = Assert.Single(h.Reviews);
             Assert.Contains("names something you typed", review.Summary, StringComparison.Ordinal);
-            Assert.DoesNotContain("not on DefenseClaw for Windows' list", review.Summary, StringComparison.Ordinal);
+            Assert.DoesNotContain("not on the app's list", review.Summary, StringComparison.Ordinal);
         }
     }
 

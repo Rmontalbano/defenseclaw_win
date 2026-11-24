@@ -217,8 +217,8 @@ internal sealed class GatewayLifecycle
                 invocation.ExitCode == 0
                     ? GatewayControl.SucceededText(action)
                     : invocation.ExitCode is { } code
-                        ? $"Exit code {code} — see the Activity panel for output."
-                        : $"{invocation.FailureReason ?? "The command did not finish"} — see the Activity panel.",
+                        ? $"Exit code {code}. Output is in Activity."
+                        : $"{invocation.FailureReason ?? "The command did not finish"}. See Activity.",
                 invocation.ExitCode == 0 ? ToastLevel.Info : ToastLevel.Warning);
             await _refresh().ConfigureAwait(true);
         }
@@ -390,7 +390,7 @@ internal sealed class GatewayLifecycle
             return;
         }
 
-        RaiseNotice(title, "The ordinary stop did not stop the gateway (it may be running with administrator rights). Asking to stop it as administrator.", ToastLevel.Info);
+        RaiseNotice(title, "The normal stop did not stop the gateway, which may run with administrator rights. Asking to stop it as administrator.", ToastLevel.Info);
         var plan = await administrator.PlanAsync(GatewayAction.Stop, CancellationToken.None).ConfigureAwait(true);
         if (await RunPlanAsync(plan, title, owner, administrator).ConfigureAwait(true))
         {

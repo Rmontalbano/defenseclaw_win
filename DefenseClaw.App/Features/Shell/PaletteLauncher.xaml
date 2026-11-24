@@ -18,7 +18,7 @@
             ToolTipService.InitialShowDelay="400"
             AutomationProperties.Name="Open command palette"
             AutomationProperties.AcceleratorKey="Ctrl+K"
-            AutomationProperties.HelpText="Opens the command palette: go to any panel, or find an app, gateway or CLI command by typing.">
+            AutomationProperties.HelpText="Opens the command palette to go to a panel or run a command.">
         <Button.Template>
             <ControlTemplate TargetType="Button">
                 <Border x:Name="Box"

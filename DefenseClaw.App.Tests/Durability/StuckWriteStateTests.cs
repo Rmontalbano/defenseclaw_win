@@ -44,7 +44,7 @@ public sealed class StuckWriteStateTests
     {
         var detail = Detail(Write(@"C:\Users\tester\.claude\settings.json", CasWriteState.Unknown));
         Assert.Contains("could not be verified", detail, StringComparison.Ordinal);
-        Assert.Contains("nothing is deleted", detail, StringComparison.Ordinal);
+        Assert.Contains("deletes nothing", detail, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -83,7 +83,7 @@ public sealed class StuckWriteStateTests
         Assert.True(button.Enabled);
         Assert.DoesNotContain("could not be verified", button.Tip, StringComparison.Ordinal);
         var warning = Assert.Single(OverviewPanelViewModel.ClearWarnings(new[] { Write(@"C:\Users\tester\.claude\settings.json", state) }));
-        Assert.Equal("A file operation, not a DefenseClaw command", warning.Title);
+        Assert.Equal("This app moves the files", warning.Title);
     }
 
     [Fact]
@@ -103,7 +103,7 @@ public sealed class StuckWriteStateTests
         var strong = warnings[1];
         Assert.Equal("Not every pending write could be verified", strong.Title);
         Assert.Contains("settings.json: the file could not be read or is too large to check", strong.Message, StringComparison.Ordinal);
-        Assert.Contains("reversible with Put back", strong.Message, StringComparison.Ordinal);
+        Assert.Contains("Put back undoes the move", strong.Message, StringComparison.Ordinal);
         Assert.DoesNotContain(@"C:\Users\tester", strong.Message, StringComparison.Ordinal);
     }
 }

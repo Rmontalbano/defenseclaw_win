@@ -88,7 +88,7 @@ public sealed class Runtime105FailModeTests : IDisposable
         switch (expected)
         {
             case "old":
-                Assert.Contains("Pair observe with hook_fail_mode: open", Assert.Single(vm.Attention, r => r.Title == ObserveClosed).Detail, StringComparison.Ordinal);
+                Assert.Contains("Set hook_fail_mode: open", Assert.Single(vm.Attention, r => r.Title == ObserveClosed).Detail, StringComparison.Ordinal);
                 Assert.DoesNotContain(vm.Attention, r => r.Title == NotApplied);
                 break;
             case "not-applied":
@@ -99,9 +99,9 @@ public sealed class Runtime105FailModeTests : IDisposable
                 var row = Assert.Single(vm.Attention, r => r.Title == ObserveClosed);
                 Assert.Equal("High", row.SeverityKey);
                 Assert.Contains("config.yaml saves hook_fail_mode: closed for claudecode", row.Detail, StringComparison.Ordinal);
-                Assert.Contains("a saved fail mode decides", row.Detail, StringComparison.Ordinal);
+                Assert.Contains("an explicit saved mode wins", row.Reference, StringComparison.Ordinal);
                 Assert.Contains("defenseclaw guardrail fail-mode open --connector claudecode", row.Detail, StringComparison.Ordinal);
-                Assert.Contains(HookFailModeRule.SavedWinsOutageRule, row.Detail, StringComparison.Ordinal);
+                Assert.Contains(HookFailModeRule.SavedWinsOutageRule, row.Reference, StringComparison.Ordinal);
                 Assert.DoesNotContain("not apply", row.Detail, StringComparison.Ordinal);
                 Assert.DoesNotContain(vm.Attention, r => r.Title == NotApplied);
                 break;
@@ -131,7 +131,7 @@ public sealed class Runtime105FailModeTests : IDisposable
         Assert.Equal("Medium", row.SeverityKey);
         Assert.Equal(hint, row.Command);
         Assert.Contains("hook_fail_mode: open " + where, row.Detail, StringComparison.Ordinal);
-        Assert.Contains("wins over the policy tier", row.Detail, StringComparison.Ordinal);
+        Assert.Contains("an explicit saved mode wins", row.Reference, StringComparison.Ordinal);
         Assert.DoesNotContain(HookFailModeRule.StrictPackCommand, row.Detail, StringComparison.Ordinal);
     }
 
@@ -153,9 +153,9 @@ public sealed class Runtime105FailModeTests : IDisposable
     // ------------------------------------------------------------------ the configuration card's fail-mode row
 
     [Theory]
-    [InlineData("1.0.5", ObserveSavedClosed, "outage mode saved for claudecode (closed), which wins over the policy tier")]
-    [InlineData("1.0.5", StrictWithGlobalSavedOpen, "outage mode saved for every connector (open), which wins over the policy tier")]
-    [InlineData("1.0.5", ObserveNothingSaved, "no outage mode saved: the policy tier decides")]
+    [InlineData("1.0.5", ObserveSavedClosed, "Outage mode saved for claudecode: closed. It wins over the policy tier.")]
+    [InlineData("1.0.5", StrictWithGlobalSavedOpen, "Outage mode saved for every connector: open. It wins over the policy tier.")]
+    [InlineData("1.0.5", ObserveNothingSaved, "No outage mode saved. The policy tier decides.")]
     [InlineData("1.0.4", ObserveSavedClosed, null)]
     [InlineData("1.0.3", ObserveSavedClosed, null)]
     public async Task The_configuration_row_says_what_decides_the_outage_mode_on_1_0_5_only(string version, string config, string? decider)
@@ -165,7 +165,7 @@ public sealed class Runtime105FailModeTests : IDisposable
         Assert.Equal(decider, vm.FailModeDecider("claudecode"));
         if (decider is null)
         {
-            Assert.DoesNotContain(vm.ConfigurationRows, r => r.Value.Contains("policy tier", StringComparison.Ordinal));
+            Assert.DoesNotContain(vm.ConfigurationRows, r => r.Value.Contains("policy tier", StringComparison.Ordinal) || r.Detail.Contains("policy tier", StringComparison.Ordinal));
         }
     }
 

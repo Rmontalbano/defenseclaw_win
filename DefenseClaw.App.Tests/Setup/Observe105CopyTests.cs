@@ -22,7 +22,7 @@ public sealed class Observe105CopyTests
     // ------------------------------------------------------------------ the batch dialog's mode note
 
     [Theory]
-    [InlineData("1.0.5", "Observe records what an agent does and never blocks on policy findings; DefenseClaw still blocks changes to its own files.")]
+    [InlineData("1.0.5", "Observe records what an agent does and never blocks on policy findings. DefenseClaw still blocks changes to its own files.")]
     [InlineData("1.0.4", "Observe records what an agent does and never blocks it.")]
     [InlineData("0.8.10", "Observe records what an agent does and never blocks it.")]
     public async Task The_batch_dialogs_observe_note_follows_the_runtime(string version, string expected)
@@ -57,7 +57,7 @@ public sealed class Observe105CopyTests
         var current = new GuardrailRowViewModel(Row("observe", "closed"), selfChangeBlocked: true);
 
         Assert.True(old.HasMismatch);
-        Assert.Equal("observe + fail-closed: this connector never blocks on policy, but does block whenever the gateway errors.", old.MismatchNote);
+        Assert.Equal("observe + fail-closed: this connector never blocks on policy. It blocks when the gateway errors.", old.MismatchNote);
         Assert.Equal(ObserveModeCopy.ObserveFailClosedNote(true), current.MismatchNote);
         Assert.Contains("changes to DefenseClaw's own files", current.MismatchNote, StringComparison.Ordinal);
 
@@ -72,7 +72,7 @@ public sealed class Observe105CopyTests
         var old = new ConnectorChipViewModel("codex", "observe", "closed", hasMismatch: true, fromConfig: true);
         var current = new ConnectorChipViewModel("codex", "observe", "closed", hasMismatch: true, fromConfig: true, selfChangeBlocked: true);
 
-        Assert.Equal("observe + fail-closed: this connector never blocks on policy, but does block whenever the gateway errors.", old.MismatchNote);
+        Assert.Equal("observe + fail-closed: this connector never blocks on policy. It blocks when the gateway errors.", old.MismatchNote);
         Assert.Equal(ObserveModeCopy.ObserveFailClosedNote(true), current.MismatchNote);
         Assert.Contains("never blocks on policy findings", current.ToolTipText, StringComparison.Ordinal);
         Assert.False(old.IsSameAs(current));

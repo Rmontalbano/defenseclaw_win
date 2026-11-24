@@ -396,7 +396,7 @@ public sealed class ShellMenuModelTests : IDisposable
         var runtime = file.Single(r => r.Id == ShellCommandRegistry.RuntimeUpdatesId);
         Assert.Equal("Check for app updates…", app.Label);
         Assert.Equal("Check for runtime updates…", runtime.Label);
-        Assert.Contains("DefenseClaw for Windows (this app)", app.Detail, StringComparison.Ordinal);
+        Assert.Contains("DefenseClaw for Windows", app.Detail, StringComparison.Ordinal);
         Assert.Contains("DefenseClaw release", runtime.Detail, StringComparison.Ordinal);
     }
 

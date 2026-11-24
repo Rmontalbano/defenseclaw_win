@@ -386,7 +386,7 @@ public sealed partial class TrayFlyoutViewModel : ObservableObject, IDisposable
 
         StateLabel = paused ? "Paused" : view.StateLabel;
         StateDetail = paused
-            ? "Monitoring is paused: nothing is polling the gateway and no audit queries run. The gateway itself is not affected."
+            ? "Monitoring is paused. Nothing polls the gateway or reads audit. The gateway is not affected."
             : view.Detail + (DurabilityAttention.StoppedSentence(view) is { Length: > 0 } why ? " " + why : string.Empty);
         StateTone = GatewayPresentation.StateTone(view);
         ApplyStartOffer(view);
@@ -405,13 +405,13 @@ public sealed partial class TrayFlyoutViewModel : ObservableObject, IDisposable
         {
             FailModeNote =
                 (blocked.Length > 0 ? $"⚠ {blocked}. " : string.Empty) +
-                $"⚠ settings.json forces fail-{drift.EnvFailMode}; {drift.GatewaySource} says " +
-                $"{drift.GatewayFailMode} — open the dashboard";
+                $"⚠ settings.json forces fail-{drift.EnvFailMode}, {drift.GatewaySource} says " +
+                $"{drift.GatewayFailMode}. Open the dashboard.";
             HasFailModeNote = true;
         }
         else if (blocked.Length > 0)
         {
-            FailModeNote = $"⚠ {blocked} - start the gateway or switch to fail open from the dashboard";
+            FailModeNote = $"⚠ {blocked}. Start the gateway or switch to fail open in the dashboard.";
             HasFailModeNote = true;
         }
         else
@@ -749,7 +749,7 @@ public sealed partial class TrayFlyoutViewModel : ObservableObject, IDisposable
             ? "No unacknowledged findings"
             : _alertsUnavailable is not null
                 ? "Unacknowledged findings are unavailable"
-                : _services.Monitor.IsPaused ? "Monitoring is paused; findings have not been read" : "Reading findings…";
+                : _services.Monitor.IsPaused ? "Monitoring is paused. Findings have not been read." : "Reading findings…";
 
     /// <summary>Replaces the list only when what it shows changed (an id, or how long ago it reads), so a poll does not rebuild rows under the pointer.</summary>
     private void SyncFindings(AlertCounts counts)

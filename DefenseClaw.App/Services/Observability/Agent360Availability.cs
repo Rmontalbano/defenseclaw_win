@@ -153,8 +153,7 @@ internal sealed class Agent360Availability : IDisposable
 
     /// <summary>The words that send the operator to the wizard that starts the stack.</summary>
     public const string HowToStart =
-        "Agent360 is a dashboard in the local observability stack, and nothing answered at {0}. " +
-        "Start the stack with the Local OTel wizard (Setup, Local observability stack), then check again.";
+        "Agent360 did not answer at {0}. Start the local observability stack from Setup, then check again.";
 
     private readonly Func<CancellationToken, Task<string?>>? _resolve;
     private readonly IGrafanaProbe _probe;

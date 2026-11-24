@@ -45,7 +45,7 @@ public sealed partial class OverviewPanelViewModel
                 new AttentionAction(
                     OpenAuditCapConfigActionId,
                     "Edit max_store_mb",
-                    "Opens the config editor on observability.local.max_store_mb. Nothing is saved until you save it there."),
+                    "Opens the config editor on observability.local.max_store_mb."),
             }),
         });
     }

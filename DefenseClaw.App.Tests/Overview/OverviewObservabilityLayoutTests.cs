@@ -279,7 +279,7 @@ public sealed class OverviewObservabilityLayoutTests
             Assert.Equal(4, scene.Rows.Items.Count);
             Assert.Contains("Name", texts);
             Assert.Contains("Signals", texts);
-            Assert.Contains("Observability plan unavailable: 'defenseclaw' was not found. The card shows what the gateway reports.", texts);
+            Assert.Contains("Observability plan unavailable: 'defenseclaw' was not found.", texts);
         });
 
         scene.Render("cust272-observability-fallback-1400x900");

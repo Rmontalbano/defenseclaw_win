@@ -197,7 +197,7 @@ public static class InitPlanBuilder
         {
             new(
                 head,
-                "Create the DefenseClaw configuration, install the scanners and configure " + Describe(connectors) + ". Prints a JSON report that is checked before anything after it runs.",
+                "Create the DefenseClaw configuration, install the scanners and configure " + Describe(connectors) + ". The JSON report it prints is checked before the next step.",
                 CommandTier.StateChanging,
                 CliRunner.LongRunningTimeout,
                 Verify: VerifyReport,
@@ -218,7 +218,7 @@ public static class InitPlanBuilder
         {
             steps.Add(new DiscoverStep(
                 new[] { "guardrail", "use-pack", "strict" },
-                "Switch the guardrail to the strict rule pack, so a hook blocks calls while the gateway is not running (the default pack lets them run with a warning). Nothing is restarted.",
+                "Switch the guardrail to the strict rule pack so hooks block calls while the gateway is stopped. The default pack allows them with a warning.",
                 CommandTier.StateChanging));
         }
 
@@ -226,7 +226,7 @@ public static class InitPlanBuilder
         {
             steps.Add(new DiscoverStep(
                 GatewayControl.Argv(GatewayAction.Start),
-                "Start the gateway as a background daemon so the configured hooks have something to talk to.",
+                "Start the gateway as a background daemon for the configured hooks.",
                 CommandTier.StateChanging,
                 Executable: GatewayControl.Executable));
         }
@@ -238,7 +238,7 @@ public static class InitPlanBuilder
             Summary =
                 "Creates ~/.defenseclaw, configures " + Describe(connectors) + " in " + profile + " mode" +
                 (options.StartGateway ? " and starts the gateway" : ", leaving the gateway stopped") +
-                ". Each command runs only if the one before it succeeded, and setup counts as failed unless its own report says it finished.",
+                ". Each command runs only if the previous one succeeded.",
         };
     }
 

@@ -30,9 +30,9 @@ public sealed partial class OverviewPanelViewModel
         var guardrail = Services.Config.Config.Guardrail;
         return HookFailModeRule.SavedScope(guardrail, name) switch
         {
-            SavedFailModeScope.Connector => $"outage mode saved for {name} ({HookFailModeRule.SavedMode(guardrail, name)}), which wins over the policy tier",
-            SavedFailModeScope.Global => $"outage mode saved for every connector ({HookFailModeRule.SavedMode(guardrail, name)}), which wins over the policy tier",
-            _ => "no outage mode saved: the policy tier decides",
+            SavedFailModeScope.Connector => $"Outage mode saved for {name}: {HookFailModeRule.SavedMode(guardrail, name)}. It wins over the policy tier.",
+            SavedFailModeScope.Global => $"Outage mode saved for every connector: {HookFailModeRule.SavedMode(guardrail, name)}. It wins over the policy tier.",
+            _ => "No outage mode saved. The policy tier decides.",
         };
     }
 
@@ -65,19 +65,20 @@ public sealed partial class OverviewPanelViewModel
                 var (why, way) = (scope, saved) switch
                 {
                     (SavedFailModeScope.None, _) => (
-                        "no fail mode is saved for it and its policy tier blocks during an outage (a strict rule pack)",
+                        "No fail mode is saved and the strict rule pack blocks during an outage.",
                         $"Use the default or permissive rule pack, save a fail mode with {HookFailModeRule.FailModeCommand}, or move to enforce."),
                     (_, "closed") => (
-                        $"config.yaml saves hook_fail_mode: closed {where}, and on this runtime a saved fail mode decides what the hook does while the gateway is not running",
+                        $"config.yaml saves hook_fail_mode: closed {where}.",
                         $"Save open with {HookFailModeRule.FailModeCommand} open{(scope == SavedFailModeScope.Connector ? " --connector " + name : string.Empty)}, or move to enforce."),
                     _ => (
-                        $"its hook reports fail mode closed although config.yaml saves open {where}",
-                        $"Run {HookFailModeRule.FailModeCommand} to see what each connector's hook does, or move to enforce."),
+                        $"Its hook reports fail mode closed, but config.yaml saves open {where}.",
+                        $"Run {HookFailModeRule.FailModeCommand} to see each connector's hook, or move to enforce."),
                 };
                 rows.Add(new AttentionRow
                 {
                     Title = $"{name}: observe mode with a fail-closed hook",
-                    Detail = $"The connector only observes, but {why}, so a gateway outage blocks the agent anyway. {way} {HookFailModeRule.SavedWinsOutageRuleFor(Services.Runtime.Capabilities)}",
+                    Detail = $"A gateway outage blocks the agent. {why} {way}",
+                    Reference = HookFailModeRule.SavedWinsOutageRuleFor(Services.Runtime.Capabilities),
                     SeverityKey = "High",
                 });
             }
@@ -87,9 +88,8 @@ public sealed partial class OverviewPanelViewModel
                 rows.Add(new AttentionRow
                 {
                     Title = $"{name}: a saved hook_fail_mode: open overrides the strict rule pack",
-                    Detail = $"config.yaml saves hook_fail_mode: open {where}. On this runtime a saved fail mode wins over the policy tier, so calls run with a " +
-                             $"warning while the gateway is not running, although the rule pack is strict. To block them during an outage, run {hint}. " +
-                             HookFailModeRule.SavedWinsOutageRuleFor(Services.Runtime.Capabilities),
+                    Detail = $"config.yaml saves hook_fail_mode: open {where}, so calls run with a warning while the gateway is down. To block them, run {hint}.",
+                    Reference = HookFailModeRule.SavedWinsOutageRuleFor(Services.Runtime.Capabilities),
                     SeverityKey = "Medium",
                     Command = hint,
                 });

@@ -65,15 +65,14 @@ public sealed partial class OverviewPanelViewModel
         return new AttentionRow
         {
             Title = StaleInstallLockTitle,
-            Detail = $"An install that stopped left its lock at {found.Path}.{holder} Its installer is gone, so DefenseClaw's hooks ignore the lock: " +
-                     "it does not block your agents. Doctor removes it: review the command and run it from here.",
+            Detail = $"A stopped install left its lock at {found.Path}.{holder} It does not block your agents. Doctor can remove it.",
             SeverityKey = "Medium",
             Actions = new AttentionActions(new[]
             {
                 new AttentionAction(
                     ClearStaleInstallLockActionId,
                     "Remove the lock",
-                    blocked ?? "Opens a review of defenseclaw doctor --fix limited to this one repair; nothing runs until you confirm.",
+                    blocked ?? "Opens a review of defenseclaw doctor --fix for this one repair. Nothing runs until you confirm.",
                     Enabled: blocked is null),
             }),
         };
@@ -86,16 +85,15 @@ public sealed partial class OverviewPanelViewModel
     private AttentionRow RecoveryInstallLockRow(InstallLockFinding found, string? blocked) => new()
     {
         Title = RecoveryInstallLockTitle,
-        Detail = $"An install stopped part-way and left its lock at {found.Path}, kept by {found.RecoveryRecord}. Its installer is gone, so agent calls are " +
-                 "not held for it: they follow the gateway-outage rule. But no hook starts the gateway until the installer runs again. " +
-                 "Running the installer again finishes or undoes that install and clears the lock: open it from here, review the command, and let it finish.",
+        Detail = $"An interrupted install left its lock at {found.Path}, kept by {found.RecoveryRecord}. Agent calls follow the gateway-outage rule, but no hook starts the " +
+                 "gateway until you run the installer again to finish or undo it.",
         SeverityKey = "High",
         Actions = new AttentionActions(new[]
         {
             new AttentionAction(
                 OpenInstallerActionId,
                 "Open the installer",
-                blocked ?? "Opens the Updates window: the installer is downloaded, verified and shown in a review before anything runs.",
+                blocked ?? "Opens the Updates window. The installer is verified and reviewed before it runs.",
                 Enabled: blocked is null),
         }),
     };
@@ -110,8 +108,8 @@ public sealed partial class OverviewPanelViewModel
 
         Review.Open(
             "Remove the stale install lock?",
-            $"Runs doctor's repair for an install lock left by an installer that is no longer running, and no other repair. Doctor checks again that the " +
-            $"installer is gone and that no interrupted install keeps the lock, then removes {found.Path}. A lock an installer has taken over meanwhile stays.",
+            $"Runs only doctor's stale install lock repair. Doctor checks that the installer is gone and no interrupted install keeps the lock, " +
+            $"then removes {found.Path}. A lock taken over meanwhile stays.",
             new[]
             {
                 new DiscoverStep(ClearStaleInstallLockArgv, "Remove the install lock the stopped installer left.", CommandTier.StateChanging),
@@ -232,9 +230,8 @@ public sealed partial class OverviewPanelViewModel
             rows.Add(new AttentionRow
             {
                 Title = "Claude Code: its settings turn every hook off",
-                Detail = $"{settings} sets {ClaudeSettingsReader.DisableAllHooksName} to true, so Claude Code runs none of its hooks and DefenseClaw is not guarding " +
-                         $"its tool calls. Remove {ClaudeSettingsReader.DisableAllHooksName} from that file (or set it to false), then restart Claude Code. " +
-                         "The app never edits it.",
+                Detail = $"{settings} sets {ClaudeSettingsReader.DisableAllHooksName} to true, so Claude Code runs no hooks and DefenseClaw is not guarding " +
+                         $"its tool calls. Remove {ClaudeSettingsReader.DisableAllHooksName} or set it to false, then restart Claude Code.",
                 SeverityKey = "High",
             });
         }
@@ -244,8 +241,8 @@ public sealed partial class OverviewPanelViewModel
             rows.Add(new AttentionRow
             {
                 Title = "Codex: its config turns hooks off",
-                Detail = $"{config} turns Codex's hooks off ([features] {_hookSwitches.CodexKey} = false), so Codex runs no hook and DefenseClaw is not guarding " +
-                         "its tool calls. Run the command below, then restart Codex. The app never runs it or edits the file.",
+                Detail = $"{config} sets [features] {_hookSwitches.CodexKey} = false, so Codex runs no hooks and DefenseClaw is not guarding " +
+                         "its tool calls. Run the command below, then restart Codex.",
                 SeverityKey = "High",
                 Command = CodexEnableHooksCommand,
             });

@@ -164,7 +164,7 @@ public sealed class PaletteRerunCancelTests : IDisposable
         Assert.Equal("defenseclaw", run.Tool);
         Assert.Equal(new[] { "skill", "block", "--", "pdf-tools" }, run.Argv);
         Assert.Equal(
-            "Re-run last command: Ran defenseclaw skill block -- pdf-tools again: finished (exit 0). The new entry is at the top of the Activity list.",
+            "Re-run last command: Ran defenseclaw skill block -- pdf-tools again: finished (exit 0). The new entry is at the top of Activity.",
             Assert.Single(_toasts));
     }
 

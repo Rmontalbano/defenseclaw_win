@@ -87,7 +87,7 @@ public sealed class OverviewQuickActionsTests : IDisposable
         Assert.False(vm.Review.IsRunning);
         var review = vm.Review.CommandReview!;
         Assert.Equal("Run “Remove”?", review.Title);
-        Assert.Contains("is not on DefenseClaw for Windows' list of commands known to be read-only, so it is reviewed first", review.Summary, StringComparison.Ordinal);
+        Assert.Contains("not on the app's list of read-only commands, so it is reviewed first", review.Summary, StringComparison.Ordinal);
         Assert.Equal(new[] { "skill", "remove", "--", "pdf-tools" }, Assert.Single(review.Steps).Argv);
         Assert.Equal(CommandTier.Destructive, review.Tier);
         Assert.False(vm.HasDiagnosticMessage);

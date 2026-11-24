@@ -110,7 +110,7 @@ public sealed class OpenClawAndAgentUpdatedOverviewTests : IDisposable
 
         Assert.DoesNotContain(vm.Attention, IsNewRow);
         Assert.DoesNotContain("on_failure", ConfigRowOf(vm, "Hook fail mode").Value, StringComparison.Ordinal);
-        Assert.DoesNotContain("gateway down:", ConfigRowOf(vm, "Hook fail mode").Value, StringComparison.Ordinal);
+        Assert.DoesNotContain("Gateway down:", ConfigRowOf(vm, "Hook fail mode").Detail, StringComparison.Ordinal);
     }
 
     // ------------------------------------------------------------------ (b) an agent that updated itself
@@ -127,7 +127,7 @@ public sealed class OpenClawAndAgentUpdatedOverviewTests : IDisposable
         Assert.Null(row.Command);
         var action = Assert.Single(row.Actions.Items);
         Assert.Equal((AttentionActionIds.ReselectCodex, true), (action.Id, action.Enabled));
-        Assert.Contains("is not checking Codex's calls until setup is run again", row.Detail, StringComparison.Ordinal);
+        Assert.Contains("not checking Codex's calls until setup runs again", row.Detail, StringComparison.Ordinal);
         Assert.Contains("the Codex executable changed since setup", row.Detail, StringComparison.Ordinal);
 
         // The 1.0.7 setup-failed row is not drawn beside it.
@@ -315,12 +315,14 @@ public sealed class OpenClawAndAgentUpdatedOverviewTests : IDisposable
             FailMode("{\"gateway_down\":\"allow\",\"no_answer\":\"allow-ordinary\",\"hook_error\":\"block\"}"),
             FailMode("{\"gateway_down\":\"allow\",\"no_answer\":\"block\",\"hook_error\":\"block\"}"))));
 
-        var codex = ConfigRowOf(vm, "Hook fail mode (codex)").Value;
-        Assert.Contains("gateway down: allow with a warning; no answer: tool calls allow with a warning unless the call may reach a protected file", codex, StringComparison.Ordinal);
-        Assert.Contains("hook or answer error: block; stop and session-end events: never blocked", codex, StringComparison.Ordinal);
+        var codex = ConfigRowOf(vm, "Hook fail mode (codex)").Detail;
+        Assert.Contains("Gateway down: allow with a warning\nNo answer: tool calls allow with a warning unless they may reach a protected file", codex, StringComparison.Ordinal);
+        Assert.Contains("Hook or answer error: block\nStop and session-end events: never blocked", codex, StringComparison.Ordinal);
 
-        var kiro = ConfigRowOf(vm, "Hook fail mode (kiro)").Value;
-        Assert.Contains("gateway down: allow with a warning; no answer: block; hook or answer error: block; stop and session-end events: never blocked", kiro, StringComparison.Ordinal);
+        Assert.Equal("open (effective, set by saved)", ConfigRowOf(vm, "Hook fail mode (codex)").Value);
+
+        var kiro = ConfigRowOf(vm, "Hook fail mode (kiro)").Detail;
+        Assert.Contains("Gateway down: allow with a warning\nNo answer: block\nHook or answer error: block\nStop and session-end events: never blocked", kiro, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -330,17 +332,17 @@ public sealed class OpenClawAndAgentUpdatedOverviewTests : IDisposable
         vm.Apply(Snapshot(Health(CodexRunning), "codex"));
 
         vm.ApplyStatus(DefenseClawStatusReader.Parse(StatusJson(FailMode(null))));
-        var absent = ConfigRowOf(vm, "Hook fail mode").Value;
+        var absent = ConfigRowOf(vm, "Hook fail mode").Detail;
         vm.ApplyStatus(DefenseClawStatusReader.Parse(StatusJson(FailMode("null"))));
-        var jsonNull = ConfigRowOf(vm, "Hook fail mode").Value;
+        var jsonNull = ConfigRowOf(vm, "Hook fail mode").Detail;
         vm.ApplyStatus(DefenseClawStatusReader.Parse(StatusJson(FailMode("{\"gateway_down\":\"SHOW THIS RUNTIME TEXT\",\"no_answer\":\"block\"}"))));
-        var unknown = ConfigRowOf(vm, "Hook fail mode").Value;
+        var unknown = ConfigRowOf(vm, "Hook fail mode").Detail;
 
-        Assert.DoesNotContain("gateway down:", absent, StringComparison.Ordinal);
+        Assert.DoesNotContain("Gateway down:", absent, StringComparison.Ordinal);
         Assert.Equal(absent, jsonNull);
         Assert.DoesNotContain("SHOW THIS RUNTIME TEXT", unknown, StringComparison.Ordinal);
-        Assert.DoesNotContain("gateway down:", unknown, StringComparison.Ordinal);
-        Assert.Contains("no answer: block", unknown, StringComparison.Ordinal);
+        Assert.DoesNotContain("Gateway down:", unknown, StringComparison.Ordinal);
+        Assert.Contains("No answer: block", unknown, StringComparison.Ordinal);
     }
 
     // ------------------------------------------------------------------ (g) a detected OpenClaw

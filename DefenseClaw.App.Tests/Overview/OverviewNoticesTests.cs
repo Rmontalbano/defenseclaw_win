@@ -108,7 +108,7 @@ public sealed class OverviewNoticesTests : IDisposable
         var row = Row(vm, "The gateway is starting");
         Assert.Equal("Info", row.SeverityKey);
         Assert.Contains("The API subsystem of /health reports reconnecting.", row.Detail, StringComparison.Ordinal);
-        Assert.Contains("Health checks will retry automatically", row.Detail, StringComparison.Ordinal);
+        Assert.Contains("Health checks retry automatically", row.Detail, StringComparison.Ordinal);
         Assert.False(row.HasCommand);
     }
 
@@ -164,7 +164,7 @@ public sealed class OverviewNoticesTests : IDisposable
         Assert.Equal("Critical", row.SeverityKey);
         Assert.Equal(
             "guardrail.connectors: 'ClaudeCode' and 'claudecode' refer to the same connector 'claudecode'; keep only one" +
-            " - showing a reduced view; check your connector config",
+            ". Check your connector config.",
             row.Detail);
     }
 
@@ -226,7 +226,7 @@ public sealed class OverviewNoticesTests : IDisposable
         Assert.Equal(OverviewPanelViewModel.InstallSkillScannerCommand, row.Command);
         Assert.True(row.HasCommand);
         Assert.Contains("skill scans cannot run", row.Detail, StringComparison.Ordinal);
-        Assert.Contains("The app never runs it for you", row.Detail, StringComparison.Ordinal);
+        Assert.Contains("Run the command below", row.Detail, StringComparison.Ordinal);
         Assert.Contains("A suggested command is available", row.ToString(), StringComparison.Ordinal);
 
         // The Scanners card says the same thing about the same lookup.

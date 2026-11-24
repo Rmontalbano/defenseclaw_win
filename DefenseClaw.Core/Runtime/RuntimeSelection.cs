@@ -104,7 +104,7 @@ public sealed partial record RuntimeSelection
 
                 if (HomeDirectory is null)
                 {
-                    return "Name the DEFENSECLAW_HOME folder this runtime keeps its files in (a side-by-side install must not share the installed one's).";
+                    return "Name the DEFENSECLAW_HOME folder for this runtime. It must differ from the installed runtime's.";
                 }
 
                 if (CheckAbsoluteFolder(HomeDirectory, "DEFENSECLAW_HOME") is { } homeProblem)
@@ -190,12 +190,12 @@ public sealed partial record RuntimeSelection
         if (!string.IsNullOrEmpty(uri.UserInfo) || !string.IsNullOrEmpty(uri.Query) || !string.IsNullOrEmpty(uri.Fragment) ||
             (uri.AbsolutePath.Length > 1))
         {
-            return "The gateway address is a host and a port only: no credentials, path or query.";
+            return "Use a host and port only, with no credentials, path or query.";
         }
 
         if (!uri.IsLoopback)
         {
-            return "The gateway address must be on this PC (127.0.0.1, localhost or [::1]): the gateway token is only sent there.";
+            return "The gateway address must be on this PC: 127.0.0.1, localhost or [::1]. The gateway token is sent only there.";
         }
 
         if (uri.IsDefaultPort)

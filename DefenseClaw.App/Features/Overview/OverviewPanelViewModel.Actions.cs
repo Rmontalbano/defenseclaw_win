@@ -111,7 +111,7 @@ public sealed partial class OverviewPanelViewModel
     private void ScanSkills() =>
         Review.Open(
             "Scan all skills?",
-            "This runs the skill scanner over every configured skill and records what it finds. It changes scan results and findings; it does not change any skill.",
+            "Runs the skill scanner over every configured skill and records the findings. It does not change any skill.",
             new[]
             {
                 new DiscoverStep(
@@ -335,16 +335,16 @@ public sealed partial class OverviewPanelViewModel
 
         var enableAllowed = unavailable is null;
         EnableAiDiscoveryTip = unavailable ??
-            "Turn on AI discovery: defenseclaw agent discovery enable --yes. It restarts the gateway and asks for a first scan. Asks for confirmation first.";
+            "Runs defenseclaw agent discovery enable --yes. Restarts the gateway and asks for a first scan. Asks for confirmation first.";
 
         // A scan is a request to the running gateway: with it down there is nothing to ask.
         var scanUnavailable = unavailable ??
             (snapshot.State is AppGatewayState.Running or AppGatewayState.Degraded
                 ? null
-                : "The gateway is not running, so there is nothing to ask for a scan. Start it first.");
+                : "The gateway is not running. Start it first.");
         var scanAllowed = scanUnavailable is null;
         ScanAiDiscoveryTip = scanUnavailable ??
-            "Ask the running gateway for one AI discovery scan now: defenseclaw agent discovery scan. Asks for confirmation first.";
+            "Runs defenseclaw agent discovery scan: one scan now. Asks for confirmation first.";
 
         var notificationsOn = NotificationsAreOn();
         NotificationsLabel = notificationsOn ? "Turn notifications off" : "Turn notifications on";
@@ -359,8 +359,8 @@ public sealed partial class OverviewPanelViewModel
         // No review stands in front of the console (nothing runs in this app), so the tooltip is where the command and its tier are said.
         FillMissingKeysTip = unavailable ??
             $"{CommandReview.LabelFor(CommandReview.ResolveTier(FillMissingKeysArgv))}. " +
-            $"Opens a console window running {CommandReview.CommandLine(CommandReview.DefaultExecutable, FillMissingKeysArgv)}, a hidden prompt for each required key " +
-            "that is unset. What you type goes to DefenseClaw's .env file and never through this app.";
+            $"Opens a console window running {CommandReview.CommandLine(CommandReview.DefaultExecutable, FillMissingKeysArgv)}, which prompts for each unset required key. " +
+            "Values you type go to DefenseClaw's .env file only.";
 
         if (enableAllowed != _enableAiDiscoveryAllowed || scanAllowed != _scanAiDiscoveryAllowed ||
             notificationsAllowed != _notificationsAllowed || fillAllowed != _fillMissingKeysAllowed)
@@ -394,8 +394,8 @@ public sealed partial class OverviewPanelViewModel
     private void EnableAiDiscovery() =>
         Review.Open(
             "Turn on AI discovery?",
-            "Sets ai_discovery.enabled to true in config.yaml and leaves your other AI discovery settings (mode, scan roots, cadence, detectors) as they are. " +
-            "It then restarts the gateway so it starts the discovery service, and asks it for a first scan.",
+            "Sets ai_discovery.enabled to true in config.yaml and keeps your other AI discovery settings. " +
+            "Then restarts the gateway to start the discovery service and asks for a first scan.",
             new[]
             {
                 new DiscoverStep(
@@ -416,10 +416,9 @@ public sealed partial class OverviewPanelViewModel
     private void ScanAiDiscovery() =>
         Review.Open(
             "Run an AI discovery scan?",
-            "It asks the running DefenseClaw gateway to scan this machine for AI tools right now: the same scan it already runs on its own schedule. " +
-            "The result is written to ai_discovery_state.json and inventory.db, which is what the agents card reads, and the gateway records it in the audit trail " +
-            "as an ai.discovery event like any scheduled scan.\n\n" +
-            "It needs the gateway running with AI discovery turned on; otherwise the command fails and nothing changes.",
+            "Asks the running gateway to scan this machine for AI tools now. " +
+            "The result is written to ai_discovery_state.json and inventory.db, and the gateway records an ai.discovery audit event.\n\n" +
+            "The gateway must be running with AI discovery on. Otherwise the command fails and nothing changes.",
             new[]
             {
                 new DiscoverStep(
@@ -462,8 +461,7 @@ public sealed partial class OverviewPanelViewModel
         ShowDiagnosticMessage(
             title,
             "Neutral",
-            $"Opened a console window running `{CommandReview.CommandLine(CommandReview.DefaultExecutable, FillMissingKeysArgv)}`. Type each value at its hidden prompt there. " +
-            "What needs attention comes from the last doctor run, so run doctor again when you are done to refresh it.",
+            $"Opened a console window running `{CommandReview.CommandLine(CommandReview.DefaultExecutable, FillMissingKeysArgv)}`. Type each value at its hidden prompt, then run doctor again to refresh What needs attention.",
             string.Empty);
     }
 
@@ -505,7 +503,7 @@ public sealed partial class OverviewPanelViewModel
             // Not a command the app knows to be a read, so nothing here runs it on a click. The step's floor is a change, and the classifier can only raise it.
             Review.Open(
                 $"Run “{command.Title}”?",
-                $"{command.Summary} It is not on DefenseClaw for Windows' list of commands known to be read-only, so it is reviewed first.",
+                $"{command.Summary} It is not on the app's list of read-only commands, so it is reviewed first.",
                 new[] { new DiscoverStep(command.Argv, command.Summary, CommandTier.StateChanging, Executable: command.Executable) },
                 primaryText: "Run command");
             return;
@@ -525,18 +523,18 @@ public sealed partial class OverviewPanelViewModel
             var tail = Tail(invocation);
             if (invocation.FailureReason is { Length: > 0 } reason)
             {
-                ShowDiagnosticMessage(command.Title, "Bad", $"'{command.CommandText}' did not finish: {reason}. The Activity panel has what it printed.", tail);
+                ShowDiagnosticMessage(command.Title, "Bad", $"'{command.CommandText}' did not finish: {reason}. Its output is in Activity.", tail);
             }
             else if (invocation.ExitCode == 0)
             {
-                ShowDiagnosticMessage(command.Title, "Ok", $"'{command.CommandText}' succeeded (exit 0). The full output is in the Activity panel.", tail);
+                ShowDiagnosticMessage(command.Title, "Ok", $"'{command.CommandText}' succeeded (exit 0). Full output is in Activity.", tail);
             }
             else
             {
                 ShowDiagnosticMessage(
                     command.Title,
                     "Warn",
-                    $"'{command.CommandText}' exited {invocation.ExitCode?.ToString(System.Globalization.CultureInfo.CurrentCulture) ?? "?"}. The full output is in the Activity panel.",
+                    $"'{command.CommandText}' exited {invocation.ExitCode?.ToString(System.Globalization.CultureInfo.CurrentCulture) ?? "?"}. Full output is in Activity.",
                     tail);
             }
         }

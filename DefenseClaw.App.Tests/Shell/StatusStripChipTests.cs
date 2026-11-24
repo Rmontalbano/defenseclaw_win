@@ -256,7 +256,7 @@ public sealed class StatusStripChipTests : IDisposable
         var tip = Chip(StripChipKey.Keys).ToolTip;
         Assert.StartsWith("2 required credentials are not set: OPENAI_API_KEY, GALILEO_API_KEY.", tip, StringComparison.Ordinal);
         Assert.Contains("Setup", tip, StringComparison.Ordinal);
-        Assert.Contains("never typed or shown in this app", tip, StringComparison.Ordinal);
+        Assert.Contains("console window asks for the value", tip, StringComparison.Ordinal);
     }
 
     // ---- Alerts and version: the words they have always had -------------------------------------------------------------------------------
@@ -431,7 +431,7 @@ public sealed class StatusStripChipTests : IDisposable
 
         var tip = Chip(StripChipKey.Redaction).ToolTip;
         Assert.Contains("unredacted", tip, StringComparison.Ordinal);
-        Assert.Contains("Observability card", tip, StringComparison.Ordinal);
+        Assert.Contains("defenseclaw observability plan", tip, StringComparison.Ordinal);
     }
 
     // ---- Policy posture -------------------------------------------------------------------------------------------------------------------
@@ -464,7 +464,7 @@ public sealed class StatusStripChipTests : IDisposable
         var chip = Chip(StripChipKey.Policy);
         Assert.Equal("Policy: observe", chip.Text);
         Assert.Contains("From config.yaml", chip.ToolTip, StringComparison.Ordinal);
-        Assert.Contains("not necessarily what is running", chip.ToolTip, StringComparison.Ordinal);
+        Assert.Contains("may differ from what is running", chip.ToolTip, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -504,13 +504,13 @@ public sealed class StatusStripChipTests : IDisposable
         Assert.True(chip.IsShown);
         Assert.Equal("1 command running", chip.Text);
         Assert.Equal("Low", chip.Tone);
-        Assert.Equal("1 command has been running for more than a moment. Its output is in Activity.", chip.ToolTip);
+        Assert.Equal("1 command is still running. Its output is in Activity.", chip.ToolTip);
         Assert.Equal(chip.ToolTip, chip.AutomationName);
 
         var status = StripScene.Running("status", "--json");
         _scene.Commands.OnStarted(null, status);
         Assert.Equal("2 commands running", chip.Text);
-        Assert.Equal("2 commands have been running for more than a moment. Their output is in Activity.", chip.ToolTip);
+        Assert.Equal("2 commands are still running. Their output is in Activity.", chip.ToolTip);
         Assert.Equal(chip.ToolTip, chip.AutomationName);
 
         InvocationFactory.Finish(doctor);

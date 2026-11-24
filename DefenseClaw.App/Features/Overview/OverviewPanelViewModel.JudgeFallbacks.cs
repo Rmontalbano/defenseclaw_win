@@ -52,9 +52,9 @@ public sealed partial class OverviewPanelViewModel
         var summary = fallbacks.Summary;
         rows.Add(new AttentionRow
         {
-            Title = $"{JudgeFallbacksTitlePrefix}{fallbacks.Total.ToString("N0", CultureInfo.CurrentCulture)} hook check(s)",
+            Title = $"{JudgeFallbacksTitlePrefix}{fallbacks.Total.ToString("N0", CultureInfo.CurrentCulture)} hook check{(fallbacks.Total == 1 ? string.Empty : "s")}",
             Detail = char.ToUpperInvariant(summary[0]) + summary[1..] + ". Counted since the judge started." +
-                     (JudgeMaxParallelIsOff() ? " Suggestion: " + JudgeFallbackHealth.MaxParallelHint + "." : string.Empty),
+                     (JudgeMaxParallelIsOff() ? " " + JudgeFallbackHealth.MaxParallelHint : string.Empty),
             SeverityKey = "Medium",
         });
     }

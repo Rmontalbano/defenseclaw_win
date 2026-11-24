@@ -16,12 +16,12 @@ public static class ObserveModeCopy
 
     /// <summary>The add-a-connector review: "Observe records what the agent does and ..." (Overview and AI Discovery).</summary>
     public static string AddConnectorSentence(bool selfChangeBlocked) => selfChangeBlocked
-        ? "Observe records what the agent does and never blocks on policy findings; DefenseClaw still blocks changes to its own files."
+        ? "Observe records what the agent does and never blocks on policy findings. DefenseClaw still blocks changes to its own files."
         : "Observe records what the agent does and never blocks it.";
 
     /// <summary>The mode note under the batch setup's mode choice.</summary>
     public static string BatchObserveNote(bool selfChangeBlocked) => selfChangeBlocked
-        ? "Observe records what an agent does and never blocks on policy findings; DefenseClaw still blocks changes to its own files."
+        ? "Observe records what an agent does and never blocks on policy findings. DefenseClaw still blocks changes to its own files."
         : "Observe records what an agent does and never blocks it.";
 
     /// <summary>Where the app picks observe because it could not find a mode: "observe, which never blocks ...".</summary>
@@ -31,12 +31,12 @@ public static class ObserveModeCopy
 
     /// <summary>The roster's note on a connector that observes but fails closed.</summary>
     public static string ObserveFailClosedNote(bool selfChangeBlocked) => selfChangeBlocked
-        ? "observe + fail-closed: this connector never blocks on policy findings, but does block whenever the gateway errors, and blocks changes to DefenseClaw's own files."
-        : "observe + fail-closed: this connector never blocks on policy, but does block whenever the gateway errors.";
+        ? "observe + fail-closed: this connector never blocks on policy findings. It blocks when the gateway errors and on changes to DefenseClaw's own files."
+        : "observe + fail-closed: this connector never blocks on policy. It blocks when the gateway errors.";
 
     /// <summary>The note on the open fail mode in the guardrail review.</summary>
     public static string FailOpenNote(bool selfChangeBlocked) => selfChangeBlocked
-        ? "Open allows the tool call or prompt and logs the failure when the gateway errors or cannot be reached, so an outage does not stop an agent. " +
+        ? "Open allows the tool call or prompt and logs the failure when the gateway errors or cannot be reached. " +
           "A call the gateway took but did not answer in time is still blocked. Recommended for almost all installs."
-        : "Open allows the tool call or prompt and logs the failure, so a misbehaving gateway never blocks an agent. Recommended for almost all installs.";
+        : "Open allows the tool call or prompt and logs the failure when the gateway errors. Recommended for almost all installs.";
 }

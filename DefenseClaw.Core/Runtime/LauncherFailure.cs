@@ -116,7 +116,7 @@ public sealed partial record LauncherFailure(LauncherFailureKind Kind, string Li
         var fix = Kind switch
         {
             LauncherFailureKind.DataFolderLink =>
-                $"Restore {folder} as a regular folder (not a junction or link), then run the DefenseClaw installer again.",
+                $"Restore {folder} as a regular folder, then run the DefenseClaw installer again.",
             LauncherFailureKind.InspectFailed =>
                 $"Check that {folder} exists and can be read, then run the DefenseClaw installer (install.ps1) again.",
             _ => "Run the DefenseClaw installer (install.ps1) again to repair the per-user install.",

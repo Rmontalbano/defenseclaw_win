@@ -80,7 +80,7 @@ public sealed class LauncherFailureTests
         var reason = LauncherFailure.Recognise(line)!.UserReason();
 
         Assert.Contains($"\"{line}\"", reason, StringComparison.Ordinal);
-        Assert.EndsWith($"Restore {Folder} as a regular folder (not a junction or link), then run the DefenseClaw installer again.", reason, StringComparison.Ordinal);
+        Assert.EndsWith($"Restore {Folder} as a regular folder, then run the DefenseClaw installer again.", reason, StringComparison.Ordinal);
     }
 
     [Fact]

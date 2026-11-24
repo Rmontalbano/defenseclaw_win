@@ -241,9 +241,9 @@ public sealed class OverviewDurabilityTests : IDisposable
         Assert.Equal(new[] { "guardrail", "fail-mode", "open", "--yes" }, step.Argv);
         Assert.Equal("defenseclaw guardrail fail-mode open --yes", step.CommandText);
         Assert.Equal(CommandTier.StateChanging, review.Tier);
-        Assert.Contains(review.Warnings, w => w.Message.Contains("config set guardrail.hook_fail_mode does not take effect", StringComparison.Ordinal));
+        Assert.Contains(review.Warnings, w => w.Message.Contains("config set guardrail.hook_fail_mode saves the value but does not change the hooks", StringComparison.Ordinal));
         Assert.False(review.RestartsGateway);
-        Assert.Contains("does not start it", review.Summary, StringComparison.Ordinal);
+        Assert.Contains("does not start the stopped gateway", review.Summary, StringComparison.Ordinal);
         Assert.Empty(ran);
 
         await vm.Review.ConfirmCommand.ExecuteAsync(null);
@@ -282,8 +282,8 @@ public sealed class OverviewDurabilityTests : IDisposable
             Assert.True(File.Exists(file));
         }
 
-        Assert.Contains(review.Warnings, w => w.Title == "A file operation, not a DefenseClaw command");
-        Assert.Contains("never deleted", review.Summary, StringComparison.Ordinal);
+        Assert.Contains(review.Warnings, w => w.Title == "This app moves the files");
+        Assert.Contains("Nothing is deleted", review.Summary, StringComparison.Ordinal);
 
         // The seeded receipt records no hash for its staging file, so the check cannot verify it (CUST-360): the move stays, with the stronger warning.
         Assert.Contains("could not verify", review.Summary, StringComparison.Ordinal);

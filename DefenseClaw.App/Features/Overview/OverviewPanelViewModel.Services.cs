@@ -155,7 +155,7 @@ public sealed partial class OverviewPanelViewModel
     {
         AppGatewayState.Running => ("running", "Ok", string.Empty),
         AppGatewayState.Degraded => ("degraded", "Warn", string.Empty),
-        AppGatewayState.WslGatewayDetected => ("wsl gateway", "Warn", "answering from WSL, not the native install"),
+        AppGatewayState.WslGatewayDetected => ("wsl gateway", "Warn", "answering from WSL"),
         AppGatewayState.GatewayStopped => (
             "stopped",
             "Bad",
@@ -292,12 +292,12 @@ public sealed partial class OverviewPanelViewModel
 
         if (primary.ToolBlocks != 0)
         {
-            parts.Add($"{primary.ToolBlocks.ToString(CultureInfo.InvariantCulture)} tool blocks");
+            parts.Add($"{primary.ToolBlocks.ToString(CultureInfo.InvariantCulture)} tool block{(primary.ToolBlocks == 1 ? string.Empty : "s")}");
         }
 
         if (primary.SubprocessBlocks != 0)
         {
-            parts.Add($"{primary.SubprocessBlocks.ToString(CultureInfo.InvariantCulture)} subprocess blocks");
+            parts.Add($"{primary.SubprocessBlocks.ToString(CultureInfo.InvariantCulture)} subprocess block{(primary.SubprocessBlocks == 1 ? string.Empty : "s")}");
         }
 
         return string.Join(" - ", parts);
@@ -396,12 +396,12 @@ public sealed partial class OverviewPanelViewModel
         var parts = new List<string>();
         if (DetailText(watcher, "skill_dirs") is { } skills)
         {
-            parts.Add($"{skills} skill dirs");
+            parts.Add($"{skills} skill dir{(skills == "1" ? string.Empty : "s")}");
         }
 
         if (DetailText(watcher, "plugin_dirs") is { } plugins)
         {
-            parts.Add($"{plugins} plugin dirs");
+            parts.Add($"{plugins} plugin dir{(plugins == "1" ? string.Empty : "s")}");
         }
 
         // 1.0.9: the watcher says when admission scanning is off for a root; its own words are the reason (WatcherAdmissionHealth, absent before 1.0.9).
@@ -452,7 +452,15 @@ public sealed partial class OverviewPanelViewModel
         var parts = new List<string> { mode ?? "unknown" };
         if (enforcing is { } enforced)
         {
-            parts.Add(enforced ? "enforcing" : "observing (enforcement off)");
+            // "observe" with enforcement off says the same thing twice.
+            if (enforced)
+            {
+                parts.Add("enforcing");
+            }
+            else if (!string.Equals(mode, "observe", StringComparison.OrdinalIgnoreCase))
+            {
+                parts.Add("not enforcing");
+            }
         }
 
         if (DetailText(guardrail, "enforcement_surface") is { Length: > 0 } surface)
@@ -460,7 +468,8 @@ public sealed partial class OverviewPanelViewModel
             parts.Add(surface);
         }
 
-        return string.Join(" · ", parts);
+        // One part of the row's " · " line, so the row stays at summary, posture and since.
+        return string.Join(", ", parts);
     }
 
     // ---- Sinks, Telemetry, Sandbox ----------------------------------------------------------------------------------------------------

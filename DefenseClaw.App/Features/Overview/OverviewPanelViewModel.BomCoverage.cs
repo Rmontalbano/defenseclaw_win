@@ -44,7 +44,7 @@ public sealed partial class OverviewPanelViewModel
     private bool _hasBomCoverage;
 
     internal const string NoBomYet =
-        "No AI BOM has been generated in this session. The Overview does not run one: open Inventory and use Generate AI BOM (it shows the command first).";
+        "No AI BOM yet. Generate one from Inventory.";
 
     /// <summary>Reads what the Inventory page last published (no I/O, no scan) and rebuilds the rows.</summary>
     internal void RefreshBomCoverage()

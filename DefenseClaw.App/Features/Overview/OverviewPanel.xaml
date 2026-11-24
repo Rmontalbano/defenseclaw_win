@@ -271,7 +271,7 @@
                                    VerticalAlignment="Center"
                                    Content="Review Installation"
                                    Command="{Binding ReviewInstallationCommand}"
-                                   AutomationProperties.HelpText="Opens Settings, where the Installation block says what chose this installation and why the app only reads it." />
+                                   AutomationProperties.HelpText="Opens Settings, which says what chose this installation and why it is read-only." />
                     </Grid>
                 </Border>
 
@@ -307,6 +307,9 @@
                                             </StackPanel>
                                             <TextBlock Style="{StaticResource DcTextSecondary}"
                                                        Margin="0,2,0,0"
+                                                       ToolTip="{Binding Reference}"
+                                                       ToolTipService.IsEnabled="{Binding HasReference}"
+                                                       AutomationProperties.HelpText="{Binding Reference}"
                                                        Text="{Binding Detail}" />
                                             <Border Style="{StaticResource DcCodeBlock}"
                                                     Margin="0,6,0,0"
@@ -345,9 +348,9 @@
                                                 <ui:Button Margin="8,0,0,0"
                                                            Content="Clear"
                                                            Command="{Binding DataContext.ClearPendingRestartCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
-                                                           ToolTip="Forget the queued restart without restarting. What was saved stays saved and applies the next time the gateway restarts."
+                                                           ToolTip="Clear the queued restart without restarting. Saved changes apply at the next gateway restart."
                                                            AutomationProperties.Name="Clear the queued restart"
-                                                           AutomationProperties.HelpText="Forgets the queued restart without restarting the gateway. What was saved stays saved and applies the next time the gateway restarts." />
+                                                           AutomationProperties.HelpText="Clears the queued restart without restarting the gateway. Saved changes apply at the next gateway restart." />
                                             </StackPanel>
 
                                             <!-- The durability rows' reviewed actions (CUST-352): Re-select Codex, Clear the stuck pending write, Put back, Switch to fail open. -->
@@ -594,21 +597,21 @@
                                        Margin="0,0,8,8"
                                        Icon="{ctl:DcSymbolIcon BookDatabase24}"
                                        Command="{Binding OpenInventoryCommand}"
-                                       ToolTip="Open the Inventory panel. Nothing is scanned."
-                                       AutomationProperties.HelpText="Opens the Inventory panel. Nothing is scanned." />
+                                       ToolTip="Open the Inventory panel."
+                                       AutomationProperties.HelpText="Opens the Inventory panel." />
                             <ui:Button Content="{Binding GatewayActionLabel}"
                                        Margin="0,0,8,8"
                                        Icon="{ctl:DcSymbolIcon ArrowClockwise24}"
                                        Command="{Binding RunGatewayActionCommand}"
                                        ToolTip="{Binding GatewayActionTip}"
                                        ToolTipService.ShowOnDisabled="True"
-                                       AutomationProperties.HelpText="Starts or restarts the DefenseClaw gateway after you confirm the exact command." />
+                                       AutomationProperties.HelpText="Starts or restarts the gateway after you confirm the command." />
                             <ui:Button Content="Run Doctor"
                                        Margin="0,0,8,8"
                                        Icon="{ctl:DcSymbolIcon Stethoscope24}"
                                        Command="{Binding RunDoctorCommand}"
-                                       ToolTip="Runs 'defenseclaw doctor': read-only probes of every configured service, usually 10-30 seconds."
-                                       AutomationProperties.HelpText="Runs defenseclaw doctor. Read-only probes of every configured service, usually 10 to 30 seconds; it writes only its own results cache." />
+                                       ToolTip="Runs 'defenseclaw doctor': read-only probes, usually 10-30 seconds."
+                                       AutomationProperties.HelpText="Runs defenseclaw doctor: read-only probes, usually 10 to 30 seconds. It writes only its results cache." />
 
                             <!-- The TUI's buttons by text (CUST-274). Each is drawn only while it applies; the review (or, for the keys, the console) comes first. -->
                             <ui:Button Content="Enable AI discovery"
@@ -618,7 +621,7 @@
                                        ToolTip="{Binding EnableAiDiscoveryTip}"
                                        ToolTipService.ShowOnDisabled="True"
                                        Visibility="{Binding ShowEnableAiDiscovery, Converter={StaticResource BoolToVisibility}}"
-                                       AutomationProperties.HelpText="Runs defenseclaw agent discovery enable --yes after you confirm it: AI discovery is off. It turns it on in config.yaml, restarts the gateway and asks for a first scan." />
+                                       AutomationProperties.HelpText="Runs defenseclaw agent discovery enable --yes after you confirm. Turns AI discovery on in config.yaml, restarts the gateway and asks for a first scan." />
                             <ui:Button Content="Scan AI discovery"
                                        Margin="0,0,8,8"
                                        Icon="{ctl:DcSymbolIcon SearchSparkle24}"
@@ -626,7 +629,7 @@
                                        ToolTip="{Binding ScanAiDiscoveryTip}"
                                        ToolTipService.ShowOnDisabled="True"
                                        Visibility="{Binding ShowScanAiDiscovery, Converter={StaticResource BoolToVisibility}}"
-                                       AutomationProperties.HelpText="Runs defenseclaw agent discovery scan after you confirm it. It asks the running gateway for one AI discovery scan now." />
+                                       AutomationProperties.HelpText="Runs defenseclaw agent discovery scan after you confirm: one AI discovery scan now." />
                             <ui:Button Content="Fill missing keys"
                                        Margin="0,0,8,8"
                                        Icon="{ctl:DcSymbolIcon Key24}"
@@ -634,14 +637,14 @@
                                        ToolTip="{Binding FillMissingKeysTip}"
                                        ToolTipService.ShowOnDisabled="True"
                                        Visibility="{Binding ShowFillMissingKeys, Converter={StaticResource BoolToVisibility}}"
-                                       AutomationProperties.HelpText="Opens a console window running defenseclaw keys fill-missing --yes. A required key is not set; you type each value at the hidden prompt there, never in this app." />
+                                       AutomationProperties.HelpText="Opens a console running defenseclaw keys fill-missing --yes. Type each unset key at its hidden prompt there." />
                             <ui:Button Content="{Binding NotificationsLabel}"
                                        Margin="0,0,8,8"
                                        Icon="{ctl:DcSymbolIcon Alert24}"
                                        Command="{Binding ToggleNotificationsCommand}"
                                        ToolTip="{Binding NotificationsTip}"
                                        ToolTipService.ShowOnDisabled="True"
-                                       AutomationProperties.HelpText="Turns DefenseClaw's own desktop notifications for blocked tool calls and pending approvals on or off with defenseclaw setup notifications, after you confirm it. The alerts this app shows from the tray are a separate setting." />
+                                       AutomationProperties.HelpText="Turns the runtime's desktop notifications for blocked tool calls and pending approvals on or off with defenseclaw setup notifications, after you confirm. Tray alerts have a separate setting." />
                             <ui:DropDownButton Content="Diagnostics"
                                                Margin="0,0,8,8"
                                                Icon="{ctl:DcSymbolIcon MoreHorizontal24}"
@@ -700,7 +703,7 @@
                             <TextBlock Style="{StaticResource DcCaption}"
                                        TextWrapping="Wrap"
                                        Margin="0,2,0,0"
-                                       Text="Runs your installed gateway with administrator rights (one Windows prompt per start). Needed only for runtime monitoring's agent-actions plane." />
+                                       Text="Runs your installed gateway with administrator rights, one Windows prompt per start. Needed only for runtime monitoring's agent-actions plane." />
                             <TextBlock Style="{StaticResource DcCaption}"
                                        TextWrapping="Wrap"
                                        Margin="0,2,0,0"
@@ -719,14 +722,14 @@
                                            ToolTip="{Binding AdminGateway.ActionsTip}"
                                            ToolTipService.ShowOnDisabled="True"
                                            Visibility="{Binding AdminGateway.ShowRepair, Converter={StaticResource BoolToVisibility}}"
-                                           AutomationProperties.HelpText="Gives the files in your .defenseclaw folder that the elevated gateway made as Administrators back to your account, after you confirm and approve the Windows prompt." />
+                                           AutomationProperties.HelpText="Returns files in your .defenseclaw folder owned by Administrators to your account, after you confirm and approve the Windows prompt." />
                                 <ui:Button Content="Prepare administrator copy…"
                                            Icon="{ctl:DcSymbolIcon ShieldKeyhole24}"
                                            Command="{Binding AdminGateway.PrepareCopyCommand}"
                                            ToolTip="{Binding AdminGateway.ActionsTip}"
                                            ToolTipService.ShowOnDisabled="True"
                                            Visibility="{Binding AdminGateway.ShowPrepare, Converter={StaticResource BoolToVisibility}}"
-                                           AutomationProperties.HelpText="Installs the helper and a copy of your installed gateway in Program Files, after you confirm and approve the Windows prompt. Starts nothing." />
+                                           AutomationProperties.HelpText="Installs the helper and a copy of your installed gateway in Program Files, after you confirm and approve the Windows prompt." />
                             </WrapPanel>
                         </StackPanel>
 
@@ -765,11 +768,11 @@
                                        Foreground="{DynamicResource DcAccentBrush}"
                                        Padding="6,3,6,3"
                                        Command="{Binding OpenActivityCommand}"
-                                       AutomationProperties.HelpText="Opens the Activity panel, where every command this page ran is recorded with its full output." />
+                                       AutomationProperties.HelpText="Opens Activity, which records every command this page ran with its full output." />
                         </StackPanel>
                         <TextBlock Style="{StaticResource DcCaption}"
                                    Margin="0,4,0,0"
-                                   Text="Scan Skills, AI discovery, notifications and the gateway actions show the exact command and ask first; Fill missing keys opens a console where you type the values. The Diagnostics checks are read-only and run at once; their output is in Activity." />
+                                   Text="Actions that change state show the exact command and ask first. Diagnostics are read-only; output is in Activity." />
                     </StackPanel>
                 </Border>
 
@@ -845,6 +848,9 @@
                                                            FontWeight="Normal"
                                                            TextWrapping="Wrap"
                                                            Tag="{Binding ToneKey}"
+                                                           ToolTip="{Binding Detail}"
+                                                           ToolTipService.IsEnabled="{Binding HasDetail}"
+                                                           AutomationProperties.HelpText="{Binding Detail}"
                                                            Text="{Binding Value}" />
                                             </Grid>
                                         </Border>
@@ -1489,8 +1495,8 @@
                                                Content="Run doctor"
                                                Icon="{ctl:DcSymbolIcon Stethoscope24}"
                                                Command="{Binding RunDoctorCommand}"
-                                               ToolTip="Runs 'defenseclaw doctor': read-only probes of every configured service, usually 10-30 seconds. Writes only its own results cache."
-                                               AutomationProperties.HelpText="Runs defenseclaw doctor. Read-only probes of every configured service, usually 10 to 30 seconds; it writes only its own results cache." />
+                                               ToolTip="Runs 'defenseclaw doctor': read-only probes, usually 10-30 seconds. Writes only its results cache."
+                                               AutomationProperties.HelpText="Runs defenseclaw doctor: read-only probes, usually 10 to 30 seconds. It writes only its results cache." />
                                 </StackPanel>
                             </Grid>
 
@@ -1507,7 +1513,7 @@
                                 <ctl:DcSymbolIcon Style="{StaticResource DcEmptyIcon}" Symbol="ShieldSettings24" />
                                 <TextBlock Style="{StaticResource DcEmptyTitle}" Text="Doctor has not run yet" />
                                 <TextBlock Style="{StaticResource DcEmptyDetail}"
-                                           Text="doctor_cache.json does not exist. Run doctor to check credentials, endpoints and connector wiring; the result is kept here so it does not need re-probing every time you open this page." />
+                                           Text="doctor_cache.json does not exist. Run doctor to check credentials, endpoints and connector wiring." />
                             </StackPanel>
 
                             <!-- Cache exists but could not be read: a different state from never run. -->
@@ -1559,7 +1565,7 @@
 
                                 <TextBlock Style="{StaticResource DcCaption}"
                                            Margin="0,0,0,0"
-                                           Text="Results are as of the last time doctor ran (from this page, a terminal or the TUI); opening this page never re-runs it. They go STALE after 15 minutes."
+                                           Text="These results are older than 15 minutes (STALE). Run doctor to refresh them."
                                            Visibility="{Binding DoctorIsStale, Converter={StaticResource BoolToVisibility}}" />
 
                                 <StackPanel Margin="0,12,0,0"
@@ -1677,7 +1683,7 @@
                                            Appearance="Secondary"
                                            Margin="0,6,0,0"
                                            Command="{Binding OpenRuntimeMonitoringCommand}"
-                                           AutomationProperties.HelpText="Opens the Setup page's Runtime monitoring card: the state of each plane, what it needs, and the switches. Nothing is changed by opening it." />
+                                           AutomationProperties.HelpText="Opens the Setup page's Runtime monitoring card: the state of each plane, what it needs, and the switches." />
                             </StackPanel>
                         </StackPanel>
                     </Border>

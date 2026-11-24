@@ -246,7 +246,7 @@ public sealed class AttentionRowTests : IDisposable
         Assert.Equal("claudecode: settings.json overrides the hook fail mode", row.Title);
         Assert.Equal("Critical", row.SeverityKey);
         Assert.Equal(drift.RemediationCommand, row.Command);
-        Assert.Contains("blocks the agent it is only meant to watch", row.Detail, StringComparison.Ordinal);
+        Assert.Contains("still blocks the agent", row.Detail, StringComparison.Ordinal);
         Assert.DoesNotContain(drift.RemediationCommand, row.ToString(), StringComparison.Ordinal);
         Assert.DoesNotContain("ReadAllText", row.ToString(), StringComparison.Ordinal);
     }

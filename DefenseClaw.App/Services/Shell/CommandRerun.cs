@@ -120,24 +120,24 @@ internal sealed class CommandRerun
 
         if (invocation.UsedStdinSecret || invocation.UsedPromptSecret || invocation.EnvironmentNames.Count > 0)
         {
-            return RerunAvailability.No("A secret was supplied to this run and the app never keeps it, so it cannot be run again from here.");
+            return RerunAvailability.No("A secret was supplied and is not kept, so this cannot be run again from here.");
         }
 
         if (invocation.Argv.Count == 0)
         {
             return RerunAvailability.No(string.Equals(tool, GatewayControl.Executable, StringComparison.Ordinal)
-                ? "A bare defenseclaw-gateway starts a second gateway daemon, so it is never run from here."
+                ? "A bare defenseclaw-gateway starts a second gateway daemon, so it is not run from here."
                 : "There is no command to run again.");
         }
 
         if (invocation.FailureReason is { } reason && reason.StartsWith(CliRunner.RefusedPrefix, StringComparison.Ordinal))
         {
-            return RerunAvailability.No("This was refused before it started. Ask again from the panel it came from, once its list is current.");
+            return RerunAvailability.No("Refused before it started. Ask again from the panel it came from.");
         }
 
         if (invocation is { IsRunning: false, ExitCode: null, FailureReason: null })
         {
-            return RerunAvailability.No("This was handed to a terminal and never ran here.");
+            return RerunAvailability.No("It was handed to a terminal and did not run here.");
         }
 
         // A read-only installation: nothing about the entry (running or not) can make this runnable, so it is the one thing said.
@@ -232,7 +232,7 @@ internal sealed class CommandRerun
                 ? GatewayVerbs.SummaryOf(argv)
                 : LocalStackReview.Summary(argv);
 
-        var again = $"This runs the same command again, exactly as it ran at {invocation.StartedAt.ToLocalTime().ToString("MMM d HH:mm:ss", CultureInfo.CurrentCulture)} ({Outcome(invocation)}).";
+        var again = $"This runs the same command again. Last run: {invocation.StartedAt.ToLocalTime().ToString("MMM d HH:mm:ss", CultureInfo.CurrentCulture)} ({Outcome(invocation)}).";
         return what.Length == 0 ? again : what + " " + again;
     }
 
@@ -353,7 +353,7 @@ internal sealed class CommandRerun
 
     /// <summary>The sentence for a re-run that did not start because the installation is read-only: nothing ran, nothing changed.</summary>
     private static string NotRun(string? installationReason) =>
-        $"Not run. {installationReason ?? "This installation is read only."} Nothing was changed; the refusal is in the Activity list.";
+        $"Not run. {installationReason ?? "This installation is read only."} Nothing was changed. The refusal is in Activity.";
 
     private async Task RefreshGatewayStatusAsync()
     {
@@ -383,6 +383,6 @@ internal sealed class CommandRerun
         var how = again.ExitCode == 0 ? "finished (exit 0)" : again.ExitCode is { } code
             ? $"exited with code {code.ToString(CultureInfo.InvariantCulture)}"
             : (again.FailureReason ?? "did not finish");
-        return $"Ran {command} again: {how}. The new entry is at the top of the Activity list.";
+        return $"Ran {command} again: {how}. The new entry is at the top of Activity.";
     }
 }

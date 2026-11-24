@@ -29,26 +29,26 @@ internal static class GatewayVerbs
     {
         new(
             new[] { "watchdog", "start" },
-            "Starts the health watchdog as a background daemon. It polls the gateway's /health endpoint and sends desktop notifications when the sidecar is unreachable or degraded."),
+            "Starts the health watchdog as a background daemon. It polls the gateway's /health and sends desktop notifications when the sidecar is unreachable or degraded."),
         new(
             new[] { "watchdog", "stop" },
-            "Stops the running watchdog daemon. The gateway keeps running, but nothing watches its health or sends a notification when it goes down."),
+            "Stops the running watchdog daemon. The gateway keeps running, but nothing watches its health."),
         new(
             new[] { "watchdog", "status" },
             "Shows whether the watchdog daemon is running."),
         new(
             new[] { "connector", "verify" },
-            "Checks that the connector left no residual state behind (hooks, env files, config patches, shims). Exit code 1 means residual state was found, 2 that the connector is unknown."),
+            "Checks that the connector left no residual state (hooks, env files, config patches, shims). Exit code 1 means residual state was found, 2 an unknown connector."),
         new(
             new[] { "connector", "list-backups" },
-            "Lists the pristine connector backups under the data directory: the rollback points connector teardown restores from."),
+            "Lists the pristine connector backups that teardown restores from."),
         new(
             new[] { "connector", "teardown" },
             "Tears down the active connector: restores the agent framework's config from its pristine backup, removes the hook scripts the connector wrote into the DefenseClaw folder and clears the environment shims it installed. " +
-            "The connector is marked inactive first. It does not touch the gateway's own service, its token or the audit database."),
+            "It does not touch the gateway's own service, its token or the audit database."),
         new(
             new[] { "policy", "reload" },
-            "Tells the running gateway to reload its OPA policies. The gateway has to be running.",
+            "Tells the running gateway to reload its OPA policies. The gateway must be running.",
             NeedsRunningGateway: true),
         new(
             new[] { "policy", "domains" },

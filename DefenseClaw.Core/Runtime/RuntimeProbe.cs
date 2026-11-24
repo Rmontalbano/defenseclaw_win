@@ -310,7 +310,7 @@ public static class RuntimeProbe
                 !text.Contains("windows", StringComparison.OrdinalIgnoreCase) &&
                 text.Contains("Linux", StringComparison.Ordinal))
             {
-                notes.Add("Sandboxes: the runtime's help says they run on Linux and macOS only, so they may not work on this PC.");
+                notes.Add("Sandboxes run on Linux and macOS only and may not work on this PC.");
             }
         }
 
@@ -489,7 +489,7 @@ public static class RuntimeProbe
     {
         if (screen is null)
         {
-            notes.Add($"'{label}' could not be read, so what depends on it is treated as unavailable.");
+            notes.Add($"'{label}' could not be read. What depends on it is unavailable.");
         }
     }
 }

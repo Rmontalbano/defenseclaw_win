@@ -113,7 +113,7 @@ public sealed class CommandReviewHazardTests : IDisposable
             },
         };
 
-        Assert.StartsWith("The DefenseClaw CLI expands", review.Warnings.Single().Message, StringComparison.Ordinal);
+        Assert.StartsWith("The CLI expands", review.Warnings.Single().Message, StringComparison.Ordinal);
         Assert.Contains("Step 2: “%" + Variable + "%” would arrive as “elsewhere”", review.Warnings.Single().Message, StringComparison.Ordinal);
     }
 
@@ -150,7 +150,7 @@ public sealed class CommandReviewHazardTests : IDisposable
         Assert.NotEqual(CommandTier.ReadOnly, review.Tier);
         var warning = Assert.Single(review.Warnings);
         Assert.Equal(CommandReviewWarning.SecretOutputTitle, warning.Title);
-        Assert.Contains("Activity panel", warning.Message, StringComparison.Ordinal);
+        Assert.Contains("Activity", warning.Message, StringComparison.Ordinal);
     }
 
     [Fact]

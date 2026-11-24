@@ -99,8 +99,8 @@ internal static partial class ShellCommandRegistry
             Title: "Toggle light/dark",
             Category: AppCategory,
             Description: appearance.IsDark
-                ? "Switch to the light look (fixed, no longer following Windows)."
-                : "Switch to the dark look (fixed, no longer following Windows).",
+                ? "Switch to light. Stops following Windows."
+                : "Switch to dark. Stops following Windows.",
             Shortcut: ShellShortcuts.ToggleThemeText,
             Keywords: "theme dark light night day mode switch flip",
             IsEnabled: true,
@@ -111,7 +111,7 @@ internal static partial class ShellCommandRegistry
             Id: "appearance.system",
             Title: "Mode: follow system",
             Category: AppCategory,
-            Description: "Follow Windows' light or dark setting, and switch when it does.",
+            Description: "Follow the Windows light or dark setting.",
             Shortcut: null,
             Keywords: "theme dark light auto automatic windows os mode",
             IsEnabled: appearance.Mode != AppearanceMode.System,
@@ -164,7 +164,7 @@ internal static partial class ShellCommandRegistry
             Id: "app.refresh-gateway",
             Title: "Refresh gateway status",
             Category: AppCategory,
-            Description: "Poll the gateway now instead of waiting for the next automatic check.",
+            Description: "Poll the gateway now.",
             Shortcut: null,
             Keywords: "poll health reload status strip",
             IsEnabled: true,
@@ -186,7 +186,7 @@ internal static partial class ShellCommandRegistry
             Id: "app.run-doctor",
             Title: "Run health check",
             Category: MonitorCategory,
-            Description: "Open the Overview's Doctor card on its Run doctor button. Nothing runs until you press it.",
+            Description: "Open the Overview's Doctor card. Nothing runs until you press Run doctor.",
             Shortcut: ShellShortcuts.HealthCheckText,
             Keywords: "doctor run doctor health check diagnose probe fix problems keys credentials",
             IsEnabled: true,
@@ -197,7 +197,7 @@ internal static partial class ShellCommandRegistry
             Id: "app.scan-ai",
             Title: "Scan AI components",
             Category: MonitorCategory,
-            Description: "Open AI Discovery on its scan review. The scan runs only after you confirm it.",
+            Description: "Open the AI Discovery scan review. Nothing scans until you confirm.",
             Shortcut: ShellShortcuts.ScanAiText,
             Keywords: "ai discovery scan components agents inventory find",
             IsEnabled: actions.Installation.IsMutable,
@@ -212,7 +212,7 @@ internal static partial class ShellCommandRegistry
             Id: "app.diagnose",
             Title: "Diagnose in background",
             Category: MonitorCategory,
-            Description: "Run the read-only doctor without leaving this panel and toast the result. Changes nothing.",
+            Description: "Run the read-only doctor here and show the result as a notification.",
             Shortcut: ShellShortcuts.DiagnoseText,
             Keywords: "doctor health check background diagnostics probe problems",
             IsEnabled: canDiagnose,
@@ -274,7 +274,7 @@ internal static partial class ShellCommandRegistry
             Id: "app.check-updates",
             Title: "Check for updates",
             Category: AppCategory,
-            Description: "Look for a newer DefenseClaw release now and open the Updates window to review it.",
+            Description: "Check for a newer DefenseClaw release and open the Updates window.",
             Shortcut: null,
             Keywords: "update upgrade version release new banner available",
             IsEnabled: true,
@@ -299,7 +299,7 @@ internal static partial class ShellCommandRegistry
             Id: "app.reset-seen-alerts",
             Title: "Reset seen-alert history",
             Category: AppCategory,
-            Description: "Announce the CRITICAL and HIGH findings that are still unacknowledged once more, as one notification.",
+            Description: "Announce unacknowledged CRITICAL and HIGH findings again, as one notification.",
             Shortcut: null,
             Keywords: "notifications toast alerts seen announced forget repeat high-water mark findings",
             IsEnabled: true,
@@ -313,8 +313,8 @@ internal static partial class ShellCommandRegistry
                 Title: "Cycle connector scope",
                 Category: AppCategory,
                 Description: connectorScope.Current is { } scoped
-                    ? $"Every list is narrowed to {scoped}; step to the next connector, then back to all."
-                    : "Narrow every list to the first connector; again for the next, then back to all.",
+                    ? $"Every list is narrowed to {scoped}. Step to the next connector, then back to all."
+                    : "Narrow every list to the first connector. Again for the next, then back to all.",
                 Shortcut: ShellShortcuts.CycleConnectorText,
                 Keywords: "connector scope filter agent claudecode codex all narrow",
                 IsEnabled: connectorScope.CanScope,
@@ -353,8 +353,8 @@ internal static partial class ShellCommandRegistry
             Title: "Open Agent360",
             Category: MonitorCategory,
             Description: connectorScope?.Current is { } scopedConnector
-                ? $"Opens the Agent360 Grafana dashboard for {scopedConnector} in your default browser."
-                : "Opens the Agent360 Grafana dashboard of the local observability stack in your default browser.",
+                ? $"Opens the Agent360 Grafana dashboard for {scopedConnector} in your browser."
+                : "Opens the Agent360 Grafana dashboard of the local observability stack in your browser.",
             Shortcut: null,
             Keywords: "agent360 agent 360 grafana dashboard local observability otel stack drill-down",
             IsEnabled: agent360.IsAvailable,

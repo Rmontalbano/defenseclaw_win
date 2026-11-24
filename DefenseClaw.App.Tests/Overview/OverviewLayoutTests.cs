@@ -559,7 +559,7 @@ public sealed class OverviewLayoutTests
         UiThread.Run(() =>
         {
             scene.ViewModel.RuntimeMonitoringText = "Runtime monitoring: on · example plane running";
-            scene.ViewModel.RuntimeMonitoringDegradedText = "The gateway reports runtime monitoring degraded: example reason.";
+            scene.ViewModel.RuntimeMonitoringDegradedText = "Runtime monitoring degraded: example reason.";
             scene.Host.Relayout();
 
             foreach (var path in new[] { "RuntimeMonitoringText", "RuntimeMonitoringDegradedText" })

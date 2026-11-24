@@ -127,7 +127,7 @@ public sealed class RuntimeHealthSignalsTests : IDisposable
         Assert.False(row.HasCommand);
 
         var tile = Assert.Single(vm.ServiceRows, static r => r.Name == "Watchdog");
-        Assert.Contains("2 skill dirs, 1 plugin dirs", tile.Detail, StringComparison.Ordinal);
+        Assert.Contains("2 skill dirs, 1 plugin dir", tile.Detail, StringComparison.Ordinal);
         Assert.Contains("admission scanning is off for one or more connector roots", tile.Detail, StringComparison.Ordinal);
     }
 
@@ -156,7 +156,7 @@ public sealed class RuntimeHealthSignalsTests : IDisposable
         vm.Apply(Snapshot(new { state = "degraded", last_error = "something else", details = new { skill_dirs = 2, plugin_dirs = 1 } }));
 
         Assert.DoesNotContain(vm.Attention, IsAdmissionRow);
-        Assert.Equal("2 skill dirs, 1 plugin dirs", Assert.Single(vm.ServiceRows, static r => r.Name == "Watchdog").Detail);
+        Assert.Equal("2 skill dirs, 1 plugin dir", Assert.Single(vm.ServiceRows, static r => r.Name == "Watchdog").Detail);
 
         vm.Apply(Snapshot(new { state = "running", details = new { watch_roots_unavailable = 0, skill_dirs = 2 } }));
         Assert.DoesNotContain(vm.Attention, IsAdmissionRow);
@@ -187,7 +187,7 @@ public sealed class RuntimeHealthSignalsTests : IDisposable
 
         var row = Assert.Single(vm.Attention, IsSkipRow);
         Assert.Equal(@"icacls C:\Users\operator\.claude\plugins /inheritance:r", row.Command);
-        Assert.Contains("The command below is the gateway's repair; the app never runs it.", row.Detail, StringComparison.Ordinal);
+        Assert.Contains("The command below is the gateway's repair.", row.Detail, StringComparison.Ordinal);
         Assert.DoesNotContain("then run the command below", row.Detail, StringComparison.Ordinal);
         Assert.Contains("Read gateway.log for the cause.", row.Detail, StringComparison.Ordinal);
         _ = Assert.Single(System.Text.RegularExpressions.Regex.Matches(row.Detail, "the command below", System.Text.RegularExpressions.RegexOptions.IgnoreCase));
@@ -205,7 +205,7 @@ public sealed class RuntimeHealthSignalsTests : IDisposable
         var row = Assert.Single(vm.Attention, IsSkipRow);
         Assert.Contains(OverviewPanelViewModel.RepairTooLongText, row.Detail, StringComparison.Ordinal);
         Assert.Contains("defenseclaw setup claudecode", row.Command, StringComparison.Ordinal);
-        Assert.Contains("then run the command below. The app never runs it.", row.Detail, StringComparison.Ordinal);
+        Assert.Contains("then run the command below.", row.Detail, StringComparison.Ordinal);
         Assert.DoesNotContain("gateway's repair", row.Detail, StringComparison.Ordinal);
 
         vm.Apply(Snapshot(guardrailDetails: Skipped(new { fix = new string('a', ConnectorStartHealth.MaxRepairLength + 1) })));
@@ -252,7 +252,7 @@ public sealed class RuntimeHealthSignalsTests : IDisposable
         Assert.Equal("defenseclaw setup claudecode", row.Command);
         Assert.DoesNotContain("Fix:", row.Detail, StringComparison.Ordinal);
         Assert.DoesNotContain("By hand", row.Detail, StringComparison.Ordinal);
-        Assert.Contains("Read gateway.log for the cause, then run the command below. The app never runs it.", row.Detail, StringComparison.Ordinal);
+        Assert.Contains("Read gateway.log for the cause, then run the command below.", row.Detail, StringComparison.Ordinal);
     }
 
     // ------------------------------------------------------------------ hook launcher doctor rows
@@ -286,7 +286,7 @@ public sealed class RuntimeHealthSignalsTests : IDisposable
         var row = Assert.Single(vm.Attention, IsLauncherRow);
         Assert.Equal("Codex: the DefenseClaw hook launcher is not the installed copy", row.Title);
         Assert.Equal("High", row.SeverityKey);
-        Assert.Contains("Run the DefenseClaw installer again the way you installed it; setup cannot recreate the launcher.", row.Detail, StringComparison.Ordinal);
+        Assert.Contains("Run the DefenseClaw installer again the way you installed it. Setup cannot recreate the launcher.", row.Detail, StringComparison.Ordinal);
         Assert.Contains("(doctor ran 4m ago)", row.Detail, StringComparison.Ordinal);
         Assert.False(row.HasActions);
         Assert.False(row.HasCommand);
@@ -397,8 +397,8 @@ public sealed class RuntimeHealthSignalsTests : IDisposable
 
         var text = vm.RuntimeMonitoringDegradedText;
         Assert.Contains("40 events were dropped", text, StringComparison.Ordinal);
-        Assert.EndsWith(" The dropped-events count stays until the gateway restarts.", text, StringComparison.Ordinal);
-        Assert.DoesNotContain("nothing needs to change", text, StringComparison.Ordinal);
+        Assert.EndsWith(" The dropped-events count resets when the gateway restarts.", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("No action needed", text, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -408,12 +408,12 @@ public sealed class RuntimeHealthSignalsTests : IDisposable
 
         vm.Apply(Snapshot(aiRuntime: AiRuntimeBlock(OwnSockets, DropReason)));
 
-        Assert.Contains("stays until the gateway restarts", vm.RuntimeMonitoringDegradedText, StringComparison.Ordinal);
-        Assert.DoesNotContain("nothing needs to change", vm.RuntimeMonitoringDegradedText, StringComparison.Ordinal);
+        Assert.Contains("resets when the gateway restarts", vm.RuntimeMonitoringDegradedText, StringComparison.Ordinal);
+        Assert.DoesNotContain("No action needed", vm.RuntimeMonitoringDegradedText, StringComparison.Ordinal);
 
         vm.Apply(Snapshot(aiRuntime: AiRuntimeBlock(OwnSockets, OwnSockets)));
-        Assert.Contains("nothing needs to change", vm.RuntimeMonitoringDegradedText, StringComparison.Ordinal);
-        Assert.DoesNotContain("stays until", vm.RuntimeMonitoringDegradedText, StringComparison.Ordinal);
+        Assert.Contains("No action needed", vm.RuntimeMonitoringDegradedText, StringComparison.Ordinal);
+        Assert.DoesNotContain("resets when", vm.RuntimeMonitoringDegradedText, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -421,11 +421,11 @@ public sealed class RuntimeHealthSignalsTests : IDisposable
     {
         var vm = await PanelAsync("1.0.9");
         vm.Apply(Snapshot(aiRuntime: AiRuntimeBlock("process table unreadable: access denied")));
-        Assert.Equal("The gateway reports runtime monitoring degraded: process table unreadable: access denied.", vm.RuntimeMonitoringDegradedText);
+        Assert.Equal("Runtime monitoring degraded: process table unreadable: access denied.", vm.RuntimeMonitoringDegradedText);
 
         var older = await PanelAsync("1.0.8");
         older.Apply(Snapshot(aiRuntime: AiRuntimeBlock(DropReason)));
-        Assert.Equal("The gateway reports runtime monitoring degraded: " + DropReason + ".", older.RuntimeMonitoringDegradedText);
+        Assert.Equal("Runtime monitoring degraded: " + DropReason + ".", older.RuntimeMonitoringDegradedText);
     }
 
     // ------------------------------------------------------------------ the owner's machine
@@ -441,7 +441,7 @@ public sealed class RuntimeHealthSignalsTests : IDisposable
         Assert.DoesNotContain(vm.Attention, IsLauncherRow);
         Assert.DoesNotContain(vm.Attention, IsSkipRow);
         Assert.DoesNotContain(vm.Attention, IsFallbackRow);
-        Assert.Equal("2 skill dirs, 1 plugin dirs", Assert.Single(vm.ServiceRows, static r => r.Name == "Watchdog").Detail);
-        Assert.DoesNotContain("stays until", vm.RuntimeMonitoringDegradedText, StringComparison.Ordinal);
+        Assert.Equal("2 skill dirs, 1 plugin dir", Assert.Single(vm.ServiceRows, static r => r.Name == "Watchdog").Detail);
+        Assert.DoesNotContain("resets when", vm.RuntimeMonitoringDegradedText, StringComparison.Ordinal);
     }
 }

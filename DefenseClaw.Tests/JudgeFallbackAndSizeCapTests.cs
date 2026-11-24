@@ -66,7 +66,7 @@ public sealed class JudgeFallbackAndSizeCapTests
         Assert.Equal(["claudecode", "codex"], read.ByConnector.Select(static pair => pair.Key));
         Assert.Equal("timeout (codex)", read.Last);
         Assert.Equal(
-            "the rules decided 12 hook check(s) because the judge gave no verdict in time (claudecode 3, codex 9); last: timeout (codex)",
+            "the judge gave no verdict in time (claudecode 3, codex 9); last: timeout (codex)",
             read.Summary);
     }
 
@@ -75,7 +75,7 @@ public sealed class JudgeFallbackAndSizeCapTests
     {
         var read = JudgeFallbackHealth.From(Block("{\"judge_fallbacks\":1}"));
 
-        Assert.Equal("the rules decided 1 hook check(s) because the judge gave no verdict in time", read!.Summary);
+        Assert.Equal("the judge gave no verdict in time", read!.Summary);
         Assert.Empty(read.ByConnector);
     }
 

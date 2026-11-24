@@ -72,11 +72,9 @@ internal static class GatewayControl
     {
         GatewayAction.Start => "This starts the DefenseClaw gateway as a background daemon.",
         GatewayAction.Stop =>
-            "This stops the DefenseClaw gateway. It stays stopped until it is started again, and hooks " +
-            "that call it follow the configured fail mode while it is down.",
+            "This stops the DefenseClaw gateway until it is started again. Hooks follow the configured fail mode meanwhile.",
         _ =>
-            "This restarts the DefenseClaw gateway. Hooks that call it follow the configured fail mode " +
-            "for the moment it is down.",
+            "This restarts the DefenseClaw gateway. Hooks follow the configured fail mode meanwhile.",
     };
 
     /// <summary>The past-tense result line for a toast.</summary>

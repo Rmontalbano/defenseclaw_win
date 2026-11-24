@@ -143,7 +143,7 @@ public sealed class AttentionParityTests : IDisposable
         Assert.Contains("0 hook events after 1h 30m", codex.Detail, StringComparison.Ordinal);
         Assert.Contains("~/.codex hooks", codex.Detail, StringComparison.Ordinal);
         Assert.Equal("Info", codex.SeverityKey);
-        Assert.Contains("Verify the connector's hook setup", Row(vm, "Cursor: no requests yet").Detail, StringComparison.Ordinal);
+        Assert.Contains("verify the connector's hook setup", Row(vm, "Cursor: no requests yet").Detail, StringComparison.Ordinal);
         NoRow(vm, "Claude Code: no requests yet");
         NoRow(vm, "ZeptoClaw");
     }
@@ -151,7 +151,7 @@ public sealed class AttentionParityTests : IDisposable
     [Theory]
     [InlineData("claudecode", 90, "0 hook events after 1m. Normal until Claude Code")]
     [InlineData("omnigent", 7200, "0 policy events after 2h 0m. Normal until OmniGent")]
-    [InlineData("openclaw", 45, "0 requests after 45s. Verify your agent is dialing the gateway port")]
+    [InlineData("openclaw", 45, "0 requests after 45s. Verify your agent uses the gateway port")]
     public void The_notice_wording_follows_the_connector_and_formats_the_uptime(string connector, int seconds, string expected)
     {
         Assert.Contains(expected, OverviewPanelViewModel.ZeroRequestsNotice(connector, TimeSpan.FromSeconds(seconds)), StringComparison.Ordinal);

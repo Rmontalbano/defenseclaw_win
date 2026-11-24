@@ -96,7 +96,7 @@ public sealed class CoworkOverviewTests : IDisposable
         Assert.NotNull(row);
         Assert.Equal("Ok", row.ToneKey);
         Assert.StartsWith("protected, observe mode: records only (plugin 1.0.20261101120000)", row.Value, StringComparison.Ordinal);
-        Assert.Contains("uses the Claude Code connector's mode and fail mode", row.Value, StringComparison.Ordinal);
+        Assert.Contains("uses Claude Code's mode and fail mode", row.Value, StringComparison.Ordinal);
         Assert.DoesNotContain("Next:", row.Value, StringComparison.Ordinal);
         Assert.Empty(CoworkAttention(vm));
     }
@@ -343,7 +343,7 @@ public sealed class CoworkOverviewTests : IDisposable
         vm.Apply(Snapshot(HealthWithCowork(ClaudeCodeWithCowork(12))));
 
         var row = Assert.Single(vm.ConnectorRows, static r => r.Name == "claudecode");
-        Assert.Contains("Cowork: 12 calls, last 3m ago (the hook's own label; the Cowork row above is the verdict)", row.Counters, StringComparison.Ordinal);
+        Assert.Contains("Cowork: 12 calls, last 3m ago", row.Counters, StringComparison.Ordinal);
         Assert.StartsWith("40 requests", row.Counters, StringComparison.Ordinal);
     }
 
@@ -381,7 +381,7 @@ public sealed class CoworkOverviewTests : IDisposable
         var row = CoworkRow(vm);
         Assert.NotNull(row);
         Assert.Equal("Warn", row.ToneKey);
-        Assert.Contains("last Cowork call seen live 3m ago", row.Value, StringComparison.Ordinal);
+        Assert.Contains("last Cowork call 3m ago", row.Value, StringComparison.Ordinal);
         _ = Assert.Single(CoworkAttention(vm));
     }
 

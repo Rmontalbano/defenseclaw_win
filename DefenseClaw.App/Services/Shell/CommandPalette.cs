@@ -111,10 +111,9 @@ internal sealed partial class PaletteItem : ObservableObject
     {
         null => string.Empty,
         { TypesInApp: true } => Form is null
-            ? "Needs the variable's NAME: Run copies the command for you to complete."
-            : "Type the variable's NAME above, then Run. The Setup page opens a masked box for the value, you review the command with the value hidden, and the app " +
-              "types it at the CLI's own prompt - never on a command line. If the app cannot do that here, a console window opens instead.",
-        { NeedsTerminal: true } cli => "Needs a terminal: it asks questions or reads a hidden prompt. Run copies the command for you to paste into one" +
+            ? "Needs the variable's NAME. Run copies the command to complete."
+            : "Type the variable's NAME above, then Run. A masked box takes the value, which goes to the CLI's own prompt, never on a command line. If that is not possible, a console window opens.",
+        { NeedsTerminal: true } cli => "Needs a terminal. Run copies the command to paste into one" +
             (cli.NeedsArguments ? $", then add {string.Join(", ", cli.RequiredArguments)}." : "."),
         { NeedsArguments: true } cli when Form is null => $"Needs {string.Join(", ", cli.RequiredArguments)}: Run copies the command for you to complete.",
         { NeedsArguments: true } => "Type the value above, then Run. You review the exact command before it runs.",

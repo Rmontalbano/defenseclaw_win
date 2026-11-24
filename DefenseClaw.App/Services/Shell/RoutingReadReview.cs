@@ -11,13 +11,12 @@ internal static class RoutingReadReview
 {
     /// <summary>The sentence for the seven routing commands that only read.</summary>
     public const string ReadNote =
-        " It only reads routing settings and the gateway's routing state; it changes nothing. It is not on DefenseClaw for Windows' list of commands known to be read-only, so it is reviewed first.";
+        " It only reads routing settings and routing state and changes nothing. It is not on the app's list of read-only commands, so it is reviewed first.";
 
     /// <summary>The sentence for <c>routing test</c>, a dry run.</summary>
     public const string TestNote =
-        " A dry run: the gateway decides where the prompt would go, and may send the prompt to the configured classifier to do so (that can be a hosted model). " +
-        "The model the prompt would be routed to is not called, and nothing is saved. " +
-        "It is not on DefenseClaw for Windows' list of commands known to be read-only, so it is reviewed first.";
+        " A dry run: the gateway may send the prompt to the configured classifier, which can be a hosted model. " +
+        "The routed model is not called and nothing is saved. It is not on the app's list of read-only commands, so it is reviewed first.";
 
     /// <summary>The sentence for <paramref name="argv"/> when it is one of the offered routing commands (options after the words do not matter), else empty.</summary>
     public static string Note(IReadOnlyList<string> argv)

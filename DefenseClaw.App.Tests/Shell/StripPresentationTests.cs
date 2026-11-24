@@ -43,10 +43,10 @@ public sealed class StripPresentationTests
         Assert.Equal("Guardrail: last seen running, monitoring paused", StripPresentation.SubsystemName("Guardrail", "running", paused: true));
 
         var live = StripPresentation.SubsystemDetail("Watchdog", "running", "2 skill dirs, 2 plugin dirs · since Jul 28 12:13", paused: false);
-        Assert.Equal("Watchdog: running. 2 skill dirs, 2 plugin dirs · since Jul 28 12:13. From the gateway's /health, the same reading as the Overview's Services card.", live);
+        Assert.Equal("Watchdog: running. 2 skill dirs, 2 plugin dirs · since Jul 28 12:13. From the gateway's /health, as on the Overview's Services card.", live);
 
         var paused = StripPresentation.SubsystemDetail("Watchdog", "running", string.Empty, paused: true);
-        Assert.Equal("Watchdog: running. Monitoring is paused, so this is the last reading, not the current state.", paused);
+        Assert.Equal("Watchdog: running. Monitoring is paused. This is the last reading.", paused);
     }
 
     [Fact]
@@ -112,7 +112,7 @@ public sealed class StripPresentationTests
     {
         Assert.Contains("has not been read yet", StripPresentation.RedactionDetail("per-route (loading)"), StringComparison.Ordinal);
         Assert.Contains("could not be read", StripPresentation.RedactionDetail("per-route (unavailable)"), StringComparison.Ordinal);
-        Assert.Contains("sends them unredacted (profile none)", StripPresentation.RedactionDetail("per-route · unredacted"), StringComparison.Ordinal);
+        Assert.Contains("sends events unredacted (profile none)", StripPresentation.RedactionDetail("per-route · unredacted"), StringComparison.Ordinal);
 
         var mixed = StripPresentation.RedactionDetail("per-route · none,sensitive");
         Assert.Contains("use: none,sensitive.", mixed, StringComparison.Ordinal);
@@ -124,7 +124,7 @@ public sealed class StripPresentationTests
 
         Assert.All(
             new[] { "per-route (loading)", "per-route (unavailable)", "per-route · unredacted", "per-route · sensitive" },
-            label => Assert.Contains("Observability card", StripPresentation.RedactionDetail(label), StringComparison.Ordinal));
+            label => Assert.Contains("defenseclaw observability plan", StripPresentation.RedactionDetail(label), StringComparison.Ordinal));
     }
 
     [Fact]
@@ -150,13 +150,13 @@ public sealed class StripPresentationTests
     public void The_policy_sentence_says_the_mode_the_enforcement_and_where_it_was_read()
     {
         Assert.Equal(
-            "Policy posture: observe. Enforcement is off: the guardrail observes only. Reported by the gateway (/health, guardrail policy_mode).",
+            "Policy posture: observe. Enforcement is off. The guardrail only observes. Reported by the gateway (/health, guardrail policy_mode).",
             StripPresentation.PolicyDetail("observe", fromGateway: true, enforcing: false));
         Assert.Equal(
             "Policy posture: action. Enforcement is on. Reported by the gateway (/health, guardrail policy_mode).",
             StripPresentation.PolicyDetail("action", fromGateway: true, enforcing: true));
         Assert.Equal(
-            "Policy posture: observe. From config.yaml: the gateway did not report a mode, so this is what was asked for, not necessarily what is running.",
+            "Policy posture: observe. From config.yaml because the gateway reported no mode. It may differ from what is running.",
             StripPresentation.PolicyDetail("observe", fromGateway: false, enforcing: null));
     }
 
@@ -176,12 +176,12 @@ public sealed class StripPresentationTests
     {
         Assert.Equal("1 command running", StripPresentation.RunningText(1));
         Assert.Equal("4 commands running", StripPresentation.RunningText(4));
-        Assert.Equal("1 command has been running for more than a moment. Its output is in Activity.", StripPresentation.RunningDetail(1));
-        Assert.Equal("4 commands have been running for more than a moment. Their output is in Activity.", StripPresentation.RunningDetail(4));
+        Assert.Equal("1 command is still running. Its output is in Activity.", StripPresentation.RunningDetail(1));
+        Assert.Equal("4 commands are still running. Their output is in Activity.", StripPresentation.RunningDetail(4));
         Assert.Equal(TimeSpan.FromMilliseconds(1500), StripPresentation.RunningGrace);
 
         Assert.Equal(
-            "No gateway poll has finished cleanly for 20 s, more than 3 times the 5 s check interval. What this strip shows may be out of date. Refresh polls the gateway now.",
+            "No gateway poll has finished cleanly for 20 s, over 3 times the 5 s check interval. This strip may be out of date. Refresh polls the gateway now.",
             StripPresentation.StaleDetail(TimeSpan.FromSeconds(20), TimeSpan.FromSeconds(5)));
     }
 }

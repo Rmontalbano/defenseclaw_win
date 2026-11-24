@@ -63,12 +63,12 @@ public sealed partial class OverviewPanelViewModel
             value += " · Next: " + cowork.Step;
         }
 
-        value += " · uses the Claude Code connector's mode and fail mode";
+        value += " · uses Claude Code's mode and fail mode";
 
         // A live label from /health: a note beside the CLI's verdict, never what turns the row green.
         if (LiveCoworkSurface() is { LastActivityAt: { } seen })
         {
-            value += " · last Cowork call seen live " + Relative(seen);
+            value += " · last Cowork call " + Relative(seen);
         }
 
         rows.Add((CoworkRowLabel, value, cowork.Protected ? "Ok" : cowork.IsNotBuilt ? "Neutral" : "Warn"));
@@ -109,7 +109,7 @@ public sealed partial class OverviewPanelViewModel
 
         var calls = surface.Requests.ToString("N0", CultureInfo.CurrentCulture);
         var last = surface.LastActivityAt is { } seen ? ", last " + Relative(seen) : string.Empty;
-        return $" · Cowork: {calls} {(surface.Requests == 1 ? "call" : "calls")}{last} (the hook's own label; the Cowork row above is the verdict)";
+        return $" · Cowork: {calls} {(surface.Requests == 1 ? "call" : "calls")}{last}";
     }
 
     /// <summary>
@@ -137,18 +137,18 @@ public sealed partial class OverviewPanelViewModel
         if (cowork.AwaitsUpload)
         {
             rows.Add(CoworkRow("Cowork is not protected yet: upload the plugin in Claude Desktop", withStep, "Medium", OpenCoworkWizardActionId, "Set up Cowork",
-                "Opens the Cowork wizard: where the plugin zip is, the upload steps in Claude Desktop, and a check of the result.", AttentionActionBlockedReason(OpenCoworkWizardActionId, _snapshot)));
+                "Opens the Cowork wizard: the plugin zip location, the upload steps in Claude Desktop and a result check.", AttentionActionBlockedReason(OpenCoworkWizardActionId, _snapshot)));
         }
         else if (cowork.IsPluginStale)
         {
             // cowork_plugin_stale (1.0.9): the plugin the user did set up uses an older Windows hook command; build it again and upload the new zip.
             rows.Add(CoworkRow("Cowork is not protected: build the plugin again and upload it", withStep, "Medium", OpenCoworkWizardActionId, "Rebuild the Cowork plugin",
-                "Opens the Cowork wizard: the plugin is built again, then the upload steps in Claude Desktop and a check of the result are shown.", AttentionActionBlockedReason(OpenCoworkWizardActionId, _snapshot)));
+                "Opens the Cowork wizard: rebuilds the plugin, then shows the upload steps and a result check.", AttentionActionBlockedReason(OpenCoworkWizardActionId, _snapshot)));
         }
         else if (cowork.IsClaudeCodeOff)
         {
             rows.Add(CoworkRow("Cowork is not protected: Claude Code is off", detail, "Medium", OpenClaudeCodeWizardActionId, "Set up Claude Code",
-                "Opens the Claude Code setup: the Cowork plugin runs the Claude Code connector's hooks.", AttentionActionBlockedReason(OpenClaudeCodeWizardActionId, _snapshot)));
+                "Opens the Claude Code setup. The Cowork plugin runs the Claude Code connector's hooks.", AttentionActionBlockedReason(OpenClaudeCodeWizardActionId, _snapshot)));
         }
         else if (cowork.ReasonCode.Length > 0)
         {

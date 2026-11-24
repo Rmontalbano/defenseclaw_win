@@ -125,7 +125,7 @@ public sealed class OverviewServiceCardsTests
         var guardrail = Card(cards, "guardrail");
         Assert.Equal(("running", "Ok"), (guardrail.StateText, guardrail.StateKey));
         Assert.Equal("observability-only (no proxy binding)", guardrail.Detail);
-        Assert.Equal("observe · observing (enforcement off) · agent_lifecycle_hooks", guardrail.Posture);
+        Assert.Equal("observe, agent_lifecycle_hooks", guardrail.Posture);
 
         var api = Card(cards, "api");
         Assert.Equal(("running", "Ok"), (api.StateText, api.StateKey));
@@ -274,7 +274,7 @@ public sealed class OverviewServiceCardsTests
         var modeOnly = Card(Cards(Health("{\"guardrail\":{\"state\":\"running\",\"details\":{\"mode\":\"observe\"}}}")), "guardrail");
         var bare = Card(Cards(Health("{\"guardrail\":{\"state\":\"running\"}}")), "guardrail");
 
-        Assert.Equal("action · enforcing · proxy", enforcing.Posture);
+        Assert.Equal("action, enforcing, proxy", enforcing.Posture);
         Assert.Equal("observe", modeOnly.Posture);
         Assert.Equal(string.Empty, bare.Posture);
     }
@@ -433,7 +433,7 @@ public sealed class OverviewServiceCardsTests
         var withArray = Card(
             Cards(Connectors(Connector("claudecode", "running", requests: 3707, toolBlocks: 2, subprocessBlocks: 1)), roster: new[] { "claudecode" }),
             "agent");
-        Assert.Equal(("running", "Claude Code - both - 3707 req - 2 tool blocks - 1 subprocess blocks"), (withArray.StateText, withArray.Detail));
+        Assert.Equal(("running", "Claude Code - both - 3707 req - 2 tool blocks - 1 subprocess block"), (withArray.StateText, withArray.Detail));
 
         var primaryOnly = Health("{\"connector\":" + Connector("claudecode", "degraded", requests: 5) + "}");
         var legacy = Card(Cards(primaryOnly, roster: new[] { "claudecode" }), "agent");

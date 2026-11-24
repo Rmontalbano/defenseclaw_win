@@ -395,7 +395,7 @@ public sealed partial class OverviewPanelViewModel : PanelViewModelBase
         var argv = DoctorArgv;
         if (!CommandReview.MayRunUnreviewed(argv))
         {
-            SetDoctorRunMessage("Doctor is not on the list of commands known to be read-only, so it will not run without a review step.");
+            SetDoctorRunMessage("Doctor is not on the read-only list, so it needs a review step.");
             return;
         }
 
@@ -404,7 +404,7 @@ public sealed partial class OverviewPanelViewModel : PanelViewModelBase
         _doctorCts = cts;
 
         IsDoctorRunning = true;
-        SetDoctorRunMessage("Running 'defenseclaw doctor' - it probes every configured service and usually takes 10-30 seconds. The previous results stay visible until it finishes.");
+        SetDoctorRunMessage("Running 'defenseclaw doctor'. This usually takes 10-30 seconds. Previous results stay visible.");
 
         try
         {
@@ -425,7 +425,7 @@ public sealed partial class OverviewPanelViewModel : PanelViewModelBase
                 // Exit 1 means "found failures", which is the tool working, not the tool failing.
                 SetDoctorRunMessage(
                     $"Doctor finished at {finished} (exit {(invocation.ExitCode?.ToString(CultureInfo.CurrentCulture) ?? "?")}). " +
-                    "It reported failures or warnings - see the list below, or Activity for the full output.");
+                    "It reported failures or warnings. See the list below, or Activity for full output.");
             }
         }
         catch (CliNotFoundException ex)
@@ -597,7 +597,7 @@ public sealed partial class OverviewPanelViewModel : PanelViewModelBase
         var shown = problems.Take(MaxDoctorProblemsShown).ToList();
         DoctorHasProblems = shown.Count > 0;
         DoctorProblemsNote = problems.Count > shown.Count
-            ? $"and {problems.Count - shown.Count} more - run 'defenseclaw doctor' in a terminal for the full list."
+            ? $"and {problems.Count - shown.Count} more. Run 'defenseclaw doctor' in a terminal for the full list."
             : string.Empty;
         SyncByEquality(DoctorChecks, shown, static row => row.Label);
     }
@@ -717,8 +717,8 @@ public sealed partial class OverviewPanelViewModel : PanelViewModelBase
                     Title = "A WSL gateway owns the API port",
                     Detail = snapshot.PortOwner is { } owner
                         ? $"Port {snapshot.ApiPort} is held by {owner.ProcessName} (pid {owner.Pid}). Everything shown " +
-                          "describes the WSL instance, not the native install."
-                        : $"Port {snapshot.ApiPort} is relayed from WSL, not served by the native install.",
+                          "is the WSL instance."
+                        : $"Port {snapshot.ApiPort} is relayed from WSL. The native install does not serve it.",
                     SeverityKey = "High",
                 });
                 break;
@@ -824,11 +824,9 @@ public sealed partial class OverviewPanelViewModel : PanelViewModelBase
                 Title = "claudecode: settings.json overrides the hook fail mode",
                 Detail = $"{drift.SettingsPath} sets {ClaudeSettingsReader.FailModeVariableName}={drift.EnvFailMode}, " +
                          $"but {drift.GatewaySource} says hook_fail_mode: {drift.GatewayFailMode}. The hook obeys the " +
-                         "env var, so this is the effective behavior — the Setup installer is known to re-plant " +
-                         "fail-closed on upgrade." +
+                         "env var. The Setup installer re-plants fail-closed on upgrade." +
                          (drift.IsDangerousPairing
-                             ? " With the connector in observe mode, a gateway outage blocks the agent it is only " +
-                               "meant to watch."
+                             ? " In observe mode, a gateway outage still blocks the agent."
                              : string.Empty),
                 SeverityKey = drift.IsDangerousPairing ? "Critical" : "High",
                 Command = drift.RemediationCommand,
@@ -843,7 +841,7 @@ public sealed partial class OverviewPanelViewModel : PanelViewModelBase
             rows.Add(new AttentionRow
             {
                 Title = $"{snapshot.CriticalAlertCount} CRITICAL alert{(snapshot.CriticalAlertCount == 1 ? string.Empty : "s")} in the last poll",
-                Detail = "Open the Alerts panel for the matched rule, evidence and target.",
+                Detail = "See Alerts for the rule, evidence and target.",
                 SeverityKey = "Critical",
             });
         }
@@ -857,7 +855,7 @@ public sealed partial class OverviewPanelViewModel : PanelViewModelBase
             rows.Add(new AttentionRow
             {
                 Title = $"{high} HIGH finding{(high == 1 ? string.Empty : "s")} in the last {GatewayMonitor.AlertLimit} alerts",
-                Detail = "On a development box these are usually the agent's own commands tripping hook rules.",
+                Detail = "See Alerts for the rule and target.",
                 SeverityKey = "High",
             });
         }
@@ -869,7 +867,7 @@ public sealed partial class OverviewPanelViewModel : PanelViewModelBase
             rows.Add(new AttentionRow
             {
                 Title = "The gateway cannot keep its event history",
-                Detail = $"/health reports event_history_failure: {historyFailure}. Events may not be reaching audit.db; the Observability card lists the destinations.",
+                Detail = $"/health reports event_history_failure: {historyFailure}. Events may not be reaching audit.db.",
                 SeverityKey = "High",
             });
         }
@@ -906,8 +904,7 @@ public sealed partial class OverviewPanelViewModel : PanelViewModelBase
                 rows.Add(new AttentionRow
                 {
                     Title = "Nothing needs attention",
-                    Detail = "The gateway is healthy, no CRITICAL alerts in the last poll, no fail-mode mismatch, " +
-                             "and settings.json agrees with the gateway on the hook fail mode.",
+                    Detail = "The gateway is healthy, with no critical alerts and no fail-mode mismatch.",
                     SeverityKey = "Ok",
                 });
             }
@@ -1064,7 +1061,7 @@ public sealed partial class OverviewPanelViewModel : PanelViewModelBase
                 Name = "codeguard",
                 StateText = "built-in",
                 StateKey = "Ok",
-                Detail = "Ships inside the gateway binary; nothing to install.",
+                Detail = "Built into the gateway binary.",
             },
             KeysRow(_doctorSnapshot),
         };
@@ -1241,7 +1238,7 @@ public sealed partial class OverviewPanelViewModel : PanelViewModelBase
                     : string.Empty,
                 HasWarning = mismatch,
                 WarningText = mismatch
-                    ? "observe mode paired with a fail-closed hook — a hook failure blocks the agent it is only meant to watch"
+                    ? "Observe mode with a fail-closed hook: a hook failure blocks the agent."
                     : string.Empty,
             });
         }
@@ -1316,7 +1313,7 @@ public sealed partial class OverviewPanelViewModel : PanelViewModelBase
         if (!Services.Audit.Exists)
         {
             AuditSummary = "No audit database yet";
-            AuditNote = $"{Services.Paths.AuditDatabasePath} has not been created. It appears after the first event.";
+            AuditNote = $"{Services.Paths.AuditDatabasePath} is created after the first event.";
             SyncTiles(SeverityTiles, Array.Empty<CountTile>());
             return;
         }
@@ -1375,7 +1372,7 @@ public sealed partial class OverviewPanelViewModel : PanelViewModelBase
             EnforcementSummary = blockedItems.Count == 0 && allowedItems.Count == 0
                 ? "No explicit block or allow entries"
                 : $"{blockedItems.Count} blocked{Parenthesized(Kinds(blockedItems))} · {allowedItems.Count} allowed{Parenthesized(Kinds(allowedItems))}";
-            EnforcementNote = "Entries come from /enforce/blocked and /enforce/allowed. Changes go through the CLI.";
+            EnforcementNote = "From /enforce/blocked and /enforce/allowed. Change them with the CLI.";
             return;
         }
 
@@ -1444,7 +1441,7 @@ public sealed partial class OverviewPanelViewModel : PanelViewModelBase
 
     private string DescribeUnavailable(GatewayStatus status, string? message) => status switch
     {
-        GatewayStatus.NotConnected => "The enforcement subsystem is not connected on this install — informational, not a fault.",
+        GatewayStatus.NotConnected => "The enforcement subsystem is not connected on this install.",
         GatewayStatus.Unauthorized =>
             $"/enforce needs a bearer token; none was found via {Services.Token.VariableName}.",
         GatewayStatus.Unreachable => "The gateway is not answering, so enforcement lists cannot be read.",
@@ -1481,7 +1478,7 @@ public sealed partial class OverviewPanelViewModel : PanelViewModelBase
             Name = name,
             StateText = path is null ? "not found" : "installed",
             StateKey = path is null ? "Warn" : "Ok",
-            Detail = path ?? "Not on PATH and not in the installer's bin directory.",
+            Detail = path ?? "Not on PATH or in the installer's bin directory.",
         };
 
     /// <summary>
@@ -1569,6 +1566,12 @@ public sealed record AttentionRow
     public required string Title { get; init; }
 
     public string Detail { get; init; } = string.Empty;
+
+    /// <summary>Reference text behind <see cref="Detail"/> that is needed only now and then (the runtime's own rule sentence): the detail's tooltip and help text.</summary>
+    public string Reference { get; init; } = string.Empty;
+
+    /// <summary>True when <see cref="Reference"/> has something to show.</summary>
+    public bool HasReference => Reference.Length > 0;
 
     /// <summary>Critical / High / Medium / Low / Info / Ok — drives the accent colour.</summary>
     public string SeverityKey { get; init; } = "Info";

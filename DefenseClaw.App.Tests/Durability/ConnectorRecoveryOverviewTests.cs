@@ -51,7 +51,7 @@ public sealed class ConnectorRecoveryOverviewTests : IDisposable
     {
         var row = Assert.Single(DurabilityAttention.Rows(Snapshot(AppGatewayState.GatewayStopped), _ => null, Now));
 
-        Assert.Contains("DefenseClaw has no command to recover from this. Clearing it moves the pending files to a quarantine folder (nothing is deleted; you can put them back) while the gateway is stopped.", row.Detail, StringComparison.Ordinal);
+        Assert.Contains("No DefenseClaw command recovers this. Clearing moves the pending files to a quarantine folder and deletes nothing. Do it while the gateway is stopped.", row.Detail, StringComparison.Ordinal);
         var action = Assert.Single(row.Actions.Items);
         Assert.Equal(AttentionActionIds.ClearStuckWrite, action.Id);
         Assert.Equal("Clear the stuck pending write", action.Label);
@@ -67,7 +67,7 @@ public sealed class ConnectorRecoveryOverviewTests : IDisposable
         Assert.Equal(AttentionActionIds.FinishInterruptedChange, action.Id);
         Assert.Equal("Finish the interrupted change", action.Label);
         Assert.True(action.Enabled);
-        Assert.DoesNotContain("DefenseClaw has no command", row.Detail, StringComparison.Ordinal);
+        Assert.DoesNotContain("No DefenseClaw command", row.Detail, StringComparison.Ordinal);
         Assert.DoesNotContain("Clear", row.Detail, StringComparison.Ordinal);
         Assert.Contains("connector recover-config", row.Detail, StringComparison.Ordinal);
         Assert.Contains("unrecognized inode", row.Detail, StringComparison.Ordinal);
@@ -211,6 +211,6 @@ public sealed class ConnectorRecoveryOverviewTests : IDisposable
         Assert.Equal("Clear the stuck pending write", action.Label);
         Assert.False(action.Enabled);
         Assert.Equal("Stop the gateway first: it may be writing these files right now.", action.Tip);
-        Assert.Contains("DefenseClaw has no command to recover from this", row.Detail, StringComparison.Ordinal);
+        Assert.Contains("No DefenseClaw command recovers this", row.Detail, StringComparison.Ordinal);
     }
 }

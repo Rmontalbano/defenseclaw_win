@@ -192,7 +192,7 @@ public sealed partial class OverviewPanelViewModel : IAcceptsNavigation
             rows.Add(new AttentionRow
             {
                 Title = "The gateway is starting",
-                Detail = starting + " Health checks will retry automatically; this clears once it reports running.",
+                Detail = starting + " Health checks retry automatically.",
                 SeverityKey = "Info",
             });
         }
@@ -215,7 +215,7 @@ public sealed partial class OverviewPanelViewModel : IAcceptsNavigation
             rows.Add(new AttentionRow
             {
                 Title = "Connector roster degraded",
-                Detail = rosterProblem + " - showing a reduced view; check your connector config",
+                Detail = rosterProblem.TrimEnd('.') + ". Check your connector config.",
                 SeverityKey = "Critical",
             });
         }
@@ -227,8 +227,7 @@ public sealed partial class OverviewPanelViewModel : IAcceptsNavigation
             rows.Add(new AttentionRow
             {
                 Title = $"Detected but not configured: {names}",
-                Detail = "DefenseClaw found these agents on this machine, but no connector is configured for them. Add from the Connectors card or Setup; " +
-                         "discovery alone never changes enforcement.",
+                Detail = "No connector is configured for these agents. Add one from the Connectors card or Setup.",
                 SeverityKey = "High",
             });
         }
@@ -238,7 +237,7 @@ public sealed partial class OverviewPanelViewModel : IAcceptsNavigation
             rows.Add(new AttentionRow
             {
                 Title = "Guardrail not configured",
-                Detail = "The LLM guardrail is off in config.yaml (guardrail.enabled). Set it up in Setup, under Guardrail.",
+                Detail = "guardrail.enabled is off in config.yaml. Set it up in Setup > Guardrail.",
                 SeverityKey = "High",
             });
         }
@@ -250,8 +249,7 @@ public sealed partial class OverviewPanelViewModel : IAcceptsNavigation
             rows.Add(new AttentionRow
             {
                 Title = "skill-scanner not on PATH",
-                Detail = "The skill scanner is neither on PATH nor in the installer's bin directory, so skill scans cannot run. " +
-                         "Install it with the command below, then press Refresh. The app never runs it for you.",
+                Detail = "Not on PATH or in the installer's bin directory, so skill scans cannot run. Run the command below, then press Refresh.",
                 SeverityKey = "High",
                 Command = InstallSkillScannerCommand,
             });
@@ -262,7 +260,7 @@ public sealed partial class OverviewPanelViewModel : IAcceptsNavigation
             rows.Add(new AttentionRow
             {
                 Title = $"Silent bypass: {_silentBypass.ToString(CultureInfo.CurrentCulture)} allowed LLM-shaped egress in the last 5 min",
-                Detail = "Traffic that looks like an LLM call left this machine without the guardrail's say. Open Alerts and choose the Egress kind to see where it went.",
+                Detail = "LLM-shaped traffic left this machine without a guardrail verdict. See Alerts, kind Egress.",
                 SeverityKey = "High",
             });
         }
@@ -302,7 +300,7 @@ public sealed partial class OverviewPanelViewModel : IAcceptsNavigation
             rows.Add(new AttentionRow
             {
                 Title = $"Doctor cache shows {contradicted.Count.ToString(CultureInfo.CurrentCulture)} stale failure{(contradicted.Count == 1 ? string.Empty : "s")}",
-                Detail = "The live /health disagrees with them: those subsystems are running now. Run doctor to refresh the cache.",
+                Detail = "Live /health shows those subsystems running. Run doctor to refresh the cache.",
                 SeverityKey = "Info",
             });
         }
@@ -322,7 +320,7 @@ public sealed partial class OverviewPanelViewModel : IAcceptsNavigation
             rows.Add(new AttentionRow
             {
                 Title = $"credential {name}",
-                Detail = $"The required key {name} is not set. Doctor found it missing.",
+                Detail = $"Doctor found required key {name} missing.",
                 SeverityKey = "High",
                 Command = FillMissingKeysCommand,
             });
@@ -384,12 +382,12 @@ public sealed partial class OverviewPanelViewModel : IAcceptsNavigation
 
         return connector.Trim().ToLowerInvariant() switch
         {
-            "codex" => $"{name} has seen 0 hook events after {formatted}. Normal until Codex emits a hook or notify event; verify the ~/.codex hooks if this persists.",
-            "claudecode" => $"{name} has seen 0 hook events after {formatted}. Normal until Claude Code emits a hook event; verify the Claude Code hooks if this persists.",
-            "omnigent" => $"{name} has seen 0 policy events after {formatted}. Normal until OmniGent emits a supported policy callback; verify the OmniGent policy setup if this persists.",
+            "codex" => $"{name} has seen 0 hook events after {formatted}. Normal until Codex emits a hook or notify event. If it persists, verify the ~/.codex hooks.",
+            "claudecode" => $"{name} has seen 0 hook events after {formatted}. Normal until Claude Code emits a hook event. If it persists, verify the Claude Code hooks.",
+            "omnigent" => $"{name} has seen 0 policy events after {formatted}. Normal until OmniGent emits a supported policy callback. If it persists, verify the OmniGent policy setup.",
             "hermes" or "cursor" or "devin" or "geminicli" or "copilot" or "openhands" or "antigravity" or "opencode" or "amp" =>
-                $"{name} has seen 0 hook events after {formatted}. Verify the connector's hook setup if this persists.",
-            _ => $"{name} has seen 0 requests after {formatted}. Verify your agent is dialing the gateway port (gateway.port).",
+                $"{name} has seen 0 hook events after {formatted}. If it persists, verify the connector's hook setup.",
+            _ => $"{name} has seen 0 requests after {formatted}. Verify your agent uses the gateway port (gateway.port).",
         };
     }
 

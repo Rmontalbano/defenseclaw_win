@@ -93,7 +93,7 @@ public sealed class OverviewScannersCardTests
         var row = Keys(json);
 
         Assert.DoesNotContain("sk-synthetic", row.ToString(), StringComparison.Ordinal);
-        Assert.Equal("keys. 1 missing. ANTHROPIC_API_KEY: doctor found them unset. Fill missing keys sets them.", row.ToString());
+        Assert.Equal("keys. 1 missing. ANTHROPIC_API_KEY: doctor found them unset. Use Fill missing keys.", row.ToString());
     }
 }
 

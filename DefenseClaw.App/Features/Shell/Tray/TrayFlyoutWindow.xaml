@@ -318,7 +318,7 @@
                         Padding="6,3,6,3"
                         Command="{Binding ReviewAcknowledgeCommand}"
                         AutomationProperties.Name="Review acknowledge"
-                        AutomationProperties.HelpText="Opens Alerts, where unacknowledged findings are reviewed and acknowledged. Nothing is acknowledged from here.">
+                        AutomationProperties.HelpText="Opens Alerts to review and acknowledge findings. Nothing is acknowledged from here.">
                     <TextBlock FontSize="12"
                                FontWeight="SemiBold"
                                Foreground="{DynamicResource DcAccentHoverBrush}"
@@ -402,7 +402,7 @@
                 <ui:Button Grid.Column="3"
                            Style="{StaticResource FooterButton}"
                            AutomationProperties.Name="{Binding PauseAutomationName}"
-                           AutomationProperties.HelpText="Stops or restarts this app's polling of the gateway. The gateway itself keeps running."
+                           AutomationProperties.HelpText="Pauses or resumes polling. The gateway keeps running."
                            Command="{Binding TogglePauseCommand}">
                     <StackPanel Orientation="Horizontal">
                         <ctl:DcSymbolIcon Symbol="{Binding PauseSymbol}"
@@ -417,7 +417,7 @@
                            Style="{StaticResource FooterButton}"
                            Margin="0"
                            Content="Exit"
-                           AutomationProperties.HelpText="Quit DefenseClaw for real. Closing the dashboard only hides it to the tray."
+                           AutomationProperties.HelpText="Quit DefenseClaw. Closing the dashboard only hides it to the tray."
                            Command="{Binding ExitCommand}" />
             </Grid>
 

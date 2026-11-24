@@ -131,7 +131,7 @@ public sealed partial class OverviewPanelViewModel
     }
 
     /// <summary>The setup-failed row's closing words: the box holds <c>defenseclaw setup &lt;name&gt;</c>. When the gateway sends its own repair the box holds that instead, and <see cref="WithRepair"/> replaces this sentence.</summary>
-    internal const string SetupFailedRunSentence = " Read gateway.log for the cause, then run the command below. The app never runs it.";
+    internal const string SetupFailedRunSentence = " Read gateway.log for the cause, then run the command below.";
 
     /// <summary>"Remove connector": the review of <c>setup remove &lt;name&gt; --yes</c>. Only for a connector the last answer says is not installed.</summary>
     private void RemoveSkippedConnector(string name)
@@ -145,8 +145,8 @@ public sealed partial class OverviewPanelViewModel
         var argv = new[] { "setup", "remove", name, "--yes" };
         Review.Open(
             $"Remove the {FriendlyConnectorName(name)} connector?",
-            $"Takes {FriendlyConnectorName(name)} out of DefenseClaw's configured connectors and restarts the gateway so it removes that connector's hooks. " +
-            "The agent itself is not touched. DefenseClaw refuses to remove the last remaining connector.",
+            $"Removes {FriendlyConnectorName(name)} from DefenseClaw's connectors and restarts the gateway to remove its hooks. " +
+            "The agent is not touched. DefenseClaw refuses to remove the last connector.",
             new[]
             {
                 new DiscoverStep(argv, $"Remove the {FriendlyConnectorName(name)} connector from DefenseClaw.", CommandTier.StateChanging, CliRunner.LongRunningTimeout),

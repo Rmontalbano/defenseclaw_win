@@ -76,7 +76,7 @@ public sealed class Agent360PanelTests : IDisposable
 
         Assert.False(vm.CanOpenAgent360);
         Assert.True(vm.HasAgent360Hint);
-        Assert.Contains("Local OTel wizard", vm.Agent360Hint, StringComparison.Ordinal);
+        Assert.Contains("Start the local observability stack from Setup", vm.Agent360Hint, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -135,7 +135,7 @@ public sealed class Agent360PanelTests : IDisposable
 
         Assert.Empty(opened);
         Assert.False(vm.CanOpenAgent360);
-        Assert.Contains("Local OTel wizard", vm.Agent360Hint, StringComparison.Ordinal);
+        Assert.Contains("Start the local observability stack from Setup", vm.Agent360Hint, StringComparison.Ordinal);
     }
 
     // ---- a connector row ----

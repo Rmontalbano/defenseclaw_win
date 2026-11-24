@@ -104,8 +104,8 @@ public sealed partial class OverviewPanelViewModel
 
         Review.Open(
             "Re-select Codex?",
-            $"Runs setup for Codex again so DefenseClaw finds the Codex that is installed now and registers its hooks with it. " +
-            $"The mode is passed explicitly - {mode}, from {source} - because setup without it has switched Codex from observe to action. " +
+            $"Runs Codex setup again so DefenseClaw finds the installed Codex and registers its hooks. " +
+            $"Mode {mode} (from {source}) is passed because setup without it has switched Codex from observe to action. " +
             "Quit Codex first.",
             new[]
             {
@@ -138,9 +138,8 @@ public sealed partial class OverviewPanelViewModel
 
         Review.Open(
             "Clear the stuck pending write?",
-            "Moves the files below out of the way so DefenseClaw can write the config again. They are moved, never deleted: the folder gets a manifest.json " +
-            "with every original path, size and SHA-256, and Put back restores them. Only the pending receipt files of the writes listed, and the staging files " +
-            "beside their target, are moved; finished writes and the config file itself are not touched. Afterwards Re-run Codex setup is offered on the row." +
+            "Moves the pending receipt and staging files below aside so DefenseClaw can write the config again. Nothing is deleted or edited: " +
+            "manifest.json lists each original path and SHA-256, and Put back restores them." +
             (DurabilityAttention.StateSentence(pending) is { Length: > 0 } states ? " " + states : string.Empty),
             new[]
             {
@@ -165,18 +164,16 @@ public sealed partial class OverviewPanelViewModel
         var warnings = new List<CommandReviewWarning>
         {
             new(
-                "A file operation, not a DefenseClaw command",
-                "DefenseClaw has no command that recovers from a stuck pending write, so this app moves the files itself - the same move-aside that was done by hand " +
-                "on 2026-10-15. Nothing here is run by the DefenseClaw CLI. The gateway must be stopped; the move is refused if it is running."),
+                "This app moves the files",
+                "DefenseClaw has no command to recover a stuck pending write. The gateway must be stopped."),
         };
 
         if (CasWriteText.AnyUnverified(pending))
         {
             warnings.Add(new CommandReviewWarning(
                 "Not every pending write could be verified",
-                "The hash check could not tell whether this write finished, never applied or was rewritten since (" + CasWriteText.UnverifiedReasons(pending) + "). " +
-                "Open the target file and the staging files listed below and make sure nothing you need is only in them before you move them aside. " +
-                "The move is still reversible with Put back."));
+                "The hash check could not tell whether this write finished, never applied or was rewritten (" + CasWriteText.UnverifiedReasons(pending) + "). " +
+                "Check the target and staging files listed below for anything you need before moving them; Put back undoes the move."));
         }
 
         return warnings;
@@ -202,8 +199,8 @@ public sealed partial class OverviewPanelViewModel
         var argv = new[] { "put-back", "from", quarantine.Directory };
         Review.Open(
             "Put the moved files back?",
-            $"Moves the {quarantine.Files.ToString(System.Globalization.CultureInfo.CurrentCulture)} file(s) listed in {Path.Combine(quarantine.Directory, CasQuarantine.ManifestName)} " +
-            "back to where they came from, if they are unchanged (SHA-256) and the place is free. That puts the stuck pending write back too.",
+            $"Moves the {quarantine.Files.ToString(System.Globalization.CultureInfo.CurrentCulture)} file{(quarantine.Files == 1 ? string.Empty : "s")} listed in {Path.Combine(quarantine.Directory, CasQuarantine.ManifestName)} " +
+            "back to their original paths if they are unchanged (SHA-256) and the path is free. This restores the stuck pending write.",
             new[]
             {
                 new DiscoverStep(
@@ -216,7 +213,7 @@ public sealed partial class OverviewPanelViewModel
             onFinished: _ => RefreshAfterActionAsync(),
             extraWarnings: new[]
             {
-                new CommandReviewWarning("A file operation, not a DefenseClaw command", "This app moves the files itself. The gateway must be stopped; it is refused if it is running."),
+                new CommandReviewWarning("This app moves the files", "No DefenseClaw command is run. The gateway must be stopped."),
             },
             primaryText: "Put back");
     }
@@ -247,9 +244,8 @@ public sealed partial class OverviewPanelViewModel
         Review.Open(
             "Switch to fail open?",
             running
-                ? "Hooks will let the agent's actions through when they cannot reach the gateway, instead of blocking them."
-                : "Hooks will let the agent's actions through while the gateway is down, instead of blocking them. The gateway is not running: the command writes the " +
-                  "new hook files and does not start it (the CLI never starts a gateway that is stopped).",
+                ? "Hooks let agent actions through when they cannot reach the gateway."
+                : "Hooks let agent actions through while the gateway is down. The command writes the new hook files and does not start the stopped gateway.",
             new[]
             {
                 new DiscoverStep(argv, "Set the hook fail mode to open and regenerate the hooks.", CommandTier.StateChanging, CliRunner.LongRunningTimeout),
@@ -260,10 +256,10 @@ public sealed partial class OverviewPanelViewModel
             {
                 new CommandReviewWarning(
                     "Use guardrail fail-mode",
-                    "defenseclaw config set guardrail.hook_fail_mode does not take effect: it saves the value, but only guardrail fail-mode regenerates the hooks that read it."),
+                    "defenseclaw config set guardrail.hook_fail_mode saves the value but does not change the hooks. Only guardrail fail-mode regenerates them."),
                 new CommandReviewWarning(
-                    "The agent is not blocked, and not inspected",
-                    "While the gateway is down an open hook allows every action without inspecting it. Start the gateway and switch back with guardrail fail-mode closed when you want it enforced."),
+                    "Open hooks do not inspect actions",
+                    "While the gateway is down, an open hook allows every action uninspected. To enforce again, start the gateway and run guardrail fail-mode closed."),
             },
             primaryText: "Switch to fail open");
     }

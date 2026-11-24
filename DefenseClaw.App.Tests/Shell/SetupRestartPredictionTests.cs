@@ -39,7 +39,7 @@ public class SetupRestartPredictionTests
         Assert.Equal(CommandReview.CoworkRestartNotice, notice);
         Assert.StartsWith("This may restart the DefenseClaw gateway", notice, StringComparison.Ordinal);
         Assert.DoesNotContain(CommandReview.RestartSentence, notice, StringComparison.Ordinal);
-        Assert.Contains("Claude Code connector is not set up yet", notice, StringComparison.Ordinal);
+        Assert.Contains("If the Claude Code connector is missing", notice, StringComparison.Ordinal);
         Assert.Contains("nothing restarts", notice, StringComparison.Ordinal);
         Assert.False(CommandReview.RestartsGatewayFor(argv.Append("--no-restart").ToArray()));
     }

@@ -96,7 +96,7 @@ internal static class GatewayPresentation
         }
 
         var newest = snapshot.AlertCount >= GatewayMonitor.AlertLimit
-            ? $"at least {GatewayMonitor.AlertLimit} recent alerts (the gateway returns its newest {GatewayMonitor.AlertLimit})"
+            ? $"at least {GatewayMonitor.AlertLimit} recent alerts"
             : $"{snapshot.AlertCount} recent alert{(snapshot.AlertCount == 1 ? string.Empty : "s")}";
 
         return snapshot.CriticalAlertCount > 0

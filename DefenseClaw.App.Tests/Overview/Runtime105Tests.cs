@@ -138,7 +138,7 @@ public sealed class Runtime105Tests : IDisposable
         Assert.Equal("Info", info.SeverityKey);
         Assert.Equal("OpenHands: 1 leftover from an older setup", info.Title);
         Assert.StartsWith("OpenHands/OmniGent support was removed in 1.0.5", info.Detail, StringComparison.Ordinal);
-        Assert.Contains("none of this blocks your agents", info.Detail, StringComparison.Ordinal);
+        Assert.Contains("None of this blocks your agents", info.Detail, StringComparison.Ordinal);
         Assert.Contains("remove the hook entry from this file", info.Detail, StringComparison.Ordinal);
         Assert.DoesNotContain(vm.Attention, r => r.Title.Contains("was removed;", StringComparison.Ordinal));
 
@@ -162,7 +162,7 @@ public sealed class Runtime105Tests : IDisposable
         Assert.True(vm.LastInstallLock!.IsStale);
         var row = Assert.Single(vm.Attention, r => r.Title == OverviewPanelViewModel.StaleInstallLockTitle);
         Assert.Equal("Medium", row.SeverityKey);
-        Assert.Contains("it does not block your agents", row.Detail, StringComparison.Ordinal);
+        Assert.Contains("It does not block your agents", row.Detail, StringComparison.Ordinal);
         Assert.Contains(path, row.Detail, StringComparison.Ordinal);
         Assert.DoesNotContain(vm.Attention, r => r.Title == OverviewPanelViewModel.InterruptedInstallTitle);
         var action = Assert.Single(row.Actions.Items);
@@ -199,7 +199,7 @@ public sealed class Runtime105Tests : IDisposable
         await vm.RefreshInstallLockAsync(CancellationToken.None);
 
         var row = Assert.Single(vm.Attention, r => r.Title == OverviewPanelViewModel.InterruptedInstallTitle);
-        Assert.Contains("agent hooks are blocking until it's cleared", row.Detail, StringComparison.Ordinal);
+        Assert.Contains("Agent hooks are blocking until the lock is cleared", row.Detail, StringComparison.Ordinal);
         Assert.Equal(OverviewPanelViewModel.OpenInstallerActionId, Assert.Single(row.Actions.Items).Id);
         Assert.DoesNotContain(vm.Attention, r => r.Title == OverviewPanelViewModel.StaleInstallLockTitle);
     }
@@ -217,7 +217,7 @@ public sealed class Runtime105Tests : IDisposable
         Assert.True(vm.LastInstallLock!.IsRecovery);
         var row = Assert.Single(vm.Attention, r => r.Title == (is105 ? OverviewPanelViewModel.RecoveryInstallLockTitle : OverviewPanelViewModel.InterruptedInstallTitle));
         Assert.Equal("High", row.SeverityKey);
-        Assert.Contains("Running the installer again", row.Detail, StringComparison.Ordinal);
+        Assert.Contains("run the installer again", row.Detail, StringComparison.OrdinalIgnoreCase);
         Assert.Equal(OverviewPanelViewModel.OpenInstallerActionId, Assert.Single(row.Actions.Items).Id);
         Assert.Equal(is105, row.Detail.Contains("follow the gateway-outage rule", StringComparison.Ordinal));
         Assert.Equal(is105, row.Detail.Contains(".lifecycle-txn.json", StringComparison.Ordinal));
@@ -241,7 +241,7 @@ public sealed class Runtime105Tests : IDisposable
         await vm.RefreshInstallLockAsync(CancellationToken.None);
 
         var row = Assert.Single(vm.Attention, r => r.Title == OverviewPanelViewModel.InterruptedInstallTitle);
-        Assert.Contains("agent hooks are blocking until it's cleared", row.Detail, StringComparison.Ordinal);
+        Assert.Contains("Agent hooks are blocking until the lock is cleared", row.Detail, StringComparison.Ordinal);
     }
 
     [Fact]
