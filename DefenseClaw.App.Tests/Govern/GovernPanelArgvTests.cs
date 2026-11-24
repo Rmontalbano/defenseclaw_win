@@ -132,7 +132,7 @@ public sealed class GovernPanelArgvTests : IDisposable
             Assert.True(vm.IsResultOpen);
             Assert.Equal("Command refused", vm.ResultTitle);
             Assert.Contains("would arrive as “some-other-skill”", vm.ResultMessage, StringComparison.Ordinal);
-            Assert.Contains("Refusing to run", vm.ResultMessage, StringComparison.Ordinal);
+            Assert.Contains("Refused.", vm.ResultMessage, StringComparison.Ordinal);
         }
         finally
         {

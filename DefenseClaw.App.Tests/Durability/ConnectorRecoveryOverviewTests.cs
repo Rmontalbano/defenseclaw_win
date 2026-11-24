@@ -51,7 +51,7 @@ public sealed class ConnectorRecoveryOverviewTests : IDisposable
     {
         var row = Assert.Single(DurabilityAttention.Rows(Snapshot(AppGatewayState.GatewayStopped), _ => null, Now));
 
-        Assert.Contains("No DefenseClaw command recovers this. Clearing moves the pending files to a quarantine folder and deletes nothing. Do it while the gateway is stopped.", row.Detail, StringComparison.Ordinal);
+        Assert.Contains("No DefenseClaw command recovers this. Clearing moves the pending files to quarantine and deletes nothing. Stop the gateway first.", row.Detail, StringComparison.Ordinal);
         var action = Assert.Single(row.Actions.Items);
         Assert.Equal(AttentionActionIds.ClearStuckWrite, action.Id);
         Assert.Equal("Clear the stuck pending write", action.Label);
@@ -71,7 +71,7 @@ public sealed class ConnectorRecoveryOverviewTests : IDisposable
         Assert.DoesNotContain("Clear", row.Detail, StringComparison.Ordinal);
         Assert.Contains("connector recover-config", row.Detail, StringComparison.Ordinal);
         Assert.Contains("unrecognized inode", row.Detail, StringComparison.Ordinal);
-        Assert.Contains("the upgrade stays refused until that config can be finished", row.Detail, StringComparison.Ordinal);
+        Assert.Contains("the upgrade stays refused", row.Detail, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -170,15 +170,15 @@ public sealed class ConnectorRecoveryOverviewTests : IDisposable
         Assert.False(review.RestartsGateway);
         foreach (var phrase in new[]
         {
-            "with the same recovery DefenseClaw runs before any later change to that file",
-            "A change it cannot prove is kept and named",
-            "a file you saved is never replaced",
+            "with the recovery DefenseClaw runs before any later change to that file",
+            "It keeps and names a change it cannot prove",
+            "does not replace a file you saved",
             "finished N interrupted agent config change(s)",
-            "finished 0 means nothing was finished; if the Overview still shows a stuck write, check that the folder it prints is your data folder.",
-            "the recovery files (the .defenseclaw-cas-v2-* receipts in the data folder) are kept",
-            "the upgrade stays refused until that config can be finished",
+            "finished 0 means nothing was finished. If Overview still shows a stuck write, check that the folder it prints is your data folder.",
+            ".defenseclaw-cas-v2-* receipts stay in the data folder",
+            "the upgrade stays refused",
             "names each config it could not finish",
-            "The installer refuses to change version while these recovery files remain and prints this command for you to run; it does not run it.",
+            "The installer refuses to change version while recovery files remain. It prints this command and does not run it.",
         })
         {
             Assert.Contains(phrase, review.Summary, StringComparison.Ordinal);

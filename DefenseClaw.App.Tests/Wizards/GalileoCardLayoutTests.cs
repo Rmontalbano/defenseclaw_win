@@ -86,7 +86,7 @@ public class GalileoCardLayoutTests
             scene.GoToKeyPage();
 
             Assert.Contains(scene.VisibleTexts(), t => t.Contains("GALILEO_API_KEY has a value", StringComparison.Ordinal));
-            Assert.Contains(scene.VisibleTexts(), t => t.Contains("already stored", StringComparison.Ordinal) && t.Contains("leave this blank", StringComparison.Ordinal));
+            Assert.Contains(scene.VisibleTexts(), t => t.Contains("already stored", StringComparison.Ordinal) && t.Contains("Leave this blank", StringComparison.Ordinal));
             Assert.Equal(string.Empty, scene.KeyBox.Password);
 
             scene.Render("galileo-key-page-stored");

@@ -304,8 +304,8 @@ public sealed record FailModeDrift
             ? RemediationTemplate
                 .Replace(ModePlaceholder, GatewayFailMode, StringComparison.Ordinal)
                 .Replace(PathPlaceholder, PowerShellSingleQuoted(SettingsPath), StringComparison.Ordinal)
-            : "# No command generated: the gateway reported a hook fail mode that is not a plain word, " +
-              $"so it is not safe to paste into a script. Set env.{ClaudeSettingsReader.FailModeVariableName} " +
+            : "# No command generated. The gateway reported a hook fail mode that is not a plain word, " +
+              $"so it is unsafe to paste into a script. Set env.{ClaudeSettingsReader.FailModeVariableName} " +
               "in Claude Code's settings.json by hand.";
 
     /// <summary>

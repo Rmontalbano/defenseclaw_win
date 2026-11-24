@@ -179,7 +179,7 @@ public static class WizardWindowsPolicy
 
     /// <summary>The Gateway card's reason on 1.0.10: OpenClaw runs on Windows, so the card stays off for another reason (<c>setup openclaw</c> sets the uplink).</summary>
     private const string GatewayReasonOpenClawNative =
-        "Configures the OpenClaw uplink. On Windows, setup openclaw points it at OpenClaw's own local gateway, so set up OpenClaw instead.";
+        "On Windows, setup openclaw sets this uplink. Set up OpenClaw instead.";
 
     /// <summary>
     /// Why a hub card cannot be launched here, or null when it can. A target that needs Docker (<see cref="NeedsDocker"/>) is not
@@ -191,8 +191,7 @@ public static class WizardWindowsPolicy
         switch (target)
         {
             case "registry":
-                return "An interactive wizard that needs a real terminal and exits before changing anything if none is attached. " +
-                       "Add, sync, approve and remove registries from the Registries panel in Discover instead.";
+                return "Needs a real terminal. Add, sync, approve and remove registries in the Registries panel in Discover instead.";
 
             case "gateway" when capabilities is not null && capabilities.Has(RuntimeCapability.OpenClawNativeWindows):
                 return GatewayReasonOpenClawNative;
@@ -202,7 +201,7 @@ public static class WizardWindowsPolicy
         }
 
         return status == PlatformStatus.Unsupported
-            ? "The CLI reports this integration as unsupported on Windows."
+            ? "The CLI reports this as unsupported on Windows and refuses it before writing anything."
             : null;
     }
 

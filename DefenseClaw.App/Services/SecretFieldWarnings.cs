@@ -120,6 +120,6 @@ internal static class SecretFieldWarnings
 
     private static CommandReviewWarning Build(string field, bool plural, string kind, string advice) =>
         new(Title,
-            $"{field} {(plural ? "look like they carry" : "looks like it carries")} a secret ({kind}). It will be visible on " +
-            $"the command line to every process on this machine, shown in Activity and written to the exported log. {advice}");
+            $"{field} {(plural ? "look like secrets" : "looks like a secret")} ({kind}). On the command line " +
+            $"every process on this machine can see it. It also shows in Activity and the exported log. {advice}");
 }

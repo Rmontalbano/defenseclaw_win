@@ -101,10 +101,10 @@ public static class CorrelationReader
                 return result.HttpStatusCode switch
                 {
                     404 or 405 => Fail<T>(CorrelationReadStatus.Unsupported, "This gateway does not serve the correlation ledger (HTTP " + result.HttpStatusCode.Value.ToString(CultureInfo.InvariantCulture) + ")."),
-                    503 => Fail<T>(CorrelationReadStatus.NotReady, "The gateway's correlation ledger is not available yet (its audit store is not ready)."),
+                    503 => Fail<T>(CorrelationReadStatus.NotReady, "The correlation ledger is not available yet. The gateway's audit store is not ready."),
                     400 => Fail<T>(CorrelationReadStatus.Rejected, "The gateway refused the query: " + AiRuntimeJson.Prose(result.ErrorMessage, 256)),
                     _ when result.ErrorMessage is { } text && text.Contains("larger than", StringComparison.Ordinal) =>
-                        Fail<T>(CorrelationReadStatus.TooLarge, "The gateway's answer is larger than this app reads, so it was not read."),
+                        Fail<T>(CorrelationReadStatus.TooLarge, "The gateway's answer is larger than this app reads."),
                     >= 200 and <= 299 => Fail<T>(CorrelationReadStatus.Malformed, "The gateway's answer could not be read: " + AiRuntimeJson.Prose(result.ErrorMessage, 256)),
                     { } code => Fail<T>(CorrelationReadStatus.Failed, "The gateway returned HTTP " + code.ToString(CultureInfo.InvariantCulture) + "."),
                     null => Fail<T>(CorrelationReadStatus.Failed, "The gateway returned an error: " + AiRuntimeJson.Prose(result.ErrorMessage, 256)),
@@ -189,7 +189,7 @@ public static class CorrelationReader
     {
         if (root.ValueKind != JsonValueKind.Object || !root.TryGetProperty("identities", out var list) || list.ValueKind is not (JsonValueKind.Array or JsonValueKind.Null))
         {
-            return Fail<AgentDirectoryPage>(CorrelationReadStatus.Malformed, "The agent directory answer is missing identities, so it is not an empty directory.");
+            return Fail<AgentDirectoryPage>(CorrelationReadStatus.Malformed, "The agent directory answer has no identities list, so it cannot be read.");
         }
 
         var skipped = 0;

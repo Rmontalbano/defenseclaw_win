@@ -96,7 +96,7 @@ public sealed partial class ProtectedFilesWatchViewModel : ObservableObject
     };
 
     /// <summary>What the gateway does, in two sentences.</summary>
-    public string Summary => "The gateway checks a short list of files every 2 seconds. " + ProtectedFileWatchFacts.BlocksNothing;
+    public string Summary => "The gateway checks a short list of files every 2 seconds while it runs. " + ProtectedFileWatchFacts.BlocksNothing;
 
     /// <summary>The attribution limit.</summary>
     public string AttributionText => ProtectedFileWatchFacts.Attribution;
@@ -202,7 +202,7 @@ public sealed partial class ProtectedFilesWatchViewModel : ObservableObject
 
         var names = string.Join(", ", settings.WatchedPaths);
         return settings.HasConfiguredPaths
-            ? $"Watched in your home folder, from guardrail.protected_files.paths: {names}."
+            ? $"Watched in your home folder: {names}. guardrail.protected_files.paths replaces the built-in list."
             : $"Watched in your home folder: {names}. {ProtectedFileWatchFacts.WindowsCoverage}";
     }
 

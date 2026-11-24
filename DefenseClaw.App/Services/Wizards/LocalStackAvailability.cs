@@ -53,8 +53,7 @@ internal sealed class LocalStackAvailability : IDisposable
     public const string CheckingReason = "Checking for Docker…";
 
     private const string HowToCheckAgain =
-        "The local observability stack runs in Docker Compose on this machine. Once Docker is ready, check again " +
-        "with the Setup page's Refresh or by reopening the command palette.";
+        "The local observability stack needs Docker Compose on this machine. When Docker is ready, select Refresh on the Setup page or reopen the command palette.";
 
     private readonly IDockerProbe _probe;
     private readonly TimeProvider _time;

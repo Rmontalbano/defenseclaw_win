@@ -150,7 +150,7 @@ public sealed class LocalStackAvailabilityTests
         Assert.StartsWith(summary, gate.Decision.Reason, StringComparison.Ordinal);
 
         // How to look again is said for both surfaces: the Setup page has a Refresh, the palette is opened again.
-        Assert.Contains("check again", gate.Decision.Reason, StringComparison.Ordinal);
+        Assert.Contains("select Refresh", gate.Decision.Reason, StringComparison.Ordinal);
         Assert.Contains("Refresh", gate.Decision.Reason, StringComparison.Ordinal);
         Assert.Contains("command palette", gate.Decision.Reason, StringComparison.Ordinal);
     }

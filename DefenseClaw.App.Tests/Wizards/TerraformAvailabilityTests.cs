@@ -154,7 +154,7 @@ public sealed class TerraformAvailabilityTests
         // What to do about it, and how to look again, for both surfaces: the Setup page has a Refresh, the palette is opened again.
         Assert.Contains("Terraform 1.5.0 or later", gate.Decision.Reason, StringComparison.Ordinal);
         Assert.Contains("TERRAFORM_BIN", gate.Decision.Reason, StringComparison.Ordinal);
-        Assert.Contains("check again", gate.Decision.Reason, StringComparison.Ordinal);
+        Assert.Contains("select Refresh", gate.Decision.Reason, StringComparison.Ordinal);
         Assert.Contains("Refresh", gate.Decision.Reason, StringComparison.Ordinal);
         Assert.Contains("command palette", gate.Decision.Reason, StringComparison.Ordinal);
     }

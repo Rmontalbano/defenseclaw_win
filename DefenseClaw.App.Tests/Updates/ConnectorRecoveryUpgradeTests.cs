@@ -114,8 +114,8 @@ public sealed class ConnectorRecoveryUpgradeTests : IDisposable
         var hint = InstallScriptPlan.HintFor(Refusal109, recoverConfigInstalled: true)!;
 
         Assert.Contains("Do not remove or move the receipts yourself.", hint, StringComparison.Ordinal);
-        Assert.Contains(".defenseclaw-cas-v2-* receipts in the data folder", hint, StringComparison.Ordinal);
-        Assert.Contains("the upgrade stays refused until that config can be finished", hint, StringComparison.Ordinal);
+        Assert.Contains(".defenseclaw-cas-v2-* receipts stay in the data folder", hint, StringComparison.Ordinal);
+        Assert.Contains("the upgrade stays refused", hint, StringComparison.Ordinal);
         Assert.Contains("give no other step", hint, StringComparison.Ordinal);
         Assert.DoesNotContain("close the agent", hint, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("move aside", hint, StringComparison.OrdinalIgnoreCase);
@@ -137,9 +137,9 @@ public sealed class ConnectorRecoveryUpgradeTests : IDisposable
     [Fact]
     public void A_folder_with_a_dollar_sign_or_percent_gets_a_check_sentence_and_a_plain_one_does_not()
     {
-        Assert.Contains("check that the command prints this folder", ConnectorRecovery.ReceiptsOnlyStep(@"C:\dc$data"), StringComparison.Ordinal);
-        Assert.Contains("check that the command prints this folder", ConnectorRecovery.ReceiptsOnlyStep(@"C:\dc%data"), StringComparison.Ordinal);
-        Assert.DoesNotContain("check that the command prints", ConnectorRecovery.ReceiptsOnlyStep(@"C:\Users\operator\.defenseclaw"), StringComparison.Ordinal);
+        Assert.Contains("Check that the command prints this folder", ConnectorRecovery.ReceiptsOnlyStep(@"C:\dc$data"), StringComparison.Ordinal);
+        Assert.Contains("Check that the command prints this folder", ConnectorRecovery.ReceiptsOnlyStep(@"C:\dc%data"), StringComparison.Ordinal);
+        Assert.DoesNotContain("Check that the command prints", ConnectorRecovery.ReceiptsOnlyStep(@"C:\Users\operator\.defenseclaw"), StringComparison.Ordinal);
         Assert.DoesNotContain("in a terminal", ConnectorRecovery.ReceiptsOnlyStep(FakeData), StringComparison.Ordinal);
     }
 

@@ -433,7 +433,7 @@ public sealed record AgentKpis(
 
     /// <summary>Why observe-mode would-blocks are not counted.</summary>
     public const string WouldBlockNote =
-        "Not reported: observe-mode would-blocks are part of a guardrail verdict, which the ledger does not store.";
+        "Not reported: observe-mode would-blocks are in guardrail verdicts, which the ledger does not store. Only applied blocks are counted.";
 
     /// <summary>Why tokens and cost are not shown.</summary>
     public const string UsageNote =

@@ -289,7 +289,7 @@ public sealed class AdminGatewayOwnershipTests
             Assert.Equal(AppGatewayState.Degraded, snapshot.State);
             Assert.True(snapshot.PeerUnverified);
             Assert.Contains(foreignSession ? $"not this app's session {OwnSession()}" : "could not be verified", snapshot.Detail, StringComparison.Ordinal);
-            Assert.Contains("sends it no credentials", snapshot.AlertsUnavailable, StringComparison.Ordinal);
+            Assert.Contains("no credentials are sent", snapshot.AlertsUnavailable, StringComparison.Ordinal);
             Assert.Equal(0, monitor.AlertsFetchCount);
             Assert.All(listener.Requests, r => Assert.Null(r.Authorization));
         }

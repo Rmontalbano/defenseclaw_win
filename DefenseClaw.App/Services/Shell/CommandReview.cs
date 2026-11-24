@@ -59,7 +59,7 @@ public sealed record CommandReviewWarning(string Title, string Message)
             .ToArray();
         return new CommandReviewWarning(
             ArgumentExpansionTitle,
-            "The DefenseClaw CLI expands %VARIABLES%, $VARIABLES, ~ and wildcards in every argument on Windows, even after --. " +
+            "The CLI expands %VARIABLES%, $VARIABLES, ~ and wildcards in every argument on Windows, even after --. " +
             "The command that runs differs from the one above. " + string.Join(' ', lines));
     }
 
@@ -67,8 +67,7 @@ public sealed record CommandReviewWarning(string Title, string Message)
     public static CommandReviewWarning SecretOutput() =>
         new(
             SecretOutputTitle,
-            "This command prints secret values the CLI normally masks. They appear in the Activity panel, in any log you " +
-            "export and on the clipboard if you copy them.");
+            "This command prints secret values the CLI normally masks. They appear in Activity, in exported logs and on the clipboard if you copy them.");
 
     /// <summary>
     /// The bar a review carries when a name it acts on - a skill, plugin, MCP server, registry entry or tool, which came from outside - has
@@ -225,8 +224,7 @@ public sealed record CommandReview
     /// alone cannot say which, so the review keeps the restart badge and this paragraph says "may".
     /// </summary>
     public const string CoworkRestartNotice =
-        "This may restart the DefenseClaw gateway. If the Claude Code connector is not set up yet, setup cowork sets it up first and that " +
-        "restarts the gateway. If it is already set up, nothing restarts. " +
+        "This may restart the DefenseClaw gateway. If the Claude Code connector is missing, setup cowork sets it up first, which restarts the gateway. Otherwise nothing restarts. " +
         "Agents that use DefenseClaw hooks may lose the gateway for a few seconds.";
 
     /// <summary>

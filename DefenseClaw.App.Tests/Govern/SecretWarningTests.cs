@@ -61,9 +61,9 @@ public sealed class SecretWarningTests : IDisposable
 
         Assert.True(vm.IsConfirmOpen);
         var bar = Assert.IsType<CommandReviewWarning>(SecretBar(vm));
-        Assert.Contains("An environment value looks like it carries a secret", bar.Message, StringComparison.Ordinal);
+        Assert.Contains("An environment value looks like a secret", bar.Message, StringComparison.Ordinal);
         Assert.Contains("API_KEY", bar.Message, StringComparison.Ordinal);
-        Assert.Contains("visible on the command line", bar.Message, StringComparison.Ordinal);
+        Assert.Contains("every process on this machine can see it", bar.Message, StringComparison.Ordinal);
         Assert.Contains("Activity", bar.Message, StringComparison.Ordinal);
         Assert.Contains("exported log", bar.Message, StringComparison.Ordinal);
         Assert.Contains("plain text", bar.Message, StringComparison.Ordinal);
@@ -76,7 +76,7 @@ public sealed class SecretWarningTests : IDisposable
         var vm = Mcp(command: "node", env: "API_KEY=abcd1234\nDB_PASSWORD=hunter22\nLOG_LEVEL=debug");
 
         var bar = Assert.IsType<CommandReviewWarning>(SecretBar(vm));
-        Assert.Contains("Environment values look like they carry a secret", bar.Message, StringComparison.Ordinal);
+        Assert.Contains("Environment values look like secrets", bar.Message, StringComparison.Ordinal);
         Assert.Contains("API_KEY", bar.Message, StringComparison.Ordinal);
         Assert.Contains("DB_PASSWORD", bar.Message, StringComparison.Ordinal);
     }
@@ -299,7 +299,7 @@ public sealed class SecretWarningTests : IDisposable
 
         Assert.NotNull(bar);
         Assert.Equal(SecretFieldWarnings.Title, bar.Title);
-        Assert.Contains("The value of --url looks like it carries a secret", bar.Message, StringComparison.Ordinal);
+        Assert.Contains("The value of --url looks like a secret", bar.Message, StringComparison.Ordinal);
         Assert.Contains("Slack webhook", bar.Message, StringComparison.Ordinal);
         Assert.Contains("config.yaml", bar.Message, StringComparison.Ordinal);
         Assert.DoesNotContain("abcdefghijklmnopqrstuvwx", bar.Message, StringComparison.Ordinal);
@@ -313,7 +313,7 @@ public sealed class SecretWarningTests : IDisposable
         var bar = WizardReview.SecretValueWarning(argv);
 
         Assert.NotNull(bar);
-        Assert.Contains("The values of --url, --backup-url look like they carry a secret", bar.Message, StringComparison.Ordinal);
+        Assert.Contains("The values of --url, --backup-url look like secrets", bar.Message, StringComparison.Ordinal);
     }
 
     [Theory]

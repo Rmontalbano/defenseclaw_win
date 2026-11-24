@@ -573,7 +573,7 @@
                                                            Appearance="Secondary"
                                                            Content="Open a terminal to store it"
                                                            IsEnabled="{Binding CanOpenTerminal}"
-                                                           ToolTip="Opens a console window running the command above. You type the value at its hidden prompt and it never passes through this app."
+                                                           ToolTip="Opens a console running the command above. Type the value at its hidden prompt. It does not pass through this app."
                                                            Command="{Binding OpenCredentialTerminalCommand}" />
                                                 <ui:Button Appearance="Secondary"
                                                            Content="Re-check"
@@ -768,7 +768,7 @@
                                        Style="{StaticResource DcEmptyDetail}"
                                        Visibility="{Binding HasRun, Converter={StaticResource InverseBoolToVisibility}}"
                                        IsHitTestVisible="False"
-                                       Text="Nothing has run yet. Output appears here after you press Execute, and the run is listed in the Activity panel." />
+                                       Text="Nothing has run yet. Output appears here after you select Execute. The run is also listed in Activity." />
                     </Grid>
                 </StackPanel>
             </ScrollViewer>

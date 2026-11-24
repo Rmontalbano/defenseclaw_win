@@ -43,9 +43,9 @@ public sealed class ArgumentExpansionException : InvalidOperationException
     public static string BuildMessage(IReadOnlyList<ArgvHazard> hazards)
     {
         ArgumentNullException.ThrowIfNull(hazards);
-        return "Refusing to run: the DefenseClaw CLI expands %VARIABLES%, $VARIABLES, ~ and wildcards in every argument on Windows, " +
-               $"so it would act on something other than what is shown - {string.Join("; ", hazards.Select(h => h.Describe()))}. " +
-               "Rename it (avoid * ? [ % $ and a leading ~) and try again.";
+        return "Refused. The CLI expands %VARIABLES%, $VARIABLES, ~ and wildcards in every argument on Windows, so it would act on something else: " +
+               $"{string.Join(". ", hazards.Select(h => h.Describe()))}. " +
+               "Rename it without * ? [ % $ or a leading ~ and try again.";
     }
 }
 

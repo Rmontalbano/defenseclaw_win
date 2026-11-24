@@ -1295,12 +1295,12 @@ public sealed class GatewayMonitor : IDisposable, IGatewaySnapshotSource, IPollF
     {
         if (status.OwnerTrust == PortOwnerTrust.Gateway)
         {
-            return $"Alerts are unavailable: the gateway's /health did not answer as expected ({health.Status}), " +
-                   "so no credentials were sent.";
+            return $"Alerts are unavailable: the gateway's /health did not answer as expected ({health.Status}). " +
+                   "No credentials were sent.";
         }
 
-        return $"Alerts are unavailable: {_peer.DescribeUntrusted(status.PortOwner)}, " +
-               "so the app reads only /health from it and sends it no credentials.";
+        return $"Alerts are unavailable: {_peer.DescribeUntrusted(status.PortOwner)}. " +
+               "Only /health is read, and no credentials are sent.";
     }
 
     /// <summary>

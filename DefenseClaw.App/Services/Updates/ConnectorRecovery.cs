@@ -22,7 +22,7 @@ internal static class ConnectorRecovery
     /// upgrade again; neither says whether the agent should be closed first, nor whether the gateway should be stopped, so this says neither.
     /// </summary>
     public const string InstallerSentence =
-        "The installer refuses to change version while these recovery files remain and prints this command for you to run; it does not run it.";
+        "The installer refuses to change version while recovery files remain. It prints this command and does not run it.";
 
     /// <summary>The argv after <c>defenseclaw-gateway</c>. <c>--data-dir</c> is passed on purpose: the command is config-optional and has no other way to find the folder.</summary>
     public static IReadOnlyList<string> Argv(string dataDirectory) => new[] { "connector", "recover-config", "--data-dir", dataDirectory };
@@ -49,16 +49,16 @@ internal static class ConnectorRecovery
 
     /// <summary>What the command does, for the Overview review.</summary>
     public const string RunsWhat =
-        "Finishes the interrupted agent config change with the same recovery DefenseClaw runs before any later change to that file. " +
-        "A change it cannot prove is kept and named, and a file you saved is never replaced.";
+        "Finishes the interrupted agent config change with the recovery DefenseClaw runs before any later change to that file. " +
+        "It keeps and names a change it cannot prove, and does not replace a file you saved.";
 
     /// <summary>
     /// What it prints (connector_cmd.go@1.0.9:1319-1320: "finished %d interrupted agent config change(s) in %s"). It also prints 0 when the folder does not exist
     /// (config_transform_recovery_windows.go@1.0.9:23-25), so a 0 is not proof that nothing is left.
     /// </summary>
     public const string SuccessText =
-        "On success it prints \"finished N interrupted agent config change(s) in <folder>\". finished 0 means nothing was finished; " +
-        "if the Overview still shows a stuck write, check that the folder it prints is your data folder.";
+        "On success it prints \"finished N interrupted agent config change(s) in <folder>\". finished 0 means nothing was finished. " +
+        "If Overview still shows a stuck write, check that the folder it prints is your data folder.";
 
     /// <summary>
     /// What stays true when it cannot finish a receipt (config_transform_recovery_windows.go@1.0.9:22-79, connector_cmd.go@1.0.9:1312; install.ps1@1.0.9:915-918):
@@ -66,20 +66,20 @@ internal static class ConnectorRecovery
     /// the receipts. Neither the help nor the installer gives another step, so none is invented here.
     /// </summary>
     public const string KeptSentence =
-        "If it names an agent config it cannot finish, the recovery files (the .defenseclaw-cas-v2-* receipts in the data folder) are kept and the upgrade stays refused until that config can be finished; " +
-        "DefenseClaw's installer and help give no other step.";
+        "If a config cannot be finished, the .defenseclaw-cas-v2-* receipts stay in the data folder and the upgrade stays refused. " +
+        "The installer and help give no other step.";
 
     public const string FailureText =
         "If it fails, its output says \"recovery files are kept in <folder>\" and names each config it could not finish. " + KeptSentence;
 
     /// <summary>The hint under a refused upgrade, installed DefenseClaw 1.0.9 or later.</summary>
     public const string UpgradeHint =
-        "Run the recovery, then run the upgrade again: use \"" + ActionLabel + "\" in Overview, or the command the installer printed (defenseclaw-gateway " + CommandName + "). " +
+        "Run the recovery, then run the upgrade again. Select \"" + ActionLabel + "\" in Overview, or run defenseclaw-gateway " + CommandName + " as the installer printed. " +
         "Do not remove or move the receipts yourself. " + KeptSentence;
 
     /// <summary>Added to today's hint when the refusal line names the 1.0.9 command and the installed DefenseClaw does not have it.</summary>
     public const string OlderRuntimeNote =
-        "The command the installer prints (" + CommandName + ") needs DefenseClaw 1.0.9. The installed version is older and does not have it.";
+        CommandName + " needs DefenseClaw 1.0.9. The installed version does not have it.";
 
     /// <summary>True when the installer's refusal line is the 1.0.9 one: it names the command, or the sentence that comes before it.</summary>
     public static bool LineNamesCommand(string reason) =>
@@ -87,13 +87,13 @@ internal static class ConnectorRecovery
 
     /// <summary>The Overview row's sentence about the command, replacing "DefenseClaw has no command to recover from this".</summary>
     public const string OverviewSentence =
-        "Finish the interrupted change runs defenseclaw-gateway " + CommandName + ", which finishes it with the same recovery DefenseClaw runs before any later change to that file. " +
-        "If it names a config it cannot finish, the files stay in the data folder and the upgrade stays refused until that config can be finished.";
+        "Select " + ActionLabel + " to run defenseclaw-gateway " + CommandName + ". " +
+        "If a config cannot be finished, the upgrade stays refused until it can be.";
 
     /// <summary>The pre-flight sentence for receipts the app does not list as a pending write.</summary>
     public static string ReceiptsOnlyStep(string dataDirectory) =>
-        "Run " + CommandText(dataDirectory) + " in PowerShell or a Command Prompt, then check again. It finishes what it can prove and names what it cannot. Do not remove or move the files yourself." +
+        "Run " + CommandText(dataDirectory) + " in PowerShell or a Command Prompt, then check again. Do not remove or move the files yourself." +
         (PathReadSpecially(dataDirectory)
-            ? " The folder name has a $, backtick or % that PowerShell or Command Prompt may read specially, so check that the command prints this folder."
+            ? " The folder name has a $, backtick or %, which the shell may read specially. Check that the command prints this folder."
             : string.Empty);
 }

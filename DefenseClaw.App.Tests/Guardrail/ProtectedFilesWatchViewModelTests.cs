@@ -88,7 +88,7 @@ public sealed class ProtectedFilesWatchViewModelTests : IDisposable
 
         // The 1.0.6 text is word for word what it was.
         Assert.EndsWith("Shell startup files and autostart entries are watched on Linux and macOS only.", vm.WatchedText, StringComparison.Ordinal);
-        Assert.Equal("The gateway checks a short list of files every 2 seconds while it runs. The watch blocks nothing. It reports a change after it happens.", vm.Summary);
+        Assert.Equal("The gateway checks a short list of files every 2 seconds while it runs. The watch blocks nothing and reports a change after it happens.", vm.Summary);
         Assert.DoesNotContain("authorized_keys, a shell startup file", vm.WatchedText, StringComparison.Ordinal);
     }
 
@@ -116,10 +116,10 @@ public sealed class ProtectedFilesWatchViewModelTests : IDisposable
     {
         var off = await CreateAsync(config: "guardrail:\n  protected_files:\n    on_change: off\n    paths: [.ssh/authorized_keys]\n");
         Assert.Equal("Off", off.BadgeText);
-        Assert.Equal("Nothing is checked: on_change is off.", off.WatchedText);
+        Assert.Equal("Nothing is watched. on_change is off.", off.WatchedText);
 
         Assert.Equal(
-            "Checked, in your home folder (guardrail.protected_files.paths, which replaces the built-in list): .ssh/authorized_keys, .config/app/.",
+            "Watched in your home folder: .ssh/authorized_keys, .config/app/. guardrail.protected_files.paths replaces the built-in list.",
             ProtectedFilesWatchViewModel.WatchedSentence(new ProtectedFilesSettings(ProtectedFilesSettings.Alert, false, null, new[] { ".ssh/authorized_keys", ".config/app/" })));
     }
 
@@ -178,8 +178,7 @@ public sealed class ProtectedFilesWatchViewModelTests : IDisposable
             var warnings = string.Join(' ', opened.Warnings.Select(w => w.Message));
             Assert.Contains("puts back the last accepted content", warnings, StringComparison.Ordinal);
             Assert.Contains("removes files the agent created", warnings, StringComparison.Ordinal);
-            Assert.Contains("Meant for strict setups", warnings, StringComparison.Ordinal);
-            Assert.Contains("off in every pack", warnings, StringComparison.Ordinal);
+            Assert.Contains("Leave it off", warnings, StringComparison.Ordinal);
             Assert.Contains("config tools that rewrite these files", warnings, StringComparison.Ordinal);
             Assert.Contains("refuse a config", warnings, StringComparison.Ordinal);
             Assert.Empty(services.Cli.Activity);

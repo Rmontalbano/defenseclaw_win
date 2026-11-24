@@ -662,6 +662,7 @@
 
                         <HeaderedContentControl Style="{StaticResource SettingRow}"
                                                 Header="Start the gateway automatically"
+                                                ToolTip="Not started after a timeout, after a refused or unreadable answer, with a WSL gateway, while paused, or after you stop it."
                                                 local:SettingsRow.Caption="Runs defenseclaw-gateway start once per launch when nothing listens on the gateway port. Never after you stop it.">
                             <ui:ToggleSwitch IsChecked="{Binding AutoStartGateway, Mode=TwoWay}"
                                              IsEnabled="{Binding CanChangeAutoStart}"

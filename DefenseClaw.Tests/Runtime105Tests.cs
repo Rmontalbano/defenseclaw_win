@@ -52,9 +52,9 @@ public sealed class Runtime105Tests
         Assert.Equal("Observe records what the agent does and never blocks it.", ObserveModeCopy.AddConnectorSentence(false));
         Assert.Equal("Observe records what an agent does and never blocks it.", ObserveModeCopy.BatchObserveNote(false));
         Assert.Equal("observe, which never blocks", ObserveModeCopy.ObserveFallbackClause(false));
-        Assert.Equal("observe + fail-closed: this connector never blocks on policy. It blocks when the gateway errors.", ObserveModeCopy.ObserveFailClosedNote(false));
+        Assert.Equal("Observe with fail closed. It never blocks on policy. It blocks when the gateway errors.", ObserveModeCopy.ObserveFailClosedNote(false));
         Assert.Equal(
-            "Open allows the tool call or prompt and logs the failure when the gateway errors. Recommended for almost all installs.",
+            "Open allows the tool call or prompt and logs the failure when the gateway errors. Recommended for most installs.",
             ObserveModeCopy.FailOpenNote(false));
     }
 
@@ -83,6 +83,6 @@ public sealed class Runtime105Tests
 
         Assert.DoesNotContain("never blocks", note, StringComparison.Ordinal);
         Assert.Contains("did not answer in time is still blocked", note, StringComparison.Ordinal);
-        Assert.Contains("Recommended for almost all installs.", note, StringComparison.Ordinal);
+        Assert.Contains("Recommended for most installs.", note, StringComparison.Ordinal);
     }
 }

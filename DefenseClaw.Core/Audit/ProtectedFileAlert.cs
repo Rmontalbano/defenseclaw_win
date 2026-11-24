@@ -233,23 +233,23 @@ public static class ProtectedFileWatchFacts
 
     /// <summary>The attribution limit.</summary>
     public const string Attribution =
-        "Attribution is by time. A change you make by hand during an agent call is reported as the agent's. A background program an agent left running is reported as yours.";
+        "Attribution is by time. A hand edit during an agent call counts as the agent's. A program an agent left running counts as yours.";
 
     /// <summary>What the watch does not do.</summary>
-    public const string BlocksNothing = "The watch blocks nothing. It reports a change after it happens.";
+    public const string BlocksNothing = "The watch blocks nothing and reports a change after it happens.";
 
     /// <summary>What the alert holds of the file.</summary>
-    public const string NoContent = "The alert holds the first 12 hex characters of the SHA-256 before and after, not the file content.";
+    public const string NoContent = "The alert shows the first 12 hex characters of the SHA-256 before and after. It holds no file content.";
 
     /// <summary>What <c>restore</c> does, shown in its review before it runs.</summary>
     public const string RestoreWarning =
-        "Restore puts back the last accepted content after an agent's change and removes files the agent created. Meant for strict setups; off in every pack. " +
-        "It undoes config tools that rewrite these files during an agent session, so leave it off on those hosts. It still blocks nothing.";
+        "Restore puts back the last accepted content after an agent's change and removes files the agent created. " +
+        "It undoes config tools that rewrite these files during a session. Leave it off on such hosts.";
 
     /// <summary>What a rollback does with the setting, shown where it is changed.</summary>
     public const string RollbackWarning =
-        "defenseclaw rollback to 1.0.5 or older restores the config from before the upgrade. Those releases refuse a config that sets " +
-        "guardrail.protected_files, so remove the block first if you move the config by hand.";
+        "defenseclaw rollback to 1.0.5 or older restores the pre-upgrade config. Those releases refuse a config that sets " +
+        "guardrail.protected_files. Remove that block first if you move the config by hand.";
 
     /// <summary>When a change to the setting takes effect.</summary>
     public const string RestartNote = "Saved in config.yaml. Applies at the next gateway restart.";
@@ -268,5 +268,5 @@ public static class ProtectedFileWatchFacts
     public const string ShellFloorCoverage =
         "A shell command that writes ~\\.ssh\\authorized_keys, a shell startup file or a Git hook is at least an alert in every rule pack. " +
         "Changes to DefenseClaw's own files are blocked in every pack. In action mode, an agent edit that turns DefenseClaw's hooks off is blocked. " +
-        "A shell command that writes those settings is an alert, blocked in the strict pack.";
+        "A shell write to those settings is an alert, blocked in the strict pack.";
 }

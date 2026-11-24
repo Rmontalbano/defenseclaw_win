@@ -59,14 +59,14 @@ public static class CoworkProtectionFacts
     /// (docs connectors/cowork.mdx; <c>mode_text</c> in cowork.py).
     /// </summary>
     public const string ClaudeCodeSettingsApply =
-        "Cowork runs through the Claude Code connector's hooks: the Claude Code mode, hook fail mode and rules apply to Cowork too.";
+        "Cowork runs through the Claude Code connector's hooks. The Claude Code mode, fail mode and rules apply to Cowork.";
 
     /// <summary>
     /// What /health's <c>connectors[].surfaces.cowork</c> counters are: the hook's own label on a call (the <c>X-DefenseClaw-Cowork</c> header), counted
     /// since the gateway started. They are attribution, never proof that Cowork is covered (internal/gateway/health.go, <c>Surfaces</c>).
     /// </summary>
     public const string SurfaceCountersAreLabels =
-        "These counters are the hook's own label on each call, counted since the gateway started; they do not prove Cowork is covered.";
+        "The hook labels each call. The counts run since the gateway started and do not prove Cowork is covered.";
 
     /// <summary>The heading of the review bar that says <c>setup cowork</c> also turns on the Claude Code connector.</summary>
     public const string ClaudeCodeToo = "This also turns on the Claude Code connector";
@@ -76,8 +76,8 @@ public static class CoworkProtectionFacts
     /// at 1.0.8), which adds Claude Code's hooks and restarts the gateway.
     /// </summary>
     public const string ClaudeCodeTooMessage =
-        "Claude Code is not a configured connector on this computer. Cowork runs through the Claude Code connector's hooks, so this command also sets that connector up: " +
-        "it adds the DefenseClaw hooks to Claude Code's settings and restarts the gateway. If you only want Cowork and not Claude Code, cancel here.";
+        "Claude Code is not a configured connector on this machine. Cowork needs it, so this command also adds the DefenseClaw hooks to Claude Code's settings " +
+        "and restarts the gateway. Cancel here if you do not want that.";
 
     /// <summary>
     /// True when the connector roster of <paramref name="config"/> holds Claude Code and the guardrail is not switched off: the app's reading of the CLI's

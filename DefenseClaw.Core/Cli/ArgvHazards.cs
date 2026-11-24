@@ -25,9 +25,8 @@ public sealed record ArgvHazard(int Index, string Token, IReadOnlyList<string> E
         {
             0 => "nothing",
             1 => $"“{Expansion[0]}”",
-            _ => string.Join(", ", Expansion.Take(3).Select(e => $"“{e}”")) +
-                 (Expansion.Count > 3 ? $" and {Expansion.Count - 3} more" : string.Empty) +
-                 $" ({Expansion.Count} arguments)",
+            _ => $"{Expansion.Count} arguments: " + string.Join(", ", Expansion.Take(3).Select(e => $"“{e}”")) +
+                 (Expansion.Count > 3 ? $" and {Expansion.Count - 3} more" : string.Empty),
         };
 
         return $"“{Token}” would arrive as {arrives}";

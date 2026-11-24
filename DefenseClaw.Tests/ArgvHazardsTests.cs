@@ -95,7 +95,7 @@ public sealed class ArgvHazardsTests : IDisposable
         var change = Assert.Single(ArgvHazards.FindChanges(new[] { "--", "conf*" }, _cwd.Path, Env));
 
         Assert.Equal(3, change.Expansion.Count);
-        Assert.Contains("(3 arguments)", change.Describe(), StringComparison.Ordinal);
+        Assert.Contains("3 arguments: ", change.Describe(), StringComparison.Ordinal);
     }
 
     [Fact]

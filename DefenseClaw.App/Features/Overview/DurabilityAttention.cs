@@ -171,11 +171,11 @@ internal static class DurabilityAttention
                     ? "A write to Codex's config.toml is stuck"
                     : $"{facts.PendingWrites.Count.ToString(CultureInfo.CurrentCulture)} guarded config write{(facts.PendingWrites.Count == 1 ? string.Empty : "s")} never finished",
                 Detail = Describe(facts.PendingWrites, now) + (StateSentence(facts.PendingWrites) is { Length: > 0 } states ? " " + states : string.Empty) +
-                         " If the agent rewrote the file meanwhile, every later write is refused (\"requested recovery leaf is occupied by an unrecognized inode\") and the gateway exits at start. " +
+                         " If the agent rewrote the file, later writes are refused (\"requested recovery leaf is occupied by an unrecognized inode\") and the gateway exits at start. " +
                          (recoverConfig
                              ? ConnectorRecovery.OverviewSentence
                              : "No DefenseClaw command recovers this. " +
-                               "Clearing moves the pending files to a quarantine folder and deletes nothing. Do it while the gateway is stopped.") +
+                               "Clearing moves the pending files to quarantine and deletes nothing. Stop the gateway first.") +
                          (stuckNow ? " This is why the gateway stops at start." : string.Empty),
                 SeverityKey = stuckNow ? "Critical" : "High",
                 Actions = recoverConfig

@@ -1,4 +1,4 @@
-﻿using DefenseClaw.App.Services;
+using DefenseClaw.App.Services;
 using DefenseClaw.App.Services.Wizards;
 using DefenseClaw.App.Tests.TestSupport;
 using DefenseClaw.App.ViewModels;
@@ -156,7 +156,7 @@ public sealed class OpenClawWindowsSetupTests
 
         var now = WizardWindowsPolicy.UnavailableReason("gateway", PlatformStatus.NotApplicable, Runtime("1.0.10"));
 
-        Assert.Equal("Configures the OpenClaw uplink. On Windows, setup openclaw points it at OpenClaw's own local gateway, so set up OpenClaw instead.", now);
+        Assert.Equal("On Windows, setup openclaw sets this uplink. Set up OpenClaw instead.", now);
         Assert.DoesNotContain("unsupported", now, StringComparison.OrdinalIgnoreCase);
     }
 

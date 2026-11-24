@@ -31,12 +31,12 @@ public static class ObserveModeCopy
 
     /// <summary>The roster's note on a connector that observes but fails closed.</summary>
     public static string ObserveFailClosedNote(bool selfChangeBlocked) => selfChangeBlocked
-        ? "observe + fail-closed: this connector never blocks on policy findings. It blocks when the gateway errors and on changes to DefenseClaw's own files."
-        : "observe + fail-closed: this connector never blocks on policy. It blocks when the gateway errors.";
+        ? "Observe with fail closed. It never blocks on policy findings. It blocks when the gateway errors and on changes to DefenseClaw's own files."
+        : "Observe with fail closed. It never blocks on policy. It blocks when the gateway errors.";
 
     /// <summary>The note on the open fail mode in the guardrail review.</summary>
     public static string FailOpenNote(bool selfChangeBlocked) => selfChangeBlocked
         ? "Open allows the tool call or prompt and logs the failure when the gateway errors or cannot be reached. " +
-          "A call the gateway took but did not answer in time is still blocked. Recommended for almost all installs."
-        : "Open allows the tool call or prompt and logs the failure when the gateway errors. Recommended for almost all installs.";
+          "A call the gateway took but did not answer in time is still blocked. Recommended for most installs."
+        : "Open allows the tool call or prompt and logs the failure when the gateway errors. Recommended for most installs.";
 }

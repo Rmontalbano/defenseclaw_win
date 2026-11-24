@@ -57,7 +57,7 @@ public sealed class Observe105CopyTests
         var current = new GuardrailRowViewModel(Row("observe", "closed"), selfChangeBlocked: true);
 
         Assert.True(old.HasMismatch);
-        Assert.Equal("observe + fail-closed: this connector never blocks on policy. It blocks when the gateway errors.", old.MismatchNote);
+        Assert.Equal("Observe with fail closed. It never blocks on policy. It blocks when the gateway errors.", old.MismatchNote);
         Assert.Equal(ObserveModeCopy.ObserveFailClosedNote(true), current.MismatchNote);
         Assert.Contains("changes to DefenseClaw's own files", current.MismatchNote, StringComparison.Ordinal);
 
@@ -72,7 +72,7 @@ public sealed class Observe105CopyTests
         var old = new ConnectorChipViewModel("codex", "observe", "closed", hasMismatch: true, fromConfig: true);
         var current = new ConnectorChipViewModel("codex", "observe", "closed", hasMismatch: true, fromConfig: true, selfChangeBlocked: true);
 
-        Assert.Equal("observe + fail-closed: this connector never blocks on policy. It blocks when the gateway errors.", old.MismatchNote);
+        Assert.Equal("Observe with fail closed. It never blocks on policy. It blocks when the gateway errors.", old.MismatchNote);
         Assert.Equal(ObserveModeCopy.ObserveFailClosedNote(true), current.MismatchNote);
         Assert.Contains("never blocks on policy findings", current.ToolTipText, StringComparison.Ordinal);
         Assert.False(old.IsSameAs(current));

@@ -534,7 +534,7 @@ public sealed partial class ConnectorBatchViewModel : SetupDialogViewModel
         {
             warnings.Add(new CommandReviewWarning(
                 "Not certified on Windows",
-                string.Join(", ", uncertified) + (uncertified.Length == 1 ? " is" : " are") + " not certified on Windows. Expect rough edges."));
+                string.Join(", ", uncertified) + (uncertified.Length == 1 ? " is" : " are") + " not certified on Windows."));
         }
 
         var previews = Rows.Where(static r => r.IsOn && r.IsPreview).Select(static r => r.Label).ToArray();
@@ -542,7 +542,7 @@ public sealed partial class ConnectorBatchViewModel : SetupDialogViewModel
         {
             warnings.Add(new CommandReviewWarning(
                 "Preview on Windows",
-                string.Join(", ", previews) + (previews.Length == 1 ? " is a preview" : " are previews") + " on Windows and not yet certified. Expect rough edges."));
+                string.Join(", ", previews) + (previews.Length == 1 ? " is a preview" : " are previews") + " on Windows and not yet certified."));
         }
 
         if (!restart)
