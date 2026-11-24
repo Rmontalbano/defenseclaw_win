@@ -116,9 +116,8 @@ public sealed class ConnectorBatchKeepsRosterTests : IDisposable
         Assert.DoesNotContain(warnings, w => w.Title is "Drops configured connectors" or "Sets the roster");
         var kept = Assert.Single(warnings, w => w.Title == ConnectorBatchViewModel.KeepsRosterTitle);
         Assert.Contains("adds or updates the connectors it names", kept.Message, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("Every other connector keeps its configuration and mode", kept.Message, StringComparison.Ordinal);
+        Assert.Contains("Others keep their configuration and mode", kept.Message, StringComparison.Ordinal);
         Assert.Contains("Left as they were: Claude Code, Codex", kept.Message, StringComparison.Ordinal);
-        Assert.Contains(ConnectorBatchViewModel.ModeAppliesOnlyToNamed, kept.Message, StringComparison.Ordinal);
         Assert.Contains("Remove a connector", kept.Message, StringComparison.Ordinal);
         Assert.StartsWith("Adds or updates Cursor in observe mode", vm.Review.CommandReview!.Summary, StringComparison.Ordinal);
     }
@@ -248,7 +247,7 @@ public sealed class ConnectorBatchKeepsRosterTests : IDisposable
 
         var warnings = ReviewWarnings(vm);
         var drops = Assert.Single(warnings, w => w.Title == "Drops configured connectors");
-        Assert.Equal("The batch sets the connector roster to the selection. Not selected, so no longer watched: Claude Code.", drops.Message);
+        Assert.Equal("The batch sets the connector roster to the selection. Not watched any more: Claude Code.", drops.Message);
         Assert.DoesNotContain(warnings, w => w.Title == ConnectorBatchViewModel.KeepsRosterTitle);
         Assert.StartsWith("Configures Codex in observe mode in one command", vm.Review.CommandReview!.Summary, StringComparison.Ordinal);
     }
@@ -262,7 +261,7 @@ public sealed class ConnectorBatchKeepsRosterTests : IDisposable
         var warnings = ReviewWarnings(vm);
 
         var sets = Assert.Single(warnings, w => w.Title == "Sets the roster");
-        Assert.Equal("The batch sets the connector roster to the selection, so a configured connector that is not among them is dropped.", sets.Message);
+        Assert.Equal("The batch sets the connector roster to the selection. A configured connector that is not selected is dropped.", sets.Message);
     }
 
     // ------------------------------------------------------------------ 1.0.10 with a roster that still replaces

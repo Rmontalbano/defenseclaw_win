@@ -59,13 +59,13 @@ public sealed record UnsavedChangesRequest(
         string? warning = null;
         if (saveApplies && fileChangedOnDisk)
         {
-            warning = "config.yaml also changed on disk after you opened it, so a save would be refused. " +
-                      "Cancel to keep your edits and compare them against the file, or discard them.";
+            warning = "config.yaml also changed on disk, so a save would be refused. " +
+                      "Cancel to keep your edits and compare them, or discard them.";
         }
         else if (saveApplies && hasParseError)
         {
-            warning = "The RAW text does not parse as YAML. Saving writes it to config.yaml anyway and the " +
-                      "validation that follows is expected to fail, so Cancel is the default.";
+            warning = "The Raw text does not parse as YAML. Saving writes it to config.yaml anyway and " +
+                      "validation is expected to fail. Cancel is the default.";
         }
 
         // Enter presses Save only when Save is available and the text is worth saving.
@@ -76,8 +76,8 @@ public sealed record UnsavedChangesRequest(
             UnsavedChangesContext.Reload => new UnsavedChangesRequest(
                 context,
                 "Save your changes before reloading?",
-                "Reloading replaces the editor with the config.yaml on disk and drops your unsaved edits." +
-                (canSave ? " Save backs up and writes config.yaml, validates it, and reloads only if that succeeds." : string.Empty),
+                "Reloading drops your unsaved edits and loads config.yaml from disk." +
+                (canSave ? " Save backs up, writes and validates config.yaml, and reloads only if that succeeds." : string.Empty),
                 warning,
                 canSave ? "Save and reload" : null,
                 "Discard and reload",
@@ -87,8 +87,8 @@ public sealed record UnsavedChangesRequest(
             UnsavedChangesContext.Restore => new UnsavedChangesRequest(
                 context,
                 "Discard your edits and restore the backup?",
-                "Restoring puts the last known-good backup back over config.yaml and reloads the editor. " +
-                "Edits you made since the last save are dropped.",
+                "Restoring puts the last known-good backup over config.yaml and reloads the editor. " +
+                "Edits since the last save are dropped.",
                 warning,
                 null,
                 "Discard and restore",
@@ -100,8 +100,8 @@ public sealed record UnsavedChangesRequest(
                 "Save your changes before closing?",
                 "You have edits that are not saved." +
                 (canSave
-                    ? " Save backs up and writes config.yaml, validates it, and closes only if that succeeds; " +
-                      "if validation fails the editor stays open with the error."
+                    ? " Save backs up, writes and validates config.yaml, and closes only if that succeeds. " +
+                      "If validation fails, the editor stays open with the error."
                     : " Closing discards them."),
                 warning,
                 canSave ? "Save and close" : null,

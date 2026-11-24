@@ -100,11 +100,10 @@ public sealed partial class ConfigEditorWindowViewModel
     /// <summary>The longer form of <see cref="CatalogLabel"/>, for its tooltip.</summary>
     public string CatalogToolTip =>
         _layoutCatalog is not null
-            ? "The sections and fields are the installed runtime's own Setup catalog, read through its Python: settings a runtime upgrade adds appear " +
-              "here without an app update. Values are config.yaml's (defenseclaw config show --source, secrets masked); a setting the file does not set " +
-              "shows the runtime's value, read-only. Keys the catalog does not describe are under Other (uncatalogued). Reload reads the file and the catalog again."
-            : "Built-in catalog: one section per key config.yaml sets, as the installed DefenseClaw reports them (defenseclaw config show --source), secrets " +
-              "masked. The runtime's own catalog was not used" + (CatalogUnavailableReason is { Length: > 0 } why ? ": " + why + "." : ".") +
+            ? "Sections and fields come from the installed runtime's Setup catalog. Values come from config.yaml with secrets masked. " +
+              "A setting the file does not set shows the runtime's value, read-only."
+            : "Built-in catalog: one section per key config.yaml sets, secrets masked. " +
+              "The runtime's own catalog was not used" + (CatalogUnavailableReason is { Length: > 0 } why ? ": " + why + "." : ".") +
               " Reload tries it again.";
 
     private static string SectionCount(int count) =>

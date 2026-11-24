@@ -61,7 +61,7 @@ public sealed partial class RedactionViewModel : ObservableObject, IDisposable
     public string Title => "Redaction policy";
 
     public string Subtitle =>
-        "What DefenseClaw collects and how it is redacted before it is stored or sent. Every change is previewed first; nothing is written until you review the command and apply it.";
+        "What DefenseClaw collects and how it is redacted. Changes are previewed first and written only after you review the command.";
 
     /// <summary>The confirm-and-run overlay every apply goes through.</summary>
     public DiscoverActionReview Review { get; }

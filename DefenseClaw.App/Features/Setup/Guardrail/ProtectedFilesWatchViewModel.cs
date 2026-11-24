@@ -84,19 +84,19 @@ public sealed partial class ProtectedFilesWatchViewModel : ObservableObject
         new ProtectedFilesModeChoice(
             ProtectedFilesSettings.Alert,
             "Alert (default)",
-            "A change while an agent tool call runs raises a HIGH alert. A change with no agent call running raises nothing and becomes the accepted content."),
+            "A change during an agent tool call raises a HIGH alert. Any other change becomes the accepted content, with no alert."),
         new ProtectedFilesModeChoice(
             ProtectedFilesSettings.Restore,
             "Restore (strict setups only)",
-            "Alerts, and puts back the last accepted content after an agent's change. Off in every pack."),
+            "Alerts, and restores the last accepted content after an agent's change. Off in every pack."),
         new ProtectedFilesModeChoice(
             ProtectedFilesSettings.Off,
             "Off",
-            "The gateway does not check these files, and raises no protected-file alert."),
+            "The gateway does not check these files. No protected-file alert is raised."),
     };
 
     /// <summary>What the gateway does, in two sentences.</summary>
-    public string Summary => "The gateway checks a short list of files every 2 seconds while it runs. " + ProtectedFileWatchFacts.BlocksNothing;
+    public string Summary => "The gateway checks a short list of files every 2 seconds. " + ProtectedFileWatchFacts.BlocksNothing;
 
     /// <summary>The attribution limit.</summary>
     public string AttributionText => ProtectedFileWatchFacts.Attribution;
@@ -139,7 +139,7 @@ public sealed partial class ProtectedFilesWatchViewModel : ObservableObject
         }
         else if (string.Equals(mode, ProtectedFilesSettings.Off, StringComparison.Ordinal))
         {
-            warnings.Add(new CommandReviewWarning("This turns the watch off", "No change to these files is reported while it is off, whoever makes it."));
+            warnings.Add(new CommandReviewWarning("This turns the watch off", "No change to these files is reported while it is off."));
         }
 
         warnings.Add(new CommandReviewWarning("Gateway not restarted", ProtectedFileWatchFacts.RestartNote));
@@ -181,7 +181,7 @@ public sealed partial class ProtectedFilesWatchViewModel : ObservableObject
         };
         WatchedText = WatchedSentence(settings);
         UnrecognizedText = settings.Unrecognized is { } value
-            ? $"config.yaml sets on_change to \"{value}\", which is not alert, restore or off: the runtime's validation refuses that value. Choose one and review the change."
+            ? $"config.yaml sets on_change to \"{value}\". The runtime accepts only alert, restore or off. Choose one and review the change."
             : string.Empty;
 
         OnPropertyChanged(nameof(SelfProtectionText));
@@ -197,13 +197,13 @@ public sealed partial class ProtectedFilesWatchViewModel : ObservableObject
 
         if (string.Equals(settings.OnChange, ProtectedFilesSettings.Off, StringComparison.Ordinal))
         {
-            return "Nothing is checked: on_change is off.";
+            return "Nothing is watched. on_change is off.";
         }
 
         var names = string.Join(", ", settings.WatchedPaths);
         return settings.HasConfiguredPaths
-            ? $"Checked, in your home folder (guardrail.protected_files.paths, which replaces the built-in list): {names}."
-            : $"Checked, in your home folder (the built-in list on Windows): {names}. {ProtectedFileWatchFacts.WindowsCoverage}";
+            ? $"Watched in your home folder, from guardrail.protected_files.paths: {names}."
+            : $"Watched in your home folder: {names}. {ProtectedFileWatchFacts.WindowsCoverage}";
     }
 
     /// <summary>Opens the review of the selected mode. Nothing runs until it is confirmed.</summary>
@@ -224,9 +224,9 @@ public sealed partial class ProtectedFilesWatchViewModel : ObservableObject
 
     private static string Explanation(string mode) => mode switch
     {
-        ProtectedFilesSettings.Restore => "Saves on_change = restore through the CLI. After an agent's change to a protected file the gateway raises the alert and puts the last accepted content back.",
-        ProtectedFilesSettings.Off => "Saves on_change = off through the CLI. The gateway stops checking these files.",
-        _ => "Removes on_change from config.yaml through the CLI, so the default applies: the gateway raises a HIGH alert for a change while an agent tool call runs.",
+        ProtectedFilesSettings.Restore => "Saves on_change = restore. After an agent changes a protected file, the gateway alerts and restores the last accepted content.",
+        ProtectedFilesSettings.Off => "Saves on_change = off. The gateway stops checking these files.",
+        _ => "Removes on_change from config.yaml. The default applies: a HIGH alert for a change during an agent tool call.",
     };
 
     internal Task OnFinishedAsync(DiscoverReviewResult result, string mode)

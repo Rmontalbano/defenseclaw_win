@@ -257,24 +257,24 @@
                 <StackPanel Style="{StaticResource DcToolbarActions}">
                     <ui:Button Icon="{ctl:DcSymbolIcon DocumentEdit24}"
                                Command="{Binding ShowConfigEditorCommand}"
-                               ToolTip="Config editor - go to the config.yaml editor on this page (backup, validation and restore)"
+                               ToolTip="Go to the config.yaml editor on this page"
                                AutomationProperties.Name="Config editor"
-                               AutomationProperties.HelpText="Brings the config.yaml editor on this page into view: backup, validation and restore." />
+                               AutomationProperties.HelpText="Goes to the config.yaml editor on this page." />
                     <ui:Button Icon="{ctl:DcSymbolIcon ShieldCheckmark24}"
                                Command="{Binding OpenFirstRunCommand}"
-                               ToolTip="Guided setup - first-run init with a reviewed plan, or add detected agents"
+                               ToolTip="Guided setup: first-run init, or add detected agents"
                                AutomationProperties.Name="Guided setup"
-                               AutomationProperties.HelpText="Opens first-run setup: install state, agent detection, and the exact commands to review before anything runs." />
+                               AutomationProperties.HelpText="Opens first-run setup. Every command is reviewed before it runs." />
                     <ui:Button Icon="{ctl:DcSymbolIcon ArrowCircleUp24}"
                                Command="{Binding OpenUpdatesCommand}"
-                               ToolTip="Updates &amp; trust - installed vs latest release, signing and provenance status"
+                               ToolTip="Updates &amp; trust: installed and latest release, signing and provenance"
                                AutomationProperties.Name="Updates &amp; trust"
-                               AutomationProperties.HelpText="Installed vs latest release, signing and provenance status." />
+                               AutomationProperties.HelpText="Installed and latest release, signing and provenance." />
                     <ui:Button Icon="{ctl:DcSymbolIcon ArrowSync24}"
                                Command="{Binding ReloadCatalogCommand}"
-                               ToolTip="Re-read catalog - ask the CLI again which setup targets it has and re-read every help screen (slow: about thirty CLI calls)"
+                               ToolTip="Re-read the setup targets and every help screen. Slow: about 30 CLI calls."
                                AutomationProperties.Name="Re-read catalog"
-                               AutomationProperties.HelpText="Ask the CLI again which setup targets it has and re-read every help screen (slow: about thirty CLI calls)." />
+                               AutomationProperties.HelpText="Re-reads the setup targets and every help screen. Slow: about 30 CLI calls." />
                     <ui:Button Icon="{ctl:DcSymbolIcon ArrowClockwise24}"
                                Command="{Binding RefreshCommand}"
                                ToolTip="Re-read the guardrail posture and the connector roster (F5)"
@@ -356,9 +356,9 @@
                             <ui:Button Margin="8,0,0,0"
                                        Content="Clear"
                                        Command="{Binding ClearRestartCommand}"
-                                       ToolTip="Forget the queued restart without restarting. What was saved stays saved and applies the next time the gateway restarts."
+                                       ToolTip="Drops the queued restart without restarting. Saved changes apply at the next gateway restart."
                                        AutomationProperties.Name="Clear the queued restart"
-                                       AutomationProperties.HelpText="Forgets the queued restart without restarting the gateway. What was saved stays saved and applies the next time the gateway restarts." />
+                                       AutomationProperties.HelpText="Drops the queued restart without restarting the gateway. Saved changes apply at the next gateway restart." />
                         </StackPanel>
                     </Grid>
                 </Border>
@@ -399,9 +399,9 @@
                            Command="{Binding OpenRedactionTileCommand}"
                            Visibility="{Binding HasRedactionTile, Converter={StaticResource BoolToVisibility}}"
                            AutomationProperties.Name="Redaction policy"
-                           AutomationProperties.HelpText="Opens the redaction policy: the profile of each bucket and destination, with every change previewed before it is applied."
+                           AutomationProperties.HelpText="Opens the redaction policy. Every change is previewed first."
                            Icon="{ctl:DcSymbolIcon EyeOff24}"
-                           Content="Redaction Policy — inspect profiles, buckets, destinations, and routes" />
+                           Content="Redaction policy: profiles, buckets, destinations and routes" />
 
                 <ui:InfoBar Margin="0,0,0,8"
                             IsClosable="False"
@@ -446,7 +446,7 @@
                     <ctl:DcSymbolIcon Style="{StaticResource DcEmptyIcon}" Symbol="ErrorCircle24" />
                     <TextBlock Style="{StaticResource DcEmptyTitle}" Text="The setup catalog is unavailable" />
                     <TextBlock Style="{StaticResource DcEmptyDetail}"
-                               Text="The DefenseClaw command did not answer, so there is no list of setup wizards to show. The reason is in the banner above." />
+                               Text="The DefenseClaw command did not answer. The reason is in the banner above." />
                     <ui:Button Margin="0,16,0,0"
                                HorizontalAlignment="Center"
                                Content="Re-read catalog"
@@ -459,7 +459,7 @@
                     <ctl:DcSymbolIcon Style="{StaticResource DcEmptyIcon}" Symbol="ShieldSettings24" />
                     <TextBlock Style="{StaticResource DcEmptyTitle}" Text="The CLI reported no setup targets" />
                     <TextBlock Style="{StaticResource DcEmptyDetail}"
-                               Text="The installed DefenseClaw answered, and its setup help lists nothing to configure. If it was just upgraded, read the catalog again." />
+                               Text="The installed DefenseClaw lists nothing to configure. If it was upgraded, re-read the catalog." />
                     <ui:Button Margin="0,16,0,0"
                                HorizontalAlignment="Center"
                                Content="Re-read catalog"
@@ -472,7 +472,7 @@
                     <ctl:DcSymbolIcon Style="{StaticResource DcEmptyIcon}" Symbol="Search24" />
                     <TextBlock Style="{StaticResource DcEmptyTitle}" Text="No wizards match" />
                     <TextBlock Style="{StaticResource DcEmptyDetail}"
-                               Text="Clear the search: no setup area, wizard or connector matches it. (In Connector Setup, the certification filter hides the connectors not certified on Windows.)" />
+                               Text="Nothing matches the search. In Connector Setup, the certification filter also hides connectors." />
                 </StackPanel>
 
                 <!--
@@ -528,7 +528,7 @@
                                 Command="{Binding OpenRuntimeMonitoringTileCommand}"
                                 Visibility="{Binding HasRuntimeMonitoringTile, Converter={StaticResource BoolToVisibility}}"
                                 AutomationProperties.Name="Runtime monitoring"
-                                AutomationProperties.HelpText="Opens the runtime monitoring card: whether DefenseClaw is watching running processes and connections for AI use, plane by plane, and what each plane needs. Changes are reviewed first.">
+                                AutomationProperties.HelpText="Opens runtime monitoring: the processes and connections watched for AI use, by plane. Changes are reviewed first.">
                             <StackPanel>
                                 <StackPanel Orientation="Horizontal">
                                     <ctl:DcSymbolIcon Margin="0,0,8,0"
@@ -596,11 +596,11 @@
                     <TextBlock Margin="0,2,0,10"
                                Style="{StaticResource DcCaption}"
                                TextWrapping="Wrap"
-                               Text="A typed, sectioned config.yaml editor built from the installed runtime's own view of the file - new runtime settings appear here without an app update. Changes are diff-reviewed, backed up and validated by the CLI when saved, and queue a gateway restart when the gateway needs one." />
+                               Text="Edit config.yaml by section. Saving shows a diff, backs up the file and validates it." />
                     <vc:ConfigEditorView x:Name="InlineEditor"
                                          IsInline="True"
                                          Session="{Binding ConfigEditor}"
-                                         FooterNote="One draft: Open in window shows these same edits in a window of their own." />
+                                         FooterNote="Open in window shows this same draft." />
                 </StackPanel>
 
                 <Separator Margin="0,8,0,16" />
@@ -753,8 +753,8 @@
                                        Content="Set up several…"
                                        Icon="{ctl:DcSymbolIcon PlugConnected24}"
                                        Command="{Binding OpenBatchCommand}"
-                                       ToolTip="Configure more than one connector in a single reviewed command (setup --yes --connector ... --mode ...)."
-                                       AutomationProperties.HelpText="Opens a dialog that sets up several connectors at once. Shows the exact command first." />
+                                       ToolTip="Set up several connectors in one reviewed command: setup --yes --connector ... --mode ..."
+                                       AutomationProperties.HelpText="Opens a dialog to set up several connectors. The command is shown first." />
                         </StackPanel>
                     </StackPanel>
                 </Border>
@@ -1088,7 +1088,7 @@
                                                                      panels:CredentialEntryBox.Attach="True"
                                                                      AutomationProperties.Name="{Binding EntryAutomationName}"
                                                                      AutomationProperties.HelpText="{Binding EntryStatus}"
-                                                                     ToolTip="Typed here and handed to the CLI’s hidden prompt for one run. Never on a command line, never in Activity.">
+                                                                     ToolTip="Passed to the CLI’s hidden prompt for one run. It is not shown on a command line or in Activity.">
                                                             <!-- Enter goes on to the review (which shows the command and asks), Esc closes the box. -->
                                                             <PasswordBox.InputBindings>
                                                                 <KeyBinding Key="Return" Command="{Binding ReviewCommand}" />
@@ -1139,7 +1139,7 @@
                                 <ui:Button Content="Check"
                                            Icon="{ctl:DcSymbolIcon CheckmarkCircle24}"
                                            Command="{Binding Credentials.CheckCommand}"
-                                           ToolTip="Run defenseclaw keys check (read-only): exits non-zero when a required key is missing"
+                                           ToolTip="Runs defenseclaw keys check. Read-only. Exits non-zero if a required key is missing."
                                            AutomationProperties.Name="Check required credentials" />
                                 <!-- Where the app can type values, this opens a masked box on every required credential that is unset; otherwise a console window. -->
                                 <ui:Button Content="Fill missing…"
@@ -1259,7 +1259,7 @@
                                    Text="Connector Setup" />
                         <TextBlock Style="{StaticResource DcBody}"
                                    TextWrapping="Wrap"
-                                   Text="Add or re-run a connector, choose the active hook connector set (batch), or remove one. Every choice ends on a review of the exact command." />
+                                   Text="Add, re-run or remove a connector, or set the active hook connectors in one batch." />
                     </StackPanel>
 
                     <ScrollViewer Grid.Row="1" Focusable="False" VerticalScrollBarVisibility="Auto">
@@ -1295,7 +1295,7 @@
                             <TextBlock Margin="0,0,0,8"
                                        Style="{StaticResource DcCaption}"
                                        Visibility="{Binding HasConnectorChoices, Converter={StaticResource InverseBoolToVisibility}}"
-                                       Text="The installed DefenseClaw lists no connector setup targets (or the setup catalog is still being read)." />
+                                       Text="No connector setup targets are listed. The catalog may still be loading." />
                         </StackPanel>
                     </ScrollViewer>
 
@@ -1304,8 +1304,8 @@
                                    Content="Set up several…"
                                    Icon="{ctl:DcSymbolIcon PlugConnected24}"
                                    Command="{Binding OpenBatchFromChooserCommand}"
-                                   ToolTip="Configure more than one connector in a single reviewed command (setup --yes --connector ... --mode ...)."
-                                   AutomationProperties.HelpText="Opens a dialog that sets up several connectors at once. Shows the exact command first." />
+                                   ToolTip="Set up several connectors in one reviewed command: setup --yes --connector ... --mode ..."
+                                   AutomationProperties.HelpText="Opens a dialog to set up several connectors. The command is shown first." />
                         <ui:Button Margin="0,0,8,0"
                                    Content="Remove a connector…"
                                    Icon="{ctl:DcSymbolIcon PlugDisconnected24}"
@@ -1314,7 +1314,7 @@
                                    ToolTipService.ShowOnDisabled="True"
                                    ToolTip="{Binding RemoveConnectorCard.TileToolTip}"
                                    Visibility="{Binding HasRemoveConnector, Converter={StaticResource BoolToVisibility}}"
-                                   AutomationProperties.HelpText="Opens the setup remove wizard, which ends on a review of the exact command." />
+                                   AutomationProperties.HelpText="Opens the remove wizard. The command is shown first." />
                         <ui:Button Appearance="Secondary"
                                    Content="Close"
                                    Command="{Binding CloseConnectorSetupCommand}"

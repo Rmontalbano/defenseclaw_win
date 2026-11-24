@@ -25,16 +25,16 @@ namespace DefenseClaw.App.ViewModels.ConfigEditor;
 public static class RuntimeCatalogLayout
 {
     /// <summary>The note under a setting the runtime's catalog lists and config.yaml does not set.</summary>
-    internal const string NotInFileReason = "Not set in config.yaml: the runtime uses the value shown. To change it, add the key in the RAW tab.";
+    internal const string NotInFileReason = "Not set in config.yaml. The runtime uses the value shown. Add the key in the Raw tab to change it.";
 
     /// <summary>The same for a secret: there is nothing to show, and the way to set one keeps it out of the file.</summary>
     internal const string NotInFileSecretReason =
-        "Not set in config.yaml. Keep a secret out of the file: store it with `defenseclaw keys set <ENV_NAME>` and point the matching *_env setting at that name.";
+        "Not set in config.yaml. Store a secret with `defenseclaw keys set <ENV_NAME>` and point the matching *_env setting at that name.";
 
     internal const string OtherSummary = "Keys config.yaml sets that the runtime's catalog does not describe yet.";
 
     internal const string OtherHelp =
-        "They keep this form's rules (secrets, masked values and structured entries stay read-only). Upgrade the runtime for a typed editor, or edit them in the RAW tab.";
+        "Secrets, masked values and structured entries stay read-only. Upgrade the runtime for a typed editor, or edit them in the Raw tab.";
 
     /// <param name="catalog">The runtime's catalog.</param>
     /// <param name="fileSections">The source-driven form <see cref="ConfigFormBuilder.Build"/> made (with <see cref="RuntimeConfigCatalog.Describe"/> for its labels and hints).</param>

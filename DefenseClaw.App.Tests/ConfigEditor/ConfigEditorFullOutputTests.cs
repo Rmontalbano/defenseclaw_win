@@ -54,7 +54,7 @@ public sealed class ConfigEditorFullOutputTests
 
         Assert.Null(result.Yaml);
         Assert.Contains("only part of config.yaml", result.Failure, StringComparison.Ordinal);
-        Assert.Contains("RAW editing still works", result.Failure, StringComparison.Ordinal);
+        Assert.Contains("Raw editing still works", result.Failure, StringComparison.Ordinal);
     }
 
     [Fact]

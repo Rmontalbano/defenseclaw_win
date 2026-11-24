@@ -230,7 +230,7 @@ public sealed class SetupCredentialsInAppViewTests
 
             scene.Button("Set EXAMPLE_JUDGE_KEY in a terminal").Command.CanExecute(null);
             Assert.All(scene.All<PasswordBox>(), b => Assert.False(b.IsVisible));
-            Assert.Contains(scene.All<TextBlock>(), t => t.IsVisible && t.Text.Contains("open a console window", StringComparison.Ordinal));
+            Assert.Contains(scene.All<TextBlock>(), t => t.IsVisible && t.Text.Contains("in a console window", StringComparison.Ordinal));
 
             scene.ScrollToCredentials();
             RenderTo.Png(scene.Shell.Host, "cust221-credentials-console-only-1400x1500");

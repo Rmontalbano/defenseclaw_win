@@ -193,7 +193,7 @@ public sealed class LlmGuardrailWizardViewTests
             var list = VisualTree.Find<ListBox>(picker)!;
             Assert.True(list.IsVisible);
             Assert.Equal(new[] { "us.acme.large-v1:0", "us.acme.small-v1:0", "eu.acme.large-v1:0" }, list.Items.Cast<ModelPickerRow>().Select(r => r.Value).ToArray());
-            Assert.Contains(withCatalogue.VisibleTexts(), t => t.Contains("3 model(s) from the runtime's catalogue for AWS Bedrock", StringComparison.Ordinal));
+            Assert.Contains(withCatalogue.VisibleTexts(), t => t.Contains("3 models in the runtime's catalogue for AWS Bedrock", StringComparison.Ordinal));
 
             // Typing narrows the list, and the typed text is the first row, marked as typed.
             model.Value = "small";

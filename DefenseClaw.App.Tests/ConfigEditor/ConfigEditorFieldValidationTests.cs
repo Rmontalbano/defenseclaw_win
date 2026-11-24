@@ -98,7 +98,7 @@ public sealed class ConfigEditorFieldValidationTests : IDisposable
         Assert.True(vm.HasBlockingFieldErrors);
         AssertSaveIs(vm, false);
         Assert.Equal("gateway.api_port: port must be between 1 and 65535", vm.FieldErrorsSummary);
-        Assert.Equal("Fix the field error before saving — gateway.api_port: port must be between 1 and 65535", vm.FieldErrorsReason);
+        Assert.Equal("Fix the field error before saving: gateway.api_port: port must be between 1 and 65535", vm.FieldErrorsReason);
         Assert.Equal(vm.FieldErrorsReason, vm.SaveToolTip);
         Assert.DoesNotContain("70000", vm.FieldErrorsSummary, StringComparison.Ordinal);
 
@@ -214,11 +214,11 @@ public sealed class ConfigEditorFieldValidationTests : IDisposable
             "gateway.api_port: port must be between 1 and 65535" + Environment.NewLine +
             "gateway.token_env: env var names must match A-Z, 0-9, and underscores",
             vm.FieldErrorsSummary);
-        Assert.StartsWith("Fix the 2 field errors before saving — gateway.api_port: ", vm.FieldErrorsReason, StringComparison.Ordinal);
+        Assert.StartsWith("Fix the 2 field errors before saving: gateway.api_port: ", vm.FieldErrorsReason, StringComparison.Ordinal);
 
         harness.Field("gateway.api_port").NumberValue = 8080;
         Assert.Equal("gateway.token_env: env var names must match A-Z, 0-9, and underscores", vm.FieldErrorsSummary);
-        Assert.StartsWith("Fix the field error before saving — gateway.token_env: ", vm.FieldErrorsReason, StringComparison.Ordinal);
+        Assert.StartsWith("Fix the field error before saving: gateway.token_env: ", vm.FieldErrorsReason, StringComparison.Ordinal);
         AssertSaveIs(vm, false);
 
         harness.Field("gateway.token_env").TextValue = "OTHER_TOKEN";
@@ -509,7 +509,7 @@ public sealed class ConfigEditorFieldValidationTests : IDisposable
         harness.Field("guardrail.mode").TextValue = "[REDACTED]";
 
         Assert.NotNull(vm.FieldErrorMessage);
-        Assert.Contains("never writes masked text back", vm.FieldErrorMessage, StringComparison.Ordinal);
+        Assert.Contains("Form never writes back", vm.FieldErrorMessage, StringComparison.Ordinal);
         Assert.Equal(harness.Raw, vm.RawText);
     }
 

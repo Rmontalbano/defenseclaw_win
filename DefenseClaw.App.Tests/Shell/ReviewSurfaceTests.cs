@@ -346,7 +346,7 @@ public sealed class ReviewSurfaceTests : IDisposable
             Assert.False(review.RestartsGateway);
             var warning = Assert.Single(review.Warnings);
             Assert.Equal("Gateway not restarted", warning.Title);
-            Assert.Contains("not yet in effect", warning.Message, StringComparison.Ordinal);
+            Assert.Contains("not in effect yet", warning.Message, StringComparison.Ordinal);
 
             vm.GuardrailRestartAfter = true;
             Assert.Equal("defenseclaw guardrail enable --yes", vm.GuardrailReview!.CommandText);
@@ -366,7 +366,7 @@ public sealed class ReviewSurfaceTests : IDisposable
             Assert.Equal("defenseclaw guardrail disable --yes", review.CommandText);
             Assert.Equal(CommandTier.Destructive, review.Tier);
             Assert.Equal("Run destructive command", review.ConfirmLabel);
-            Assert.Contains("tears down the connector hooks", review.Summary, StringComparison.Ordinal);
+            Assert.Contains("removes the connector hooks", review.Summary, StringComparison.Ordinal);
         });
     }
 

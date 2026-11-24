@@ -152,10 +152,10 @@ public sealed partial class WizardGuideCardViewModel : ObservableObject
 
         IsAvailable = true;
         UnavailableReason = string.Empty;
-        Caution = "Choosing this starts containers on this machine (Splunk in Free mode, with its own storage volumes) through Docker Desktop. " +
-                  "Docker Desktop's Linux-container engine needs Hyper-V virtual-machine resources — memory and disk — on this PC. " +
+        Caution = "Choosing this starts Splunk (Free mode) containers with their own storage volumes through Docker Desktop. " +
+                  "Docker Desktop's Linux-container engine needs Hyper-V virtual-machine memory and disk on this PC. " +
                   (status.Warnings.Count > 0
-                      ? "The CLI checks Docker itself before it changes anything, and from here it looks like it would refuse: " + string.Join(" ", status.Warnings)
+                      ? "The CLI checks Docker before it changes anything, and it looks like it would refuse: " + string.Join(" ", status.Warnings)
                       : string.Empty);
         Caution = Caution.Trim();
     }

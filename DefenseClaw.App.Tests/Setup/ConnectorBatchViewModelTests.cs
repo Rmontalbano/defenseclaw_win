@@ -104,7 +104,7 @@ public sealed class ConnectorBatchViewModelTests : IDisposable
         Assert.Equal("Configured now: Codex.", vm.RosterLine);
         Assert.False(vm.HasChanges);
         Assert.Equal("Nothing to apply", vm.Summary);
-        Assert.StartsWith("Nothing to apply:", vm.ReviewBlockedReason, StringComparison.Ordinal);
+        Assert.StartsWith("Nothing to apply.", vm.ReviewBlockedReason, StringComparison.Ordinal);
         Assert.Empty(cli.Ran);
     }
 
@@ -242,7 +242,7 @@ public sealed class ConnectorBatchViewModelTests : IDisposable
         Assert.False(vm.CanChooseDetected);
         Assert.True(vm.CanChooseAll);
         vm.ExtraIndex = 1;
-        Assert.Equal("The installed DefenseClaw's setup does not list --detected.", vm.ReviewBlockedReason);
+        Assert.Equal("setup does not list --detected.", vm.ReviewBlockedReason);
     }
 
     [Fact]

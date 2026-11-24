@@ -55,7 +55,7 @@ public sealed class ConfigEditorRuntimeCatalogTests : IDisposable
         Assert.True(vm.UsesRuntimeCatalog);
         Assert.Equal(RuntimeCatalogFixtures.SectionNames.Append(RuntimeConfigCatalog.OtherSectionName), vm.Sections.Select(s => s.DisplayName));
         Assert.Equal("runtime catalog 1.0.4 · 24 sections", vm.CatalogLabel);
-        Assert.Contains("runtime's own Setup catalog", vm.CatalogToolTip, StringComparison.Ordinal);
+        Assert.Contains("runtime's Setup catalog", vm.CatalogToolTip, StringComparison.Ordinal);
 
         // The catalog's summary and help line go with its card; separators are group cards in the catalog's order.
         var general = Section(vm, "General");

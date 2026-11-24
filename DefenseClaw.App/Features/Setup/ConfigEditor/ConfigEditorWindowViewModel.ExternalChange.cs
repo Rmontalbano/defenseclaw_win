@@ -58,7 +58,7 @@ public sealed partial class ConfigEditorWindowViewModel
     }
 
     /// <summary>What the success banner adds when every changed key is applied by the running gateway itself.</summary>
-    internal const string HotReloadSentence = "The running gateway applies these settings on its own config reload; no restart is needed.";
+    internal const string HotReloadSentence = "The gateway reloads these settings itself. No restart is needed.";
 
     // ------------------------------------------------------------------ an unloadable config.yaml
 
@@ -102,7 +102,7 @@ public sealed partial class ConfigEditorWindowViewModel
 
         if (!OpenFileRequest(path))
         {
-            LoadProblemActionMessage = "Windows has no program set to open config.yaml. Use Show in Explorer and open it with the editor you like.";
+            LoadProblemActionMessage = "Windows has no program set for config.yaml. Use Show in Explorer and open it with your editor.";
         }
     }
 
@@ -254,7 +254,7 @@ public sealed partial class ConfigEditorWindowViewModel
     }
 
     private const string FieldErrorBlocksRebase =
-        "A field in FORM holds a value with an error that is not in your draft yet. Fix it or put the old value back first: a rebase would drop it.";
+        "A field in Form has an error that is not in your draft yet. Fix it or restore the old value first. A rebase would drop it.";
 
     /// <summary>"Back to editing" on the review (also Esc).</summary>
     [RelayCommand]

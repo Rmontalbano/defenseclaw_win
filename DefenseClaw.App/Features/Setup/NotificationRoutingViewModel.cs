@@ -49,7 +49,7 @@ public sealed partial class RoutingRow : ObservableObject
     public string ChangeText => IsChanged ? (Original ? "was on" : "was off") : string.Empty;
 
     /// <summary>Why the toggle is off to the touch, or empty.</summary>
-    public string UnavailableText => IsAvailable ? string.Empty : "This DefenseClaw does not list this setting, so it cannot be changed here.";
+    public string UnavailableText => IsAvailable ? string.Empty : "This DefenseClaw does not list this setting.";
 
     /// <summary>What a screen reader announces for the row.</summary>
     public string AutomationName =>
@@ -101,9 +101,7 @@ public sealed partial class NotificationRoutingViewModel : SetupDialogViewModel
     /// the Overview's switch uses (<see cref="NotificationSwitch.Explanation"/>).
     /// </summary>
     public const string TrayNote =
-        "These are DefenseClaw's own desktop notifications, raised by the gateway for blocked tool calls, would-block verdicts and pending approvals " +
-        "(the notifications block of config.yaml). The alerts this app shows from the tray (Settings, Notifications) are a separate setting: " +
-        "the same block can raise both, and turning one off leaves the other as it is.";
+        "Gateway desktop notifications for blocked tool calls, would-block verdicts and pending approvals. Tray alerts are a separate setting (Settings, Notifications).";
 
     private readonly List<NotificationChange> _pending = new();
     private IReadOnlyList<NotificationChange> _planChanges = Array.Empty<NotificationChange>();
@@ -134,7 +132,7 @@ public sealed partial class NotificationRoutingViewModel : SetupDialogViewModel
 
     public string Title => DialogTitle;
 
-    public string Subtitle => "Choose which events make DefenseClaw's gateway raise a desktop notification.";
+    public string Subtitle => "Choose which events raise a desktop notification.";
 
     public string ScopeNote => TrayNote;
 
@@ -159,7 +157,7 @@ public sealed partial class NotificationRoutingViewModel : SetupDialogViewModel
     public string MasterText => $"Desktop notifications are {(MasterOn ? "on" : "off")}";
 
     /// <summary>Under the master line: that the file does not say, so the runtime's default is what is on screen. Empty when it does.</summary>
-    public string MasterDetail => MasterIsExplicit ? string.Empty : "config.yaml does not say, so this is the runtime's default on Windows.";
+    public string MasterDetail => MasterIsExplicit ? string.Empty : "Not set in config.yaml. This is the runtime default.";
 
     public bool HasMasterDetail => MasterDetail.Length > 0;
 
@@ -168,13 +166,13 @@ public sealed partial class NotificationRoutingViewModel : SetupDialogViewModel
     /// <summary>The Overview's tooltip for the same action, or the reason it is off.</summary>
     public string MasterTip =>
         ChangesBlockedReason ??
-        $"DefenseClaw's desktop notifications for blocked tool calls and pending approvals are {(MasterOn ? "on" : "off")}. " +
+        $"Desktop notifications are {(MasterOn ? "on" : "off")}. " +
         $"{CommandReview.CommandLine(CommandReview.DefaultExecutable, NotificationSwitch.Argv(!MasterOn))} restarts the gateway. Asks for confirmation first.";
 
     public bool ShowMasterOffNote => !MasterOn;
 
     public string MasterOffNote =>
-        "Desktop notifications are off, so none of the switches below raises one until you turn them on. You can still change them now; the choices are saved.";
+        "Desktop notifications are off. The switches below are saved but raise nothing until you turn them on.";
 
     // ------------------------------------------------------------------ what moved
 
@@ -183,8 +181,8 @@ public sealed partial class NotificationRoutingViewModel : SetupDialogViewModel
 
     public string RestartNote =>
         RestartAfter
-            ? "The gateway reads these once, when it starts. With several changes only the last command restarts it."
-            : "The gateway is not restarted, so the changes are saved but not in effect until it next restarts.";
+            ? "The gateway reads these at start. With several changes, only the last command restarts it."
+            : "Saved, but not in effect until the gateway restarts.";
 
     public ObservableCollection<string> ChangeLines { get; } = new();
 
@@ -277,14 +275,14 @@ public sealed partial class NotificationRoutingViewModel : SetupDialogViewModel
         _listedSlots = null;
         if (!result.Succeeded)
         {
-            return "The options of setup notifications-set could not be read (" + result.Error + "), so the settings cannot be checked against this DefenseClaw. Press Refresh to try again.";
+            return "The options of setup notifications-set could not be read (" + result.Error + "). Press Refresh to try again.";
         }
 
         var help = SetupHelpParser.Parse(result.Text);
         var slots = help.FirstChoices();
         if (slots.Count == 0)
         {
-            return "The installed DefenseClaw's setup notifications-set help lists no settings to choose from, so there is nothing this dialog can change. Press Refresh to read it again.";
+            return "setup notifications-set lists no settings, so nothing can be changed here. Press Refresh to read it again.";
         }
 
         _listedSlots = new HashSet<string>(slots, StringComparer.Ordinal);
@@ -356,7 +354,7 @@ public sealed partial class NotificationRoutingViewModel : SetupDialogViewModel
                 return "Another command is running.";
             }
 
-            return HasChanges ? null : "Nothing to apply: no switch differs from config.yaml.";
+            return HasChanges ? null : "Nothing to apply. No switch differs from config.yaml.";
         }
     }
 
@@ -364,7 +362,7 @@ public sealed partial class NotificationRoutingViewModel : SetupDialogViewModel
     public bool ReviewBlocked => ReviewBlockedReason is not null;
 
     /// <summary>The tooltip of "Review changes": the reason it is off, or what it does.</summary>
-    public string ReviewTip => ReviewBlockedReason ?? "Shows the exact commands first, one for each switch you moved. Nothing runs until you confirm.";
+    public string ReviewTip => ReviewBlockedReason ?? "Shows one command for each switch you moved. Nothing runs until you confirm.";
 
     private bool CanReview() => ReviewBlockedReason is null;
 
@@ -394,38 +392,37 @@ public sealed partial class NotificationRoutingViewModel : SetupDialogViewModel
 
         var restart = RestartAfter
             ? (_canSkipRestart || _pending.Count == 1
-                ? "The gateway restarts once, after the last command, because it reads these settings only when it starts."
-                : "The installed DefenseClaw has no --no-restart for these commands, so each of them restarts the gateway.")
-            : "The gateway is not restarted, so the changes are saved but not in effect until it next restarts.";
+                ? "The gateway restarts once, after the last command."
+                : "This DefenseClaw has no --no-restart for these commands, so each one restarts the gateway.")
+            : "Saved, but not in effect until the gateway restarts.";
 
         var warnings = new List<CommandReviewWarning>();
         if (!RestartAfter)
         {
             warnings.Add(new CommandReviewWarning(
                 "Gateway not restarted",
-                "The gateway is not restarted, so the new settings are saved but not in effect until it next restarts."));
+                "The settings are saved but not in effect until the gateway restarts."));
         }
         else if (!_canSkipRestart && _pending.Count > 1)
         {
             warnings.Add(new CommandReviewWarning(
                 "One restart per command",
-                $"This DefenseClaw's setup notifications-set has no --no-restart, so the gateway restarts {_pending.Count.ToString(CultureInfo.CurrentCulture)} times, once after each command."));
+                $"setup notifications-set has no --no-restart, so the gateway restarts {_pending.Count.ToString(CultureInfo.CurrentCulture)} times, once per command."));
         }
 
         if (!MasterOn)
         {
             warnings.Add(new CommandReviewWarning(
                 "Desktop notifications are off",
-                "The master switch is off, so these changes are saved but nothing is raised until you turn it on."));
+                "The master switch is off. These changes are saved but raise nothing until you turn it on."));
         }
 
         return new SetupPlan
         {
             Title = "Update notification routing?",
             Summary =
-                $"Changes which events DefenseClaw's gateway raises a desktop notification for: {(_pending.Count == 1 ? "one setting" : _pending.Count.ToString(CultureInfo.CurrentCulture) + " settings")} " +
-                $"in the notifications block of config.yaml, one command each, in the order shown. {restart} " +
-                "These are the gateway's own notifications; the alerts this app shows from the tray are a separate setting and do not change.",
+                $"Changes {(_pending.Count == 1 ? "1 setting" : _pending.Count.ToString(CultureInfo.CurrentCulture) + " settings")} " +
+                $"in the notifications block of config.yaml, one command each. {restart} Tray alerts do not change.",
             Steps = steps,
             RestartsGateway = RestartAfter,
             Warnings = warnings,
@@ -519,7 +516,7 @@ public sealed partial class NotificationRoutingViewModel : SetupDialogViewModel
         ResultKey = result.Succeeded ? "Ok" : "Bad";
         ResultText = result.Succeeded
             ? $"Desktop notifications are now {(turnedOn ? "on" : "off")}."
-            : $"Desktop notifications were not turned {(turnedOn ? "on" : "off")}. The review and the Activity panel have the output.";
+            : $"Desktop notifications were not turned {(turnedOn ? "on" : "off")}. The output is in the review and Activity.";
         return Task.CompletedTask;
     }
 }

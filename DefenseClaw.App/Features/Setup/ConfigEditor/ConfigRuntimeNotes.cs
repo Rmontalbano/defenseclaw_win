@@ -63,7 +63,7 @@ public static class ConfigRuntimeNotes
             Get(guardrail, "profile_assignments") is YamlSequenceNode { Children.Count: > 0 })
         {
             notes.Add(
-                "Guardrail profile assignments: when several profiles match, the runtime applies their strictest combination (1.0.4). The first match no longer wins, so the order of the assignments does not decide.");
+                "Since 1.0.4, when several guardrail profiles match, the runtime applies their strictest combination. Assignment order does not decide.");
         }
 
         return notes;
@@ -88,7 +88,7 @@ public static class ConfigRuntimeNotes
             var shown = id.Length > ContainerIdChars ? id[..ContainerIdChars] + "…" : id;
             var container = shown.Length == 0 ? string.Empty : $" (container {shown})";
             notes.Add(
-                $"Splunk destination {name} was set up by DefenseClaw's local Splunk{container}. Its local_stack record is written only by that setup and is shown read-only: change it with the local Splunk setup, not by hand. A Splunk destination without it is remote.");
+                $"Splunk destination {name} was set up by DefenseClaw's local Splunk{container}. Its local_stack record is read-only here: change it with the local Splunk setup. A Splunk destination without it is remote.");
         }
     }
 

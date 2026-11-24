@@ -156,7 +156,7 @@
                     <ContentPresenter Content="{Binding}" ContentTemplate="{StaticResource FieldValidationTemplate}" />
                 </StackPanel>
                 <ui:TextBox Grid.Column="1"
-                            AutomationProperties.HelpText="Name of the environment variable that holds the value, not the value itself."
+                            AutomationProperties.HelpText="Name of the environment variable that holds the value."
                             AutomationProperties.Name="{Binding DisplayName}"
                             FontFamily="{DynamicResource DcMonoFontFamily}"
                             IsEnabled="{Binding IsEditable}"
@@ -366,7 +366,7 @@
                 <ItemsControl ItemsSource="{Binding SubGroups}" ItemTemplate="{DynamicResource SubGroupTemplate}" />
                 <!-- An empty mapping (e.g. `observability: {}`) is a normal state, not an error. -->
                 <TextBlock Style="{StaticResource DcCaption}"
-                           Text="Nothing to edit here: this section is empty in config.yaml. Add settings in the RAW tab, or use the Setup panel's wizards."
+                           Text="This section is empty in config.yaml. Add settings in the Raw tab or with a Setup wizard."
                            Visibility="{Binding IsEmpty, Converter={StaticResource BoolToVisibility}}" />
             </StackPanel>
         </DataTemplate>
@@ -527,7 +527,7 @@
                            ToolTip="{Binding CatalogToolTip}" />
                 <ui:Button Margin="0"
                            VerticalAlignment="Center"
-                           AutomationProperties.HelpText="Reloads config.yaml and the runtime's view of it. With unsaved edits it asks whether to save, discard or cancel first."
+                           AutomationProperties.HelpText="Reloads config.yaml and the runtime's view of it. With unsaved edits it asks first: save, discard or cancel."
                            Command="{Binding ReloadCommand}"
                            Content="Reload"
                            ToolTip="Read config.yaml and the runtime's view of it again">
@@ -540,10 +540,10 @@
                            Margin="8,0,0,0"
                            VerticalAlignment="Center"
                            Appearance="Secondary"
-                           AutomationProperties.HelpText="Opens this config editor in a window of its own. It is the same draft: an edit in one shows in the other."
+                           AutomationProperties.HelpText="Opens this draft in a separate window. Edits show in both."
                            Click="OnOpenInWindowClick"
                            Content="Open in window"
-                           ToolTip="Open this draft in a window of its own"
+                           ToolTip="Open this draft in a separate window"
                            Visibility="Collapsed">
                     <ui:Button.Icon>
                         <ui:SymbolIcon Symbol="WindowNew24" />
@@ -555,7 +555,7 @@
         <!-- Banners: every state the editor can be in, one InfoBar each (a closed InfoBar takes no room) -->
         <StackPanel Grid.Row="1">
             <!-- A managed or invalid installation is only read: this editor writes config.yaml itself, so Save and Restore are off. -->
-            <ui:InfoBar Title="State-changing actions disabled — Save is off"
+            <ui:InfoBar Title="State-changing actions disabled. Save is off"
                         Margin="{StaticResource DcCardGap}"
                         IsClosable="False"
                         IsOpen="{Binding HasChangesBlockedReason, Mode=OneWay}"
@@ -567,7 +567,7 @@
                 fixed or put back. The lines name the key and the kind of problem, never the value. Below the installation's banner, whose reason
                 is the first one.
             -->
-            <ui:InfoBar Title="Save is off — fix the field errors in the FORM tab"
+            <ui:InfoBar Title="Save is off until the Form tab errors are fixed"
                         Margin="{StaticResource DcCardGap}"
                         IsClosable="False"
                         IsOpen="{Binding HasBlockingFieldErrors, Mode=OneWay}"
@@ -658,7 +658,7 @@
                         Orientation="Horizontal"
                         Visibility="{Binding HasRebaseNotice, Converter={StaticResource BoolToVisibility}}">
                 <ui:Button Appearance="Secondary"
-                           AutomationProperties.HelpText="Puts your draft back exactly as it was before the rebase."
+                           AutomationProperties.HelpText="Puts your draft back as it was before the rebase."
                            Command="{Binding UndoRebaseCommand}"
                            Content="Undo rebase"
                            Visibility="{Binding CanUndoRebase, Converter={StaticResource BoolToVisibility}}" />
@@ -668,7 +668,7 @@
                            Content="Dismiss" />
             </StackPanel>
 
-            <ui:InfoBar Title="FORM view unavailable"
+            <ui:InfoBar Title="Form view unavailable"
                         Margin="{StaticResource DcCardGap}"
                         IsClosable="False"
                         IsOpen="{Binding FormUnavailableReason, Converter={StaticResource StringHasValue}, FallbackValue=False}"
@@ -689,7 +689,7 @@
                            Content="View on-disk version" />
                 <ui:Button Margin="8,0,0,0"
                            Appearance="Secondary"
-                           AutomationProperties.HelpText="Shows what changed on disk, and what putting your edits on the new file would do. Nothing is changed."
+                           AutomationProperties.HelpText="Shows what changed on disk and what rebasing your edits would do."
                            Command="{Binding ReviewExternalChangeCommand}"
                            Content="Review the difference" />
                 <ui:Button Margin="8,0,0,0"
@@ -707,13 +707,13 @@
                         Margin="{StaticResource DcCardGap}"
                         IsClosable="False"
                         IsOpen="{Binding ShowExternalChangeBanner}"
-                        Message="Something else edited the file while you had unsaved changes here. Your edits have not been touched. Review the difference, then rebase your edits onto the new file, keep them as they are, or drop them and reload."
+                        Message="The file changed on disk while you had unsaved edits. Your edits are untouched. Review the difference, then rebase, keep your edits or discard them."
                         Severity="Warning" />
             <StackPanel Margin="{StaticResource DcCardGap}"
                         Orientation="Horizontal"
                         Visibility="{Binding ShowExternalChangeBanner, Converter={StaticResource BoolToVisibility}}">
                 <ui:Button Appearance="Primary"
-                           AutomationProperties.HelpText="Shows what changed on disk, and what putting your edits on the new file would do. Nothing is changed."
+                           AutomationProperties.HelpText="Shows what changed on disk and what rebasing your edits would do."
                            Command="{Binding ReviewExternalChangeCommand}"
                            Content="Review the difference" />
                 <ui:Button Margin="8,0,0,0"
@@ -723,7 +723,7 @@
                            Content="Discard my edits and reload" />
                 <ui:Button Margin="8,0,0,0"
                            Appearance="Secondary"
-                           AutomationProperties.HelpText="Dismisses this notice and keeps the text in the editor. Saving will still report that the file changed."
+                           AutomationProperties.HelpText="Dismisses this notice and keeps your text. Save still reports that the file changed."
                            Command="{Binding KeepEditsCommand}"
                            Content="Keep my edits" />
                 <ui:Button Margin="8,0,0,0"
@@ -772,17 +772,17 @@
                 The gateway reads config.yaml when it starts, so a saved change does not apply to the running one. The button
                 opens the same review the tray's Restart opens; nothing restarts without that confirm.
             -->
-            <ui:InfoBar Title="Saved — restart the gateway to apply"
+            <ui:InfoBar Title="Saved. Restart the gateway to apply"
                         Margin="{StaticResource DcCardGap}"
                         IsClosable="False"
                         IsOpen="{Binding ShowRestartPrompt}"
-                        Message="The running gateway still has the previous settings until it restarts."
+                        Message="The gateway keeps the previous settings until it restarts."
                         Severity="Informational" />
             <StackPanel Margin="{StaticResource DcCardGap}"
                         Orientation="Horizontal"
                         Visibility="{Binding ShowRestartPrompt, Converter={StaticResource BoolToVisibility}}">
                 <ui:Button Appearance="Primary"
-                           AutomationProperties.HelpText="Opens the review for defenseclaw-gateway restart. Nothing restarts until you confirm it there."
+                           AutomationProperties.HelpText="Opens the review for defenseclaw-gateway restart. Nothing restarts until you confirm."
                            Command="{Binding RestartGatewayCommand}"
                            Content="Restart gateway…"
                            Visibility="{Binding CanRestartGateway, Converter={StaticResource BoolToVisibility}}" />
@@ -916,15 +916,15 @@
                                 is the last version that did, so it is disabled (IsFormEditable) and
                                 FORM edits are refused until RAW parses again.
                             -->
-                            <ui:InfoBar Title="FORM is out of date"
+                            <ui:InfoBar Title="Form is out of date"
                                         Margin="{StaticResource DcCardGap}"
                                         IsClosable="False"
                                         IsOpen="{Binding ShowFormStaleNotice}"
-                                        Message="The RAW tab has changes that do not parse as YAML, so this view is out of date and read-only. Fix the YAML in RAW, then switch back."
+                                        Message="The Raw tab has YAML that does not parse, so this view is out of date and read-only. Fix the YAML, then switch back."
                                         Severity="Warning" />
                             <TextBlock Margin="{StaticResource DcCardGap}"
                                        Style="{StaticResource DcCaption}"
-                                       Text="Values come from the CLI's masked view of config.yaml (defenseclaw config show --source). Secrets and header values are masked, so those fields are read-only here — edit them in the RAW tab, or keep a secret out of the file with defenseclaw keys set and an *_env setting."
+                                       Text="Secrets and header values are masked and read-only here. Edit them in the Raw tab, or use defenseclaw keys set with an *_env setting."
                                        TextWrapping="Wrap"
                                        Visibility="{Binding ShowFormEmptyState, Converter={StaticResource InverseBoolToVisibility}}" />
                             <ItemsControl x:Name="SectionItems"
@@ -1004,7 +1004,7 @@
                     <TextBlock Style="{StaticResource DcBadgeText}" Text="MODIFIED" />
                 </Border>
                 <ui:Button Appearance="Secondary"
-                           AutomationProperties.HelpText="Drops every unsaved edit and reads config.yaml again. Nothing is written."
+                           AutomationProperties.HelpText="Drops unsaved edits and reads config.yaml again. Nothing is written."
                            Command="{Binding RevertCommand}"
                            Content="Revert"
                            ToolTip="Drop the unsaved edits and read config.yaml again">
@@ -1014,7 +1014,7 @@
                 </ui:Button>
                 <ui:Button Margin="8,0,0,0"
                            Appearance="Primary"
-                           AutomationProperties.HelpText="Shows what will change in config.yaml, then backs it up, writes the new text and validates it with the CLI. Shortcut: Ctrl+S."
+                           AutomationProperties.HelpText="Shows the changes, then backs up, writes and validates config.yaml with the CLI. Shortcut: Ctrl+S."
                            Command="{Binding ReviewAndSaveCommand}"
                            Content="Save"
                            ToolTipService.ShowOnDisabled="True"
@@ -1044,7 +1044,7 @@
                 <TextBlock Style="{StaticResource DcSectionHeader}" Text="Review changes" />
                 <TextBlock Style="{StaticResource DcCaption}" Text="{Binding Review.Summary}" />
                 <TextBlock Style="{StaticResource DcCaption}"
-                           Text="config.yaml on disk against your edits. Secret values are hidden on both sides; unchanged lines are folded." />
+                           Text="config.yaml on disk against your edits. Secret values are hidden and unchanged lines folded." />
             </StackPanel>
             <Border Grid.Row="1"
                     Margin="{StaticResource DcCardGap}"
@@ -1073,7 +1073,7 @@
                            ToolTip="Back to editing (Esc)" />
                 <ui:Button Margin="8,0,0,0"
                            Appearance="Primary"
-                           AutomationProperties.HelpText="Backs up config.yaml, writes the edited text, then validates it with the CLI. Shortcut: Ctrl+S."
+                           AutomationProperties.HelpText="Backs up, writes and validates config.yaml with the CLI. Shortcut: Ctrl+S."
                            Command="{Binding ConfirmReviewedSaveCommand}"
                            Content="Save">
                     <ui:Button.Icon>
@@ -1101,7 +1101,7 @@
                 <TextBlock Style="{StaticResource DcSectionHeader}" Text="config.yaml changed on disk" />
                 <TextBlock Style="{StaticResource DcCaption}" Text="{Binding ExternalChangeSummary}" TextWrapping="Wrap" />
                 <TextBlock Style="{StaticResource DcCaption}"
-                           Text="Below: what changed on disk since you opened it. Secret values are hidden; unchanged lines are folded. Rebase puts your edited settings on top of the new file."
+                           Text="Changes on disk since you opened the file. Secret values are hidden and unchanged lines folded. Rebase puts your edits on the new file."
                            TextWrapping="Wrap" />
                 <ui:InfoBar Margin="0,8,0,0"
                             IsClosable="False"
@@ -1110,7 +1110,7 @@
                             Severity="Warning"
                             Title="Rebase is not possible right now" />
                 <StackPanel Margin="0,8,0,0" Visibility="{Binding HasRebaseConflicts, Converter={StaticResource BoolToVisibility}}">
-                    <TextBlock Style="{StaticResource DcCardTitle}" Text="Changed in both places (the file's value is kept)" />
+                    <TextBlock Style="{StaticResource DcCardTitle}" Text="Changed in both places: the file's value is kept" />
                     <ItemsControl AutomationProperties.Name="Settings changed in both places" ItemsSource="{Binding RebaseConflicts}">
                         <ItemsControl.ItemTemplate>
                             <DataTemplate DataType="{x:Type vmc:RebaseConflict}">
@@ -1155,7 +1155,7 @@
                            Content="Discard my edits and reload" />
                 <ui:Button Margin="8,0,0,0"
                            Appearance="Primary"
-                           AutomationProperties.HelpText="Puts your edited settings on the new file. A setting changed in both places keeps the file's value. Nothing is saved; Undo rebase restores your draft."
+                           AutomationProperties.HelpText="Puts your edits on the new file. A setting changed in both places keeps the file's value. Nothing is saved. Undo rebase restores your draft."
                            Command="{Binding RebaseDraftCommand}"
                            Content="Rebase my edits"
                            IsEnabled="{Binding CanRebaseDraft}" />

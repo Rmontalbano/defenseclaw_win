@@ -103,7 +103,7 @@ public sealed class ConfigFieldValidationViewTests : IDisposable
 
                 texts = VisibleTexts(host).ToList();
                 Assert.Contains("Error: port must be between 1 and 65535", texts);
-                Assert.Contains("Save is off — fix the field errors in the FORM tab", texts);
+                Assert.Contains("Save is off until the Form tab errors are fixed", texts);
                 Assert.Contains("gateway.api_port: port must be between 1 and 65535", texts);
                 Assert.DoesNotContain(texts, t => t.Contains("70000", StringComparison.Ordinal));
                 Assert.False(save.IsEnabled);

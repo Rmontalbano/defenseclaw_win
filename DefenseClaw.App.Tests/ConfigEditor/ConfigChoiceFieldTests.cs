@@ -428,14 +428,14 @@ public class ConfigChoiceFieldTests
 
         skip.BoolValue = true;
         Assert.True(skip.Validation.IsWarning);
-        Assert.Equal("TLS verification is disabled; dev-only", skip.Validation.Message);
+        Assert.Equal("TLS verification is disabled. Development only.", skip.Validation.Message);
 
         skip.BoolValue = false;
         Assert.True(skip.Validation.IsOk);
 
         var loadedOn = Build("gateway:\n  tls_skip_verify: true\n").Field("gateway.tls_skip_verify");
         Assert.True(loadedOn.Validation.IsWarning);
-        Assert.Equal("TLS verification is disabled; dev-only", loadedOn.Validation.Message);
+        Assert.Equal("TLS verification is disabled. Development only.", loadedOn.Validation.Message);
     }
 
     [Fact]

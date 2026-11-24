@@ -235,7 +235,7 @@ public sealed class CoworkWizardTests : IDisposable
 
         Assert.Equal("Unknown", vm.BadgeText);
         Assert.Equal("Neutral", vm.BadgeKey);
-        Assert.Equal("status --json reported no Cowork state: Claude Desktop was not found for this account and no plugin was built.", vm.DetailText);
+        Assert.Equal("status --json reported no Cowork state. Claude Desktop was not found and no plugin was built.", vm.DetailText);
         Assert.False(vm.ShowUpload);
         Assert.Equal("Build the plugin", vm.BuildText);
     }
@@ -278,7 +278,7 @@ public sealed class CoworkWizardTests : IDisposable
 
         Assert.True(vm.ShowUpload);
         Assert.Equal(CoworkProtectionFacts.PluginZipPath(services.Paths.DataDirectory), vm.ZipPath);
-        Assert.Contains("did not give the zip's path", vm.ZipNote, StringComparison.Ordinal);
+        Assert.Contains("gave no zip path", vm.ZipNote, StringComparison.Ordinal);
     }
 
     [Fact]

@@ -634,8 +634,8 @@ public class WizardGuideViewModelTests
         {
             var logs = scene.Card("logs");
             Assert.True(logs.HasCaution);
-            Assert.Contains("starts containers", logs.Caution, StringComparison.Ordinal);
-            Assert.Contains("Splunk in Free mode", logs.Caution, StringComparison.Ordinal);
+            Assert.Contains("starts Splunk (Free mode) containers", logs.Caution, StringComparison.Ordinal);
+            Assert.Contains("Splunk (Free mode)", logs.Caution, StringComparison.Ordinal);
             Assert.Contains("Hyper-V", logs.Caution, StringComparison.Ordinal);
             Assert.Contains("WSL 2 backend", logs.Caution, StringComparison.Ordinal);
 

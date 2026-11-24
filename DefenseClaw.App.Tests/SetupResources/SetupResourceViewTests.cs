@@ -632,7 +632,7 @@ public sealed class SetupResourceViewTests : IDisposable
             Assert.True(RowGrid(view).IsVisible);
             Assert.Equal(vm.Rows.Count, VisualTree.Descendants<DataGridRow>(RowGrid(view)).Count());
             var bar = Assert.Single(OpenBars(view));
-            Assert.Equal("State-changing actions disabled - the list is still read", bar.Title);
+            Assert.Equal("State-changing actions disabled. The list is still read.", bar.Title);
             Assert.Equal(TestInstallations.ManagedReason, bar.Message);
 
             // Every control that changes something is off, and its tooltip is the installation's sentence (shown on a disabled control too).
@@ -704,7 +704,7 @@ public sealed class SetupResourceViewTests : IDisposable
             host.Relayout();
             var remove = Labelled(view, "Remove…");
             Assert.False(remove.IsEnabled);
-            Assert.Equal("Built-in defaults are protected: the CLI never removes one.", remove.ToolTip);
+            Assert.Equal("Built-in defaults are protected. The CLI does not remove them.", remove.ToolTip);
         });
     }
 

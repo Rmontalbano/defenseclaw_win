@@ -43,17 +43,17 @@ public static class ConfigFormBuilder
     /// <summary>Top-level scalars that are shown but never editable from FORM, with the reason.</summary>
     private static readonly Dictionary<string, string> ManagedKeys = new(StringComparer.Ordinal)
     {
-        ["config_version"] = "The config schema version is managed by DefenseClaw — editing it by hand can make the CLI reject or migrate the file. Use the RAW tab if you really need to.",
+        ["config_version"] = "The config schema version is managed by DefenseClaw. Editing it can make the CLI reject or migrate the file. Use the Raw tab only if needed.",
     };
 
     private const string SecretReason =
-        "Secret — shown masked, never written from this form. Edit it in the RAW tab, or keep the value out of config.yaml: store it with `defenseclaw keys set <ENV_NAME>` and point the matching *_env setting at that name.";
+        "Secret, masked and read-only. Edit it in the Raw tab, or use `defenseclaw keys set <ENV_NAME>` with the matching *_env setting.";
 
     private const string MaskedReason =
-        "Part of this value is masked by `defenseclaw config show --source`, so FORM cannot write it back without destroying the real value. Edit it in the RAW tab.";
+        "Part of this value is masked by `defenseclaw config show --source`, so Form would overwrite the real value. Edit it in the Raw tab.";
 
     private const string HeaderMapReason =
-        "Header values are masked by `defenseclaw config show --source`. Edit them in the RAW tab.";
+        "Header values are masked by `defenseclaw config show --source`. Edit them in the Raw tab.";
 
     // Only for rendering RawBlockNode.Yaml — re-serializes a subtree rather than slicing the
     // original text by YamlNode.Start/End marks, which turned out to span only a node's
@@ -287,7 +287,7 @@ public static class ConfigFormBuilder
                 scalar.Style == ScalarStyle.Plain &&
                 YamlSectionEditor.LooksLikeNonStringPlainScalar(text))
             {
-                (isEditable, reason) = (false, "This value is a number, date or null/yes/no word rather than a string — edit it in the RAW tab so its type is preserved.");
+                (isEditable, reason) = (false, "This value is a number, date or null/yes/no word. Edit it in the Raw tab to keep its type.");
             }
         }
 
@@ -373,7 +373,7 @@ public static class ConfigFormBuilder
             return;
         }
 
-        group.RawBlocks.Add(RawBlockFor(key, path, seq, "A list of structured entries — edit in RAW."));
+        group.RawBlocks.Add(RawBlockFor(key, path, seq, "A list of structured entries. Edit in Raw."));
     }
 
     private static RawBlockNode RawBlockFor(string key, List<string> path, YamlNode node, string reason)
@@ -409,23 +409,23 @@ public static class ConfigFormBuilder
         var sectionText = document.SectionText(path[0]);
         if (sectionText is null)
         {
-            return (false, "Not present in config.yaml. Add it in the RAW tab first.");
+            return (false, "Not present in config.yaml. Add it in the Raw tab first.");
         }
 
         var lookup = YamlSectionEditor.FindScalar(sectionText, path);
         if (!lookup.Found)
         {
-            return (false, "This key is not on a line of its own in config.yaml (it may be written inline, or the RAW tab changed since the form was built) — edit it in the RAW tab.");
+            return (false, "This key is not on its own line in config.yaml, or the Raw tab changed since Form was built. Edit it in the Raw tab.");
         }
 
         if (lookup.Ambiguous)
         {
-            return (false, "This key appears more than once in config.yaml — edit it in the RAW tab.");
+            return (false, "This key appears more than once in config.yaml. Edit it in the Raw tab.");
         }
 
         if (lookup.Unsupported)
         {
-            return (false, "This value has a trailing comment, is a block scalar/anchor/alias, or continues on the next line — edit it in the RAW tab.");
+            return (false, "This value has a trailing comment, is a block scalar/anchor/alias, or continues on the next line. Edit it in the Raw tab.");
         }
 
         return (true, null);
@@ -436,23 +436,23 @@ public static class ConfigFormBuilder
         var sectionText = document.SectionText(path[0]);
         if (sectionText is null)
         {
-            return (false, "Not present in config.yaml. Add it in the RAW tab first.");
+            return (false, "Not present in config.yaml. Add it in the Raw tab first.");
         }
 
         var lookup = YamlSectionEditor.FindList(sectionText, path);
         if (!lookup.Found)
         {
-            return (false, "This list is not written as a block of '- item' lines in config.yaml (it may be inline, or the RAW tab changed since the form was built) — edit it in the RAW tab.");
+            return (false, "This list is not a block of '- item' lines in config.yaml, or the Raw tab changed since Form was built. Edit it in the Raw tab.");
         }
 
         if (lookup.Ambiguous)
         {
-            return (false, "This key appears more than once in config.yaml — edit it in the RAW tab.");
+            return (false, "This key appears more than once in config.yaml. Edit it in the Raw tab.");
         }
 
         if (lookup.Unsupported)
         {
-            return (false, "This list has comments, nested or non-scalar items, or other content a rewrite could corrupt — edit it in the RAW tab.");
+            return (false, "This list has comments, nested or non-scalar items, or other content a rewrite could corrupt. Edit it in the Raw tab.");
         }
 
         return (true, null);

@@ -120,7 +120,7 @@ public sealed class NotificationRoutingViewModelTests : IDisposable
         Assert.True(vm.MasterOn);
         Assert.False(vm.MasterIsExplicit);
         Assert.Equal("Desktop notifications are on", vm.MasterText);
-        Assert.Equal("config.yaml does not say, so this is the runtime's default on Windows.", vm.MasterDetail);
+        Assert.Equal("Not set in config.yaml. This is the runtime default.", vm.MasterDetail);
         Assert.True(vm.HasMasterDetail);
     }
 
@@ -138,7 +138,7 @@ public sealed class NotificationRoutingViewModelTests : IDisposable
         Assert.False(vm.HasMasterDetail);
         Assert.Equal("Turn on…", vm.MasterButtonText);
         Assert.True(vm.ShowMasterOffNote);
-        Assert.Contains("none of the switches below raises one", vm.MasterOffNote, StringComparison.Ordinal);
+        Assert.Contains("raise nothing until you turn them on", vm.MasterOffNote, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -275,7 +275,7 @@ public sealed class NotificationRoutingViewModelTests : IDisposable
 
         Assert.Equal("Nothing to apply", vm.Summary);
         Assert.False(vm.ReviewChangesCommand.CanExecute(null));
-        Assert.Equal("Nothing to apply: no switch differs from config.yaml.", vm.ReviewBlockedReason);
+        Assert.Equal("Nothing to apply. No switch differs from config.yaml.", vm.ReviewBlockedReason);
         Assert.Equal(vm.ReviewBlockedReason, vm.ReviewTip);
         Assert.Null(vm.BuildPlan());
     }
@@ -337,9 +337,9 @@ public sealed class NotificationRoutingViewModelTests : IDisposable
 
         Assert.All(plan.Steps, s => Assert.Equal("--no-restart", s.Argv[^1]));
         Assert.False(plan.RestartsGateway);
-        Assert.Contains("not in effect until it next restarts", plan.Summary, StringComparison.Ordinal);
+        Assert.Contains("not in effect until the gateway restarts", plan.Summary, StringComparison.Ordinal);
         Assert.Contains(plan.Warnings, w => w.Title == "Gateway not restarted");
-        Assert.Contains("not in effect until it next restarts", vm.RestartNote, StringComparison.Ordinal);
+        Assert.Contains("not in effect until the gateway restarts", vm.RestartNote, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -353,7 +353,7 @@ public sealed class NotificationRoutingViewModelTests : IDisposable
 
         Assert.Equal("setup notifications-set hitl_approval off", string.Join(' ', Assert.Single(plan.Steps).Argv));
         Assert.Equal("Apply change", plan.PrimaryText);
-        Assert.Contains("one setting", plan.Summary, StringComparison.Ordinal);
+        Assert.Contains("Changes 1 setting", plan.Summary, StringComparison.Ordinal);
     }
 
     // ---- the gateway's notifications are not the tray's alerts ----
@@ -365,11 +365,10 @@ public sealed class NotificationRoutingViewModelTests : IDisposable
         vm.Open();
         Row(vm, "hitl_approval").IsOn = false;
 
-        Assert.Contains("raised by the gateway", vm.ScopeNote, StringComparison.Ordinal);
-        Assert.Contains("The alerts this app shows from the tray (Settings, Notifications) are a separate setting", vm.ScopeNote, StringComparison.Ordinal);
-        Assert.Contains("the same block can raise both", vm.ScopeNote, StringComparison.Ordinal);
-        Assert.Contains("the alerts this app shows from the tray are a separate setting and do not change", vm.BuildPlan()!.Summary, StringComparison.Ordinal);
-        Assert.Contains("The alerts this app shows from the tray are a separate setting (Settings, Notifications) and do not change.", NotificationSwitch.Explanation(turnOn: false), StringComparison.Ordinal);
+        Assert.Contains("Gateway desktop notifications", vm.ScopeNote, StringComparison.Ordinal);
+        Assert.Contains("Tray alerts are a separate setting (Settings, Notifications)", vm.ScopeNote, StringComparison.Ordinal);
+        Assert.Contains("Tray alerts do not change", vm.BuildPlan()!.Summary, StringComparison.Ordinal);
+        Assert.Contains("Tray alerts (Settings, Notifications) do not change.", NotificationSwitch.Explanation(turnOn: false), StringComparison.Ordinal);
     }
 
     // ---- the master switch is the Overview's action ----
@@ -440,7 +439,7 @@ public sealed class NotificationRoutingViewModelTests : IDisposable
 
         var warning = Assert.Single(plan.Warnings);
         Assert.Equal("Desktop notifications are off", warning.Title);
-        Assert.Contains("nothing is raised until you turn it on", warning.Message, StringComparison.Ordinal);
+        Assert.Contains("raise nothing until you turn it on", warning.Message, StringComparison.Ordinal);
     }
 
     // ---- the installation first ----
@@ -641,7 +640,7 @@ public sealed class NotificationRoutingViewModelTests : IDisposable
         vm.Open();
 
         Assert.True(vm.HasHelpProblem);
-        Assert.Contains("lists no settings to choose from", vm.HelpProblem, StringComparison.Ordinal);
+        Assert.Contains("lists no settings", vm.HelpProblem, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -657,7 +656,7 @@ public sealed class NotificationRoutingViewModelTests : IDisposable
 
         Assert.All(plan.Steps, s => Assert.DoesNotContain("--no-restart", s.Argv));
         Assert.Contains(plan.Warnings, w => w.Title == "One restart per command" && w.Message.Contains("restarts 2 times", StringComparison.Ordinal));
-        Assert.Contains("each of them restarts the gateway", plan.Summary, StringComparison.Ordinal);
+        Assert.Contains("each one restarts the gateway", plan.Summary, StringComparison.Ordinal);
     }
 
     // ---- keys and states ----

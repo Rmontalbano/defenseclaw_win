@@ -412,15 +412,15 @@ public sealed partial class ConfigEditorWindowViewModel : ObservableObject, IDis
     /// <summary>Why FORM is empty, in the terms of the state that caused it (mac pattern #1: never one scary "empty").</summary>
     public string FormEmptyTitle =>
         LoadFailed ? "config.yaml could not be loaded"
-        : ParseError is not null ? "FORM cannot be built from invalid YAML"
-        : FormUnavailableReason is not null ? "FORM is unavailable"
+        : ParseError is not null ? "Form cannot be built from invalid YAML"
+        : FormUnavailableReason is not null ? "Form is unavailable"
         : "No settings to show";
 
     public string FormEmptyDetail =>
-        LoadFailed ? "FORM needs the file to load. Fix the error above and press Reload."
-        : ParseError is not null ? "Fix the YAML in the RAW tab, then switch back to FORM."
-        : FormUnavailableReason is not null ? "RAW editing still works — see the notice above for why FORM could not be built."
-        : "config.yaml has no sections yet. Add settings in the RAW tab, or use the Setup panel's wizards.";
+        LoadFailed ? "Form needs config.yaml to load. Fix the error above and press Reload."
+        : ParseError is not null ? "Fix the YAML in the Raw tab, then switch back to Form."
+        : FormUnavailableReason is not null ? "Raw editing still works. The notice above says why Form could not be built."
+        : "config.yaml has no sections yet. Add settings in the Raw tab or with a Setup wizard.";
 
     private void RaiseFormEmptyState()
     {
@@ -597,7 +597,7 @@ public sealed partial class ConfigEditorWindowViewModel : ObservableObject, IDis
         _formSourceYaml = string.Empty;
         NeedsFormRebuild = false;
         ClearSections();
-        FormUnavailableReason = "FORM is unavailable until config.yaml loads successfully (see the error above).";
+        FormUnavailableReason = "Form is unavailable until config.yaml loads. See the error above.";
         HasSecretReferences = false;
     }
 
@@ -1189,7 +1189,7 @@ public sealed partial class ConfigEditorWindowViewModel : ObservableObject, IDis
         {
             return new FormSourceResult(
                 null,
-                "The defenseclaw CLI was not found on PATH. FORM view needs it to read config.yaml's masked source view — RAW editing still works.");
+                "The defenseclaw CLI was not found on PATH. Form needs it to read config.yaml. Raw editing still works.");
         }
     }
 
@@ -1214,8 +1214,8 @@ public sealed partial class ConfigEditorWindowViewModel : ObservableObject, IDis
         {
             return new FormSourceResult(
                 null,
-                $"defenseclaw {string.Join(' ', argv)} printed more than the app keeps ({invocation.DroppedOutputLineCount:N0} lines dropped), " +
-                "so FORM view would show only part of config.yaml. RAW editing still works.");
+                $"defenseclaw {string.Join(' ', argv)} printed too much output ({invocation.DroppedOutputLineCount:N0} lines dropped), " +
+                "so Form would show only part of config.yaml. Raw editing still works.");
         }
 
         return new FormSourceResult(OutputText(invocation, CliStream.StandardOutput), null);
@@ -1379,8 +1379,8 @@ public sealed partial class ConfigEditorWindowViewModel : ObservableObject, IDis
         FieldErrorsReason = lines.Count switch
         {
             0 => null,
-            1 => $"Fix the field error before saving — {lines[0]}",
-            _ => $"Fix the {lines.Count} field errors before saving — {lines[0]}",
+            1 => $"Fix the field error before saving: {lines[0]}",
+            _ => $"Fix the {lines.Count} field errors before saving: {lines[0]}",
         };
 
         OnPropertyChanged(nameof(HasBlockingFieldErrors));
@@ -1434,8 +1434,8 @@ public sealed partial class ConfigEditorWindowViewModel : ObservableObject, IDis
         if (NeedsFormRebuild || !string.Equals(_document.RawText, RawText, StringComparison.Ordinal))
         {
             FieldErrorMessage = ParseError is null
-                ? $"Could not apply '{displayName}': the RAW tab has changes FORM has not picked up yet. Switch to RAW and back to FORM, then try again."
-                : $"Could not apply '{displayName}': the RAW tab has changes that do not parse as YAML, so FORM would overwrite them. Fix the YAML in RAW first.";
+                ? $"Could not apply '{displayName}': the Raw tab has changes Form has not picked up. Switch to Raw and back to Form, then try again."
+                : $"Could not apply '{displayName}': the Raw tab has YAML that does not parse, so Form would overwrite it. Fix the YAML in Raw first.";
             return false;
         }
 
@@ -1454,7 +1454,7 @@ public sealed partial class ConfigEditorWindowViewModel : ObservableObject, IDis
 
         if (field.IsMasked || field.Kind == FormFieldKind.Secret || !field.IsEditable || isMaskedText)
         {
-            FieldErrorMessage = $"Could not apply '{field.DisplayName}': it holds a secret or a value the CLI masks, and this form never writes masked text back. Edit it in the RAW tab.";
+            FieldErrorMessage = $"Could not apply '{field.DisplayName}': it holds a secret or a value the CLI masks, which Form never writes back. Edit it in the Raw tab.";
             return true;
         }
 
@@ -1465,7 +1465,7 @@ public sealed partial class ConfigEditorWindowViewModel : ObservableObject, IDis
     {
         if (!list.IsEditable || list.Items.Any(SensitiveKeyClassifier.IsMaskedValue))
         {
-            FieldErrorMessage = $"Could not apply '{list.DisplayName}': it holds a value the CLI masks, and this form never writes masked text back. Edit it in the RAW tab.";
+            FieldErrorMessage = $"Could not apply '{list.DisplayName}': it holds a value the CLI masks, which Form never writes back. Edit it in the Raw tab.";
             return true;
         }
 
@@ -1502,7 +1502,7 @@ public sealed partial class ConfigEditorWindowViewModel : ObservableObject, IDis
         var patchedSection = YamlSectionEditor.TrySetScalar(sectionText, pathSegments, field.CurrentRawValue);
         if (patchedSection is null)
         {
-            FieldErrorMessage = $"Could not apply '{field.DisplayName}' — edit it in the RAW tab instead.";
+            FieldErrorMessage = $"Could not apply '{field.DisplayName}'. Edit it in the Raw tab instead.";
             return;
         }
 
@@ -1534,7 +1534,7 @@ public sealed partial class ConfigEditorWindowViewModel : ObservableObject, IDis
         var patchedSection = YamlSectionEditor.TrySetList(sectionText, pathSegments, items);
         if (patchedSection is null)
         {
-            FieldErrorMessage = $"Could not apply '{list.DisplayName}' — edit it in the RAW tab instead.";
+            FieldErrorMessage = $"Could not apply '{list.DisplayName}'. Edit it in the Raw tab instead.";
             return;
         }
 
@@ -1568,14 +1568,14 @@ public sealed partial class ConfigEditorWindowViewModel : ObservableObject, IDis
         }
         catch (ConfigParseException ex)
         {
-            FieldErrorMessage = $"Could not apply '{displayName}': the result would not parse as YAML ({ex.Message}). Edit it in the RAW tab instead.";
+            FieldErrorMessage = $"Could not apply '{displayName}': the result would not parse as YAML ({ex.Message}). Edit it in the Raw tab instead.";
             return;
         }
 
         if (!OnlySectionChanged(_document, newDocument, sectionName, patchedSectionText) ||
             !patchedSectionYieldsExpectedValue(patchedSectionText))
         {
-            FieldErrorMessage = $"Could not apply '{displayName}': the patched YAML did not read back as expected — edit it in the RAW tab instead.";
+            FieldErrorMessage = $"Could not apply '{displayName}': the patched YAML did not read back as expected. Edit it in the Raw tab instead.";
             return;
         }
 
@@ -1583,7 +1583,7 @@ public sealed partial class ConfigEditorWindowViewModel : ObservableObject, IDis
         // document than it started with. A count that goes up means a masked value went in.
         if (SensitiveKeyClassifier.CountMaskMarkers(newRawText) > SensitiveKeyClassifier.CountMaskMarkers(_document.RawText))
         {
-            FieldErrorMessage = $"Could not apply '{displayName}': the change would write masked text into config.yaml. Edit it in the RAW tab instead.";
+            FieldErrorMessage = $"Could not apply '{displayName}': the change would write masked text into config.yaml. Edit it in the Raw tab instead.";
             return;
         }
 

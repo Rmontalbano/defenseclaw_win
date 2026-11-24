@@ -74,7 +74,7 @@ public sealed class PreviewConnectorHubTests
             Assert.Contains(vm.ConnectorChoices, c => c.Target == "opencode");
 
             // Not counted as certified: Claude Code and Codex only.
-            Assert.Contains("2 certified connector(s)", vm.StatusNote, StringComparison.Ordinal);
+            Assert.Contains("2 certified connectors", vm.StatusNote, StringComparison.Ordinal);
 
             vm.CertifiedOnly = true;
             Assert.DoesNotContain(vm.Groups.SelectMany(g => g.Cards), c => c.Target == "opencode");

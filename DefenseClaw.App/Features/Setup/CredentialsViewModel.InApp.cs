@@ -75,17 +75,15 @@ public sealed partial class CredentialsViewModel
     /// <summary>Fill missing's primary button: what it does, or why it cannot.</summary>
     public string FillMissingButtonToolTip => ChangesBlockedReason ??
         (InAppAvailable
-            ? "Opens a masked box on every required credential that is unset. You review the commands, with the values masked, before anything runs."
+            ? "Opens a masked box for each unset required credential. Commands are reviewed with values masked."
             : FillMissingToolTip);
 
     public string FillMissingAutomationName => InAppAvailable ? "Fill missing credentials" : "Fill missing credentials in a terminal";
 
     /// <summary>The caption under the card: how a value gets to the CLI, said for the route that is in use.</summary>
     public string FooterText => InAppAvailable
-        ? "A value is typed into a masked box here, reviewed with the value hidden, and handed to the CLI's own hidden prompt in a pseudo-console. " +
-          "It is never on a command line or in Activity, and the app does not keep it. The console button on a row opens a console window instead."
-        : "Values are never shown or passed through this app. The CLI reads them at a hidden console prompt, so Set and Fill missing open a console window; " +
-          "this list refreshes when you come back.";
+        ? "Values are typed masked and passed to the CLI's hidden prompt. They are not shown on a command line or in Activity. The console button opens a terminal instead."
+        : "Values are typed at the CLI's hidden prompt in a console window. Set and Fill missing open one. This list refreshes when you come back.";
 
     /// <summary>Fill missing is open: the boxes of the credentials that are unset are showing.</summary>
     [ObservableProperty]
@@ -102,7 +100,7 @@ public sealed partial class CredentialsViewModel
     /// <summary>The Review button of the Fill missing bar: what it does, or why it cannot.</summary>
     public string FillReviewToolTip => ChangesBlockedReason ??
         (FillEntryCount > 0
-            ? "Show the exact commands with the values masked. Nothing runs until you confirm."
+            ? "Shows the commands with values masked. Nothing runs until you confirm."
             : "Type a value in at least one box first.");
 
     /// <summary>Nothing else is being reviewed or stored: a row may open its review.</summary>
@@ -197,7 +195,7 @@ public sealed partial class CredentialsViewModel
         }
 
         IsFilling = true;
-        Note = "Type a value in the box of each credential you want to store, then review. A box left empty is skipped.";
+        Note = "Type a value in each credential you want to store, then review. Empty boxes are skipped.";
         NoteKey = "Neutral";
         EntriesChanged();
     }
@@ -230,7 +228,7 @@ public sealed partial class CredentialsViewModel
     {
         if (!WizardCredentials.IsValidName(envName))
         {
-            Note = "That is not the NAME of an environment variable, so no box was opened.";
+            Note = "That is not an environment variable name. No box was opened.";
             NoteKey = "Warn";
             return;
         }
@@ -256,7 +254,7 @@ public sealed partial class CredentialsViewModel
 
         if (!CanStartReview)
         {
-            Note = "Finish or cancel the review that is open first, then ask again.";
+            Note = "Finish or cancel the open review first.";
             NoteKey = "Warn";
             return;
         }
@@ -300,7 +298,7 @@ public sealed partial class CredentialsViewModel
             "optional",
             presence switch { CredentialPresence.InDotEnv => "dotenv", CredentialPresence.InEnvironment => "env", _ => "unset" },
             isSet,
-            "A variable you named. The CLI keeps its value in ~/.defenseclaw/.env; it is not in the CLI's credential list, so nothing here says what reads it.");
+            "A variable you named. Its value is kept in ~/.defenseclaw/.env. It is not in the CLI's credential list.");
     }
 
     // ------------------------------------------------------------------------------------------------------- set
@@ -369,9 +367,9 @@ public sealed partial class CredentialsViewModel
 
     private DiscoverStep StepFor(SetOutcome outcome) => new(
         SecretPtyRunner.SetKeyArgv(outcome.Name),
-        $"Stores the value you typed for {outcome.Name} ({outcome.Length.ToString(CultureInfo.CurrentCulture)} characters, hidden) in ~/.defenseclaw/.env.",
+        $"Stores the value for {outcome.Name} ({outcome.Length.ToString(CultureInfo.CurrentCulture)} characters, hidden) in ~/.defenseclaw/.env.",
         CommandTier.StateChanging,
-        Verify: _ => outcome.Result is { Succeeded: true } ? null : "The CLI ended without taking the value, so nothing was stored.",
+        Verify: _ => outcome.Result is { Succeeded: true } ? null : "The CLI did not take the value. Nothing was stored.",
         Run: () => RunSetAsync(outcome));
 
     /// <summary>
@@ -415,10 +413,8 @@ public sealed partial class CredentialsViewModel
         }
 
         text.AppendLine().AppendLine().Append(outcomes.Count == 1
-            ? "This app types it at the CLI's own hidden prompt, in a pseudo-console it starts for the command below. It is not on the command line, " +
-              "it is not recorded in Activity and it is not kept after the run. The CLI stores it in ~/.defenseclaw/.env."
-            : "This app types each one at the CLI's own hidden prompt, in a pseudo-console it starts for each command below. None is on a command line, " +
-              "recorded in Activity or kept after the run. The CLI stores each in ~/.defenseclaw/.env.");
+            ? "The value goes to the CLI's hidden prompt. It is not on the command line or in Activity, and it is not kept. The CLI stores it in ~/.defenseclaw/.env."
+            : "The values go to the CLI's hidden prompt. They are not on a command line or in Activity, and they are not kept. The CLI stores them in ~/.defenseclaw/.env.");
         return text.ToString();
     }
 
@@ -431,7 +427,7 @@ public sealed partial class CredentialsViewModel
         {
             warnings.Add(new CommandReviewWarning(
                 "Replaces a stored value",
-                $"{string.Join(", ", replacing)} {(replacing.Length == 1 ? "already has" : "already have")} a value in ~/.defenseclaw/.env. This replaces {(replacing.Length == 1 ? "it" : "them")}."));
+                $"{string.Join(", ", replacing)} {(replacing.Length == 1 ? "already has" : "already have")} a value in ~/.defenseclaw/.env. Storing replaces {(replacing.Length == 1 ? "it" : "them")}."));
         }
 
         var shadowed = outcomes.Where(o => o.Row.Row is { IsSet: true } row && string.Equals(row.Source, "env", StringComparison.OrdinalIgnoreCase)).Select(o => o.Name).ToArray();
@@ -440,7 +436,7 @@ public sealed partial class CredentialsViewModel
             warnings.Add(new CommandReviewWarning(
                 "The environment wins",
                 $"{string.Join(", ", shadowed)} {(shadowed.Length == 1 ? "is" : "are")} set in this app's environment, which the CLI reads before ~/.defenseclaw/.env. " +
-                "Storing a value there will not change what the CLI uses until the variable is removed from the environment."));
+                "A stored value has no effect until the variable is removed from the environment."));
         }
 
         return warnings;
@@ -468,8 +464,7 @@ public sealed partial class CredentialsViewModel
             await OpenInTerminalAsync(argv).ConfigureAwait(true);
             if (_awaitingReturn)
             {
-                Note = $"The app could not type the value itself ({broken.Result!.Message.TrimEnd('.')}), so a console window was opened instead. " +
-                       "Type the value there; this list refreshes when you come back to this window.";
+                Note = $"The app could not type the value ({broken.Result!.Message.TrimEnd('.')}). A console window was opened. Type the value there. This list refreshes when you come back.";
                 NoteKey = "Warn";
             }
 
@@ -479,7 +474,7 @@ public sealed partial class CredentialsViewModel
         if (ran.Length == 0)
         {
             // Not one of them reached the CLI (it was not found): the review says why, and there is nothing to read again.
-            Note = "Nothing was stored: the command could not be started (the review shows why).";
+            Note = "Nothing was stored. The command could not be started. The review shows why.";
             NoteKey = "Bad";
             return;
         }
@@ -495,7 +490,7 @@ public sealed partial class CredentialsViewModel
             Note = $"{(stored.Length > 0 ? $"Stored {stored.Length.ToString(CultureInfo.CurrentCulture)} of {outcomes.Count.ToString(CultureInfo.CurrentCulture)}. " : string.Empty)}" +
                    $"{failed.Name} was not stored: {failed.Result!.Message}" +
                    $"{(untried > 0 ? $" {untried.ToString(CultureInfo.CurrentCulture)} more {(untried == 1 ? "was" : "were")} not tried." : string.Empty)} " +
-                   "The command and its output are in the Activity panel.";
+                   "The output is in Activity.";
             NoteKey = "Bad";
             return;
         }
@@ -504,14 +499,14 @@ public sealed partial class CredentialsViewModel
         var unseen = stored.Where(o => Rows.FirstOrDefault(r => r.EnvName == o.Name) is { Row.IsSet: false }).Select(o => o.Name).ToArray();
         if (unseen.Length > 0)
         {
-            Note = $"The CLI finished, but the list still shows {string.Join(", ", unseen)} as unset. Refresh in a moment, or check ~/.defenseclaw/.env.";
+            Note = $"The CLI finished, but {string.Join(", ", unseen)} still reads unset. Refresh, or check ~/.defenseclaw/.env.";
             NoteKey = "Warn";
             return;
         }
 
         Note = stored.Length == 1
-            ? $"Stored {stored[0].Name}. The value is shown nowhere; the row now reads set."
-            : $"Stored {stored.Length.ToString(CultureInfo.CurrentCulture)} values: {string.Join(", ", stored.Select(o => o.Name))}. They are shown nowhere; the rows now read set.";
+            ? $"Stored {stored[0].Name}. The row now reads set."
+            : $"Stored {stored.Length.ToString(CultureInfo.CurrentCulture)} values: {string.Join(", ", stored.Select(o => o.Name))}. The rows now read set.";
         NoteKey = "Ok";
     }
 }

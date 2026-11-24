@@ -116,7 +116,7 @@ public abstract partial class SetupResourceViewModel
 
         if (OpenWizard is not { } open)
         {
-            ShowNotice("The wizard cannot open here", $"Add needs the setup wizard, and this window has none to open. Use the {SetupResourceArgv.Noun(Resource)} card on the Setup page.");
+            ShowNotice("The wizard cannot open here", $"Add needs the setup wizard. Use the {SetupResourceArgv.Noun(Resource)} card on the Setup page.");
             return;
         }
 

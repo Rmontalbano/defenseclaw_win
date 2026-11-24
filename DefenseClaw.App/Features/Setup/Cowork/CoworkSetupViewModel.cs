@@ -27,27 +27,27 @@ internal sealed record CoworkStateRead(CoworkProtection? State, string? Problem)
 public sealed partial class CoworkSetupViewModel : ObservableObject
 {
     /// <summary>Said when <c>status --json</c> has no <c>cowork</c> object (cowork.py: no state file and no Claude Desktop, or live health skipped).</summary>
-    internal const string NoStateText = "status --json reported no Cowork state: Claude Desktop was not found for this account and no plugin was built.";
+    internal const string NoStateText = "status --json reported no Cowork state. Claude Desktop was not found and no plugin was built.";
 
     /// <summary>
     /// Said when the CLI reports <c>cowork_plugin_stale</c> (cowork.py@1.0.9:685-692): the plugin was built by an older DefenseClaw. Every Windows plugin built
     /// by 1.0.8 reads this way on 1.0.9. Build again, then upload the new zip.
     /// </summary>
     internal const string PluginStaleText =
-        "This plugin was built by an older DefenseClaw and uses an older Windows hook command, so Cowork is not protected. " +
-        "Build the plugin again below, then upload the new zip in Claude Desktop (" + CoworkProtectionFacts.UploadPath + ").";
+        "This plugin was built by an older DefenseClaw, so Cowork is not protected. " +
+        "Build the plugin again, then upload the new zip in Claude Desktop (" + CoworkProtectionFacts.UploadPath + ").";
 
     /// <summary>Said before the run.</summary>
     internal const string BeforeRunText = "Builds the DefenseClaw plugin for Claude Cowork. Sets up Claude Code hooks first if they are off.";
 
     /// <summary>Said next to "Build the plugin again": each run is a new version (cmd_setup_cowork.py).</summary>
     internal const string RebuildNoteText =
-        "Each run builds a new plugin version and clears the earlier confirmation, so Cowork reads as not protected until a Cowork event reaches the new one. " +
-        "The old plugin keeps working until the new one is live; if Claude then lists two, remove the older one.";
+        "Each run builds a new plugin version. Cowork reads as not protected until a Cowork event reaches it. " +
+        "If Claude lists two plugins afterwards, remove the older one.";
 
     /// <summary>Said when the managed-host refusal's own text is not in the output.</summary>
     internal const string ManagedFallbackText =
-        "This computer's DefenseClaw is managed by your organization, so per-user Cowork setup is disabled: Cowork is covered by the Claude Code machine policy your administrator deploys. Nothing was changed.";
+        "This DefenseClaw is managed by your organization, so per-user Cowork setup is off. The Claude Code machine policy covers Cowork. Nothing was changed.";
 
     private readonly AppServices _services;
     private readonly CoworkProtectionStore _store;
@@ -303,7 +303,7 @@ public sealed partial class CoworkSetupViewModel : ObservableObject
         else
         {
             zip = CoworkProtectionFacts.PluginZipPath(_services.Paths.DataDirectory);
-            ZipNote = "status --json did not give the zip's path, so this is where setup cowork writes it by default.";
+            ZipNote = "status --json gave no zip path. This is the default location.";
         }
 
         ZipPath = zip;
@@ -314,9 +314,9 @@ public sealed partial class CoworkSetupViewModel : ObservableObject
     {
         if (_services.Installation.Context.IsManaged)
         {
-            return "This installation is managed by your organization, so per-user Cowork setup is disabled (setup cowork exits " +
+            return "This installation is managed by your organization, so per-user Cowork setup is off (setup cowork exits " +
                    CoworkProtectionFacts.ManagedHostExitCode.ToString(CultureInfo.InvariantCulture) +
-                   " here). Cowork is covered by the Claude Code machine policy your administrator deploys.";
+                   "). The Claude Code machine policy covers Cowork.";
         }
 
         return _services.Installation.BlockedReason;
@@ -334,7 +334,7 @@ public sealed partial class CoworkSetupViewModel : ObservableObject
 
         var argv = CoworkProtectionFacts.SetupArgv;
         var again = _state?.PluginVersion is not null;
-        var explanation = BeforeRunText + " It opens nothing and does not wait: upload the plugin in Claude Desktop afterwards." +
+        var explanation = BeforeRunText + " Upload the plugin in Claude Desktop afterwards." +
                           (again ? " " + RebuildNoteText : string.Empty);
         Review.Open(
             "Build the Cowork plugin?",
@@ -343,7 +343,7 @@ public sealed partial class CoworkSetupViewModel : ObservableObject
             {
                 new DiscoverStep(
                     argv,
-                    "Build the Cowork plugin zip (and set up Claude Code first if it is off). Opens nothing and does not wait.",
+                    "Builds the Cowork plugin zip. Sets up Claude Code first if it is off.",
                     CommandTier.StateChanging,
                     CliRunner.LongRunningTimeout),
             },
@@ -394,7 +394,7 @@ public sealed partial class CoworkSetupViewModel : ObservableObject
         _buildFailed = false;
         _justBuilt = true;
         ResultKey = "Warn";
-        ResultText = "setup cowork finished and built the plugin. Cowork is not protected until you upload it in Claude Desktop and a Cowork event reaches DefenseClaw.";
+        ResultText = "setup cowork built the plugin. Cowork is not protected until you upload it in Claude Desktop and a Cowork event reaches DefenseClaw.";
 
         // The review's own "Done." speaks of the command, not of Cowork: close it so the window's state and upload steps are what the user reads.
         if (Review.DismissCommand.CanExecute(null))

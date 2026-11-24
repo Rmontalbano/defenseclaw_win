@@ -83,7 +83,7 @@ public static partial class ConfigFieldValidator
     private static readonly string[] SecretPrefixes = { "sk-", "ghp_", "gho_", "ghs_", "AIza", "AKIA", "ASIA", "eyJ" };
 
     private const string SecretGuidance =
-        "Keep secrets out of config.yaml: store it with `defenseclaw keys set <ENV_NAME>` (it is kept in .env) and enter only that name here.";
+        "Keep secrets out of config.yaml. Store it in .env with `defenseclaw keys set <ENV_NAME>` and enter only that name here.";
 
     /// <summary>
     /// Checks one field.
@@ -146,7 +146,7 @@ public static partial class ConfigFieldValidator
         if (isEnvName && text.Length > 0 && !LooksLikeEnvName(text))
         {
             return LooksLikeSecretValue(text)
-                ? Warning("this looks like a secret value, not an env var name. " + SecretGuidance)
+                ? Warning("this looks like a secret value. " + SecretGuidance)
                 : Error("env var names must match A-Z, 0-9, and underscores");
         }
 
@@ -182,7 +182,7 @@ public static partial class ConfigFieldValidator
 
         if (key.Contains("tls_skip_verify", StringComparison.Ordinal) && text == "true")
         {
-            return Warning("TLS verification is disabled; dev-only");
+            return Warning("TLS verification is disabled. Development only.");
         }
 
         if (kind != FormFieldKind.Secret && IsSecretName(key) && LooksLikeSecretValue(text))

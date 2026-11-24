@@ -281,7 +281,7 @@ public sealed class OverviewReviewedActionsTests : IDisposable
         Assert.Equal(CommandTier.StateChanging, review.Tier);
         Assert.True(review.RestartsGateway);
         Assert.Contains("notifications.enabled to false", review.Summary, StringComparison.Ordinal);
-        Assert.Contains("separate setting", review.Summary, StringComparison.Ordinal);
+        Assert.Contains("Tray alerts (Settings, Notifications) do not change", review.Summary, StringComparison.Ordinal);
         Assert.Empty(Services.Cli.Activity);
     }
 

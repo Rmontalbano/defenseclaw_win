@@ -145,7 +145,7 @@ public sealed partial class ConnectorBatchViewModel : SetupDialogViewModel
 
     public string Title => "Set up several connectors";
 
-    public string Subtitle => "Configure more than one agent in a single command. Nothing changes until you review the command and confirm it.";
+    public string Subtitle => "Configure several connectors in one command. Nothing changes until you confirm the review.";
 
     /// <summary>The connectors to tick, in the order the first-run window lists them.</summary>
     public ObservableCollection<BatchRow> Rows { get; } = new();
@@ -168,11 +168,11 @@ public sealed partial class ConnectorBatchViewModel : SetupDialogViewModel
     private bool _canSkipRestart = true;
 
     public string RestartNote => RestartAfter
-        ? "The gateway restarts once, at the end, so the new connectors' hooks come up."
-        : "The gateway is not restarted, so nothing changes in the running gateway until it is restarted.";
+        ? "The gateway restarts once, at the end."
+        : "The running gateway does not change until it restarts.";
 
     public string ModeNote => (Mode == ConnectorBatch.ActionMode
-        ? "Action lets DefenseClaw block. If the CLI cannot verify a connector for action mode it configures observe for that one and says so."
+        ? "Action lets DefenseClaw block. A connector the CLI cannot verify for action mode is configured as observe."
         : DefenseClaw.Core.Runtime.ObserveModeCopy.BatchObserveNote(DefenseClaw.Core.Runtime.ObserveModeCopy.BlocksSelfChange(Services.Runtime.Capabilities)))
         + (_keepsRoster ? " " + ModeAppliesOnlyToNamed : string.Empty);
 
@@ -279,7 +279,7 @@ public sealed partial class ConnectorBatchViewModel : SetupDialogViewModel
         _listed = null;
         if (!result.Succeeded)
         {
-            return "The options of setup could not be read (" + result.Error + "), so the batch cannot be checked against this DefenseClaw. Press Refresh to try again.";
+            return "The options of setup could not be read (" + result.Error + "). Press Refresh to try again.";
         }
 
         var help = SetupHelpParser.Parse(result.Text, commandDepth: 1);
@@ -295,8 +295,8 @@ public sealed partial class ConnectorBatchViewModel : SetupDialogViewModel
         var missing = new[] { "--yes", "--connector", "--mode" }.Where(f => !listed.Contains(f)).ToArray();
         if (missing.Length > 0)
         {
-            return "The installed DefenseClaw's setup does not list " + string.Join(", ", missing) +
-                   ", so it has no batch form this app can send. Use the connector tiles below one at a time.";
+            return "setup does not list " + string.Join(", ", missing) +
+                   ", so a batch cannot be sent. Use the connector tiles below one at a time.";
         }
 
         _listed = listed;
@@ -457,26 +457,26 @@ public sealed partial class ConnectorBatchViewModel : SetupDialogViewModel
 
             if (!Selected.Any() && Extra == BatchExtra.None)
             {
-                return "Tick at least one connector, or choose detected or supported connectors: with none the CLI would open a picker this app cannot answer.";
+                return "Tick at least one connector, or choose detected or supported connectors.";
             }
 
             if (Extra == BatchExtra.Detected && !IsListed("--detected"))
             {
-                return "The installed DefenseClaw's setup does not list --detected.";
+                return "setup does not list --detected.";
             }
 
             if (Extra == BatchExtra.All && !IsListed("--all"))
             {
-                return "The installed DefenseClaw's setup does not list --all.";
+                return "setup does not list --all.";
             }
 
-            return HasChanges ? null : "Nothing to apply: the ticked connectors are the ones configured now, in the mode chosen.";
+            return HasChanges ? null : "Nothing to apply. The ticked connectors are already configured in this mode.";
         }
     }
 
     public bool ReviewBlocked => ReviewBlockedReason is not null;
 
-    public string ReviewTip => ReviewBlockedReason ?? "Shows the exact command first. Nothing runs until you confirm.";
+    public string ReviewTip => ReviewBlockedReason ?? "Shows the command first. Nothing runs until you confirm.";
 
     // ------------------------------------------------------------------ the plan
 
@@ -513,20 +513,20 @@ public sealed partial class ConnectorBatchViewModel : SetupDialogViewModel
         {
             warnings.Add(new CommandReviewWarning(
                 "Drops configured connectors",
-                "The batch sets the connector roster to the selection. Not selected, so no longer watched: " + string.Join(", ", dropped.Select(Label)) + "."));
+                "The batch sets the connector roster to the selection. Not watched any more: " + string.Join(", ", dropped.Select(Label)) + "."));
         }
         else if (Extra != BatchExtra.None)
         {
             warnings.Add(new CommandReviewWarning(
                 "Sets the roster",
-                "The batch sets the connector roster to the selection, so a configured connector that is not among them is dropped."));
+                "The batch sets the connector roster to the selection. A configured connector that is not selected is dropped."));
         }
 
         if (Mode == ConnectorBatch.ActionMode)
         {
             warnings.Add(new CommandReviewWarning(
                 "Action mode can block",
-                "In action mode DefenseClaw can block an agent's tool calls. A connector the CLI cannot verify for action mode is configured in observe mode instead."));
+                "Action mode can block an agent's tool calls. A connector the CLI cannot verify for it is configured as observe."));
         }
 
         var uncertified = Rows.Where(static r => r.IsOn && r.HasCaution && !r.IsPreview).Select(static r => r.Label).ToArray();
@@ -534,7 +534,7 @@ public sealed partial class ConnectorBatchViewModel : SetupDialogViewModel
         {
             warnings.Add(new CommandReviewWarning(
                 "Not certified on Windows",
-                string.Join(", ", uncertified) + (uncertified.Length == 1 ? " is" : " are") + " not certified on Windows. They can be added; expect rough edges."));
+                string.Join(", ", uncertified) + (uncertified.Length == 1 ? " is" : " are") + " not certified on Windows. Expect rough edges."));
         }
 
         var previews = Rows.Where(static r => r.IsOn && r.IsPreview).Select(static r => r.Label).ToArray();
@@ -542,14 +542,14 @@ public sealed partial class ConnectorBatchViewModel : SetupDialogViewModel
         {
             warnings.Add(new CommandReviewWarning(
                 "Preview on Windows",
-                string.Join(", ", previews) + (previews.Length == 1 ? " is a preview" : " are previews") + " on Windows. They can be added, but they have not completed Windows certification; expect rough edges."));
+                string.Join(", ", previews) + (previews.Length == 1 ? " is a preview" : " are previews") + " on Windows and not yet certified. Expect rough edges."));
         }
 
         if (!restart)
         {
             warnings.Add(new CommandReviewWarning(
                 "Gateway not restarted",
-                "The gateway is not restarted, so the connectors' hooks are not live until it is."));
+                "The connector hooks are not live until the gateway restarts."));
         }
 
         return new SetupPlan
@@ -601,7 +601,7 @@ public sealed partial class ConnectorBatchViewModel : SetupDialogViewModel
         ResultKey = result.Succeeded ? "Ok" : "Bad";
         ResultText = result.Succeeded
             ? "Done. " + RosterLine
-            : "Not applied. " + PlanReport.Describe(result.Outcomes) + " The review and the Activity panel have the output.";
+            : "Not applied. " + PlanReport.Describe(result.Outcomes) + " The output is in the review and Activity.";
         ResultText = ResultText.Replace("  ", " ", StringComparison.Ordinal).Trim();
 
         if (Applied is { } applied)

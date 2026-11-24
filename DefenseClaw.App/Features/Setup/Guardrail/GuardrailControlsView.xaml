@@ -35,7 +35,7 @@
                         <TextBlock Style="{StaticResource DcBody}" FontWeight="SemiBold" Text="Guardrail controls"
                                    AutomationProperties.HeadingLevel="Level1" />
                         <TextBlock Style="{StaticResource DcCaption}"
-                                   Text="Human-in-the-loop approval, the message shown when an action is blocked, and which hook connectors use the LLM judge. Enable, disable and fail mode are on the Setup panel." />
+                                   Text="Human approval, block message and hook judge settings. Enable, disable and fail mode are on the Setup panel." />
                     </StackPanel>
                     <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Top">
                         <ui:ProgressRing Width="16" Height="16" Margin="0,0,8,0" IsIndeterminate="True"
@@ -117,7 +117,7 @@
                                        Command="{Binding TurnHiltOffCommand}" />
                         </WrapPanel>
                         <TextBlock Margin="0,6,0,0" Style="{StaticResource DcCaption}"
-                                   Text="HILT pauses a confirmable action at or above the minimum severity and asks you to approve it. CRITICAL findings always block." />
+                                   Text="HILT asks you to approve a confirmable action at or above the minimum severity. CRITICAL findings always block." />
                     </StackPanel>
                 </Border>
 
@@ -159,7 +159,7 @@
                                        Command="{Binding ClearBlockMessageCommand}" />
                         </WrapPanel>
                         <TextBlock Margin="0,6,0,0" Style="{StaticResource DcCaption}"
-                                   Text="Shown when a block verdict carries no reason of its own. Audit rows and notifications always keep the real reason." />
+                                   Text="Shown when a block verdict has no reason. Audit rows and notifications keep the real reason." />
                     </StackPanel>
                 </Border>
 
@@ -233,6 +233,8 @@
                             <TextBlock Style="{StaticResource DcToolbarLabel}" Text="Timeout (s)" />
                             <TextBox Width="70"
                                      AutomationProperties.Name="Judge hook timeout in seconds, optional"
+                                     AutomationProperties.HelpText="Optional cap on the hook lane. Hook scripts allow 10 seconds in all."
+                                     ToolTip="Optional cap on the hook lane. Hook scripts allow 10 seconds in all."
                                      Text="{Binding JudgeTimeoutText, UpdateSourceTrigger=PropertyChanged}" />
                             <ui:Button Content="Add all hook connectors"
                                        AutomationProperties.Name="Send every hook connector to the LLM judge"
@@ -253,7 +255,7 @@
                                    Visibility="{Binding HasTimeoutProblem, Converter={StaticResource BoolToVisibility}}"
                                    Text="{Binding TimeoutProblem}" />
                         <TextBlock Margin="0,6,0,0" Style="{StaticResource DcCaption}"
-                                   Text="The judge adds latency and an LLM call to every inspected hook event, so it is opt-in per connector. Proxy-backed connectors are always judged while the judge is on. The timeout is the optional hook-lane cap; the hook scripts allow 10 seconds in all." />
+                                   Text="The judge adds latency and an LLM call to each inspected hook event, so it is opt-in per connector. Proxy-backed connectors are always judged while it is on." />
                     </StackPanel>
                 </Border>
 

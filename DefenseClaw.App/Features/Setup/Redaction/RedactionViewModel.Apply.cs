@@ -131,7 +131,7 @@ public sealed partial class RedactionViewModel
             Outcome = Failed(
                 info,
                 command,
-                "The change did not finish. The review has the output, and the Activity panel has all of it. Check the policy below before trying again.",
+                "The change did not finish. The review and the Activity panel have the output. Check the policy below before trying again.",
                 invocation is null ? string.Empty : Transcript(invocation));
         }
 
@@ -177,7 +177,7 @@ public sealed partial class RedactionViewModel
             ? "The gateway was restarted."
             : restart
                 ? "The gateway restart was requested but the CLI did not report it."
-                : "The gateway was not restarted. It hot-reloads the policy changes it supports; restart it from the Overview if a change does not take effect.");
+                : "The gateway was not restarted. It hot-reloads supported policy changes. Restart it from the Overview if a change does not take effect.");
         notes.AddRange(applied.Locked.Select(static l => DisplayNames.Visible($"Managed policy stays locked: {l.Destination} ({string.Join(", ", l.Profiles)}).")));
 
         return new RedactionOutcomeViewModel
@@ -222,7 +222,7 @@ public sealed partial class RedactionViewModel
         var effect = preview.Changes.Count == 0
             ? "No delivery leg is redacted differently, but the configuration file is rewritten."
             : $"{preview.Headline} {(preview.Breakdown.Length > 0 ? "(" + preview.Breakdown + ")" : string.Empty)}".Trim();
-        return $"{info.Summary} {effect} A copy of config.yaml is saved to the backups folder first, and the plan that is written is checked against this preview.";
+        return $"{info.Summary} {effect} config.yaml is backed up first, and the written plan is checked against this preview.";
     }
 
     private static IReadOnlyList<CommandReviewWarning> ReviewWarnings(RedactionResult preview, bool restart, bool setsNone)
@@ -234,27 +234,27 @@ public sealed partial class RedactionViewModel
             var where = DisplayNames.Visible(string.Join("; ", preview.Groups.Where(static g => g.NewlyUnredacted).Take(3).Select(static g => $"{g.Target} {g.Signal} ({g.BucketsText})")));
             warnings.Add(new CommandReviewWarning(
                 "Raw content will flow",
-                $"{Legs(preview.NewlyUnredacted)} will carry raw, unredacted content: {where}. What they carry can include prompts, tool input and output, file paths and secrets."));
+                $"{Legs(preview.NewlyUnredacted)} will carry raw, unredacted content: {where}. This can include prompts, tool input and output, file paths and secrets."));
         }
         else if (setsNone)
         {
             warnings.Add(new CommandReviewWarning(
                 "Profile none: no redaction",
-                "No leg changes today, but profile none sends content as recorded. Whatever follows it, including a bucket or a destination you add later, will send raw content too."));
+                "No leg changes today, but profile none sends content as recorded. Anything added later, such as a bucket or destination, will send raw content too."));
         }
 
         if (!restart)
         {
             warnings.Add(new CommandReviewWarning(
                 "Gateway not restarted",
-                "The command says --no-restart: the gateway keeps running as it is. It hot-reloads the policy changes it supports; restart it from the Overview if a change does not take effect."));
+                "The command uses --no-restart, so the gateway keeps running. It hot-reloads supported policy changes. Restart it from the Overview if a change does not take effect."));
         }
 
         foreach (var locked in preview.Locked)
         {
             warnings.Add(new CommandReviewWarning(
                 "Locked destination",
-                DisplayNames.Visible($"{locked.Destination} keeps its own profile ({string.Join(", ", locked.Profiles)}): its policy belongs to the release and this change cannot touch it.")));
+                DisplayNames.Visible($"{locked.Destination} keeps its own profile ({string.Join(", ", locked.Profiles)}). Its policy is managed by the release and this change cannot touch it.")));
         }
 
         return warnings;

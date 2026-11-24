@@ -30,15 +30,15 @@ public sealed partial class ConnectorBatchViewModel
         _roster.Count > 0 &&
         !_roster.Any(static id => ConnectorOnboarding.IsProxy(id));
 
-    internal const string ModeAppliesOnlyToNamed = "The mode applies only to the connectors this command adds or updates; every other connector keeps its own mode.";
+    internal const string ModeAppliesOnlyToNamed = "The mode applies only to the connectors this command adds or updates. Others keep their own mode.";
 
     internal const string KeepsRosterTitle = "Other connectors are kept";
 
-    private const string HowToStop = "To stop one, use Remove a connector… in the Setup panel's connector list.";
+    private const string HowToStop = "To stop one, use Remove a connector… in the Setup panel.";
 
     /// <summary>Under the roster line: what unticking does, and where to take a connector out. Empty when the dialog replaces the roster.</summary>
     public string RosterNote => _keepsRoster
-        ? "A connector you leave unticked keeps its configuration and mode. " + HowToStop
+        ? "An unticked connector keeps its configuration and mode. " + HowToStop
         : string.Empty;
 
     public bool HasRosterNote => RosterNote.Length > 0;
@@ -87,7 +87,7 @@ public sealed partial class ConnectorBatchViewModel
         BatchRow.LeftAsTheyWere + ": " + string.Join(", ", kept.Select(Label));
 
     private string KeepsRosterText(IReadOnlyList<string> kept) =>
-        "This adds or updates the connectors it names. Every other connector keeps its configuration and mode." +
+        "This adds or updates the connectors it names. Others keep their configuration and mode." +
         (kept.Count > 0 ? " Left as they were: " + string.Join(", ", kept.Select(Label)) + "." : string.Empty) +
-        " " + ModeAppliesOnlyToNamed + " " + HowToStop;
+        " " + HowToStop;
 }

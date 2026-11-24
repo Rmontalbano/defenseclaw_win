@@ -146,7 +146,7 @@ public sealed class KeysSetPlanTests
 
             Assert.False(key.OffersKeysSetEntry);
             Assert.False(key.ShowsEntryBox);
-            Assert.Contains("This app never takes the secret itself", key.CredentialExplanation, StringComparison.Ordinal);
+            Assert.Contains("The command reads the secret from a variable", key.CredentialExplanation, StringComparison.Ordinal);
             key.SetEntry(Secure(Value));
             Assert.False(key.HasEntry); // refused rather than kept unused
 

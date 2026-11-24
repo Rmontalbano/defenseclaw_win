@@ -81,7 +81,7 @@ public class JudgeExtraBodyAndProvidersTests
 
         Assert.True(result.IsError);
         Assert.Contains("invalid key", result.Message, StringComparison.Ordinal);
-        Assert.Contains("use ASCII letters, digits, _, - or .", result.Message, StringComparison.Ordinal);
+        Assert.Contains("Use ASCII letters, digits, _, - or .", result.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -144,7 +144,7 @@ public class JudgeExtraBodyAndProvidersTests
 
         Assert.Contains("chat_template_kwargs: {enable_thinking: false}", info.Hint, StringComparison.Ordinal);
         Assert.Contains("base URL", info.Hint, StringComparison.Ordinal);
-        Assert.Contains("Releases before 1.0.8 refuse it; unset it before you go back.", info.Hint, StringComparison.Ordinal);
+        Assert.Contains("Releases before 1.0.8 refuse it, so unset it before downgrading.", info.Hint, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -170,7 +170,7 @@ public class JudgeExtraBodyAndProvidersTests
         Assert.Null(ConfigFieldCatalog.Resolve("openshell.middleware.enabled", Older));
 
         var info = ConfigFieldCatalog.Resolve("openshell.middleware.enabled", Newer)!;
-        Assert.Equal("Retired in 1.0.8: it had no effect. config set refuses it; remove it from config.yaml. Existing files with the key still load.", info.ReadOnlyReason);
+        Assert.Equal("Retired in 1.0.8 and has no effect. config set refuses it. Remove it from config.yaml; files that still have it load.", info.ReadOnlyReason);
     }
 
     [Fact]

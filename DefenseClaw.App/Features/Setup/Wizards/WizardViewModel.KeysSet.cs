@@ -67,7 +67,7 @@ public sealed partial class WizardViewModel
         {
             if (field.IsSecret)
             {
-                field.SetKeysSetAvailable(available, "The value you entered was cleared because this app can no longer type it at the keys set prompt. Store it in a console, or enter it again.");
+                field.SetKeysSetAvailable(available, "The value you entered was cleared because the keys set prompt is no longer available. Store it in a console, or enter it again.");
             }
         }
     }
@@ -101,7 +101,7 @@ public sealed partial class WizardViewModel
             var name = stores[i].CredentialEnvName;
             steps.Add(new CommandReviewStep(
                 SecretPtyRunner.SetKeyArgv(name),
-                $"Stores the value you typed for {name} (hidden) in ~/.defenseclaw/.env. This app types it at the command's own hidden prompt; it is not on the command line.",
+                $"Stores the value you typed for {name} (hidden) in ~/.defenseclaw/.env. This app types it at the hidden prompt. It is not on the command line.",
                 CommandTier.StateChanging,
                 number: i + 1));
         }
@@ -183,7 +183,7 @@ public sealed partial class WizardViewModel
                 return false;
             }
 
-            ResultMessage = $"Step {number} of {total}: storing {name}. This app is typing the value at the CLI's hidden prompt. Cancel stops it.";
+            ResultMessage = $"Step {number} of {total}: storing {name}. Typing the value at the hidden prompt. Cancel stops it.";
             var plan = CommandReview;
             BeginPlanStep(i + 1, total, plan);
 
@@ -219,7 +219,7 @@ public sealed partial class WizardViewModel
                 var failure = (OpenConsole ?? Credentials.OpenKeysSetTerminal)(name);
                 ExitBadgeText = "not run";
                 ExitBadgeKey = "Warn";
-                ResultMessage = $"The app could not type the value itself ({result.Message.TrimEnd('.')}). " +
+                ResultMessage = $"The app could not type the value ({result.Message.TrimEnd('.')}). " +
                                 (failure is null
                                     ? $"A console window opened for {name}: type the value there, press Re-check, then Execute again. The wizard's command was not run."
                                     : failure + " The wizard's command was not run.");
@@ -229,7 +229,7 @@ public sealed partial class WizardViewModel
             var cancelled = result.Outcome == SecretPtyOutcome.Cancelled;
             ExitBadgeText = cancelled ? "cancelled" : result.Invocation?.ExitCode is { } code ? "exit " + code.ToString(CultureInfo.CurrentCulture) : "failed";
             ExitBadgeKey = cancelled ? "Warn" : "Bad";
-            ResultMessage = $"Step {number} of {total} did not store {name}: {result.Message} The wizard's command was not run, so nothing was changed by it. " +
+            ResultMessage = $"Step {number} of {total} did not store {name}: {result.Message} The wizard's command was not run. " +
                             "The command and its output are in the Activity panel.";
             return false;
         }

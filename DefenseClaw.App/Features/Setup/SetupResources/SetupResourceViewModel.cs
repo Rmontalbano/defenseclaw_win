@@ -124,7 +124,7 @@ public abstract partial class SetupResourceViewModel : ObservableObject, IDispos
     public virtual string FailedTitle => $"The {Singular} list could not be read";
 
     /// <summary>What the failed state adds to the CLI's reason: why this is not the same as an empty list.</summary>
-    public virtual string FailedDetail => $"This is not an empty list: nobody knows what is configured. Nothing here can be changed until the {Plural} have been read.";
+    public virtual string FailedDetail => $"The list is unknown, not empty. Nothing can be changed until the {Plural} are read.";
 
     /// <summary>
     /// What this editor shows that the others do not (the trusted-folder editor's connectors and the reason the operator came), for the view to
@@ -506,7 +506,7 @@ public abstract partial class SetupResourceViewModel : ObservableObject, IDispos
 
         if (_lastReadAt is { } at && _rows.Count > 0)
         {
-            RefreshWarning = $"{title}: {message} Showing the last good read (as of {at:HH:mm}); changes are off until the list is read again.";
+            RefreshWarning = $"{title}: {message} Showing the last good read from {at:HH:mm}. Changes are off until the list is read again.";
             return;
         }
 
@@ -690,7 +690,7 @@ public abstract partial class SetupResourceViewModel : ObservableObject, IDispos
         {
             ShowNotice(
                 "Nothing was sent",
-                $"Enter only selects the {Singular}. Press Test to check that it answers; the command is shown first and nothing runs until you confirm it.",
+                $"Enter only selects the {Singular}. Press Test to check that it answers.",
                 InfoBarSeverity.Informational);
         }
     }

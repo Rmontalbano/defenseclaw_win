@@ -32,7 +32,7 @@ public sealed partial class WizardViewModel
     private bool _hasEnvironmentNotes;
 
     /// <summary>What the result line says once a run that was given a secret has ended.</summary>
-    internal const string SecretClearedSentence = "The value you entered was supplied to that one command only and has been cleared; enter it again to retry.";
+    internal const string SecretClearedSentence = "The value you entered was used for that one command and has been cleared. Enter it again to retry.";
 
     /// <summary>
     /// The visible secret fields that will actually be supplied: an in-app route, and a usable typed value.
@@ -48,8 +48,8 @@ public sealed partial class WizardViewModel
         foreach (var field in SuppliedSecretFields())
         {
             EnvironmentNotes.Add(
-                $"{field.InAppEnvName}=••• — {field.CredentialPurpose}, supplied to the command as an environment variable " +
-                "(value masked; this run only, not on the command line)." +
+                $"{field.InAppEnvName}=•••: {field.CredentialPurpose}, supplied to the command as an environment variable " +
+                "(value masked, this run only, not on the command line)." +
                 (field.PersistSentence.Length > 0 ? " " + field.PersistSentence : string.Empty));
         }
 
@@ -156,7 +156,7 @@ public sealed partial class WizardViewModel
         // A key typed for the keys set route is stored by Execute alone: a preview writes nothing, so the command it previews reads whatever is stored now.
         if (KeysSetFields().Any())
         {
-            notes.Add("A preview does not store the key you typed: Execute stores it first, so a preview reads whatever is stored now.");
+            notes.Add("A preview does not store the key you typed. Execute stores it first, so a preview reads whatever is stored now.");
         }
 
         return notes.Count == 0 ? string.Empty : " " + string.Join(' ', notes);

@@ -325,7 +325,7 @@ public sealed class CredentialsInAppTests
         Assert.Equal("✓ set", refreshed.SetText);
         Assert.Equal("dotenv", refreshed.Source);
         Assert.Equal("Ok", h.Credentials.NoteKey);
-        Assert.Equal("Stored EXAMPLE_JUDGE_KEY. The value is shown nowhere; the row now reads set.", h.Credentials.Note);
+        Assert.Equal("Stored EXAMPLE_JUDGE_KEY. The row now reads set.", h.Credentials.Note);
         Assert.Empty(h.Launched);
 
         AssertNothingHolds(h, Value);
@@ -642,7 +642,7 @@ public sealed class CredentialsInAppTests
         Assert.False(h.Credentials.InAppAvailable);
         Assert.False(row.OffersInApp);
         Assert.False(row.ShowEditor);
-        Assert.Contains("console window was opened instead", h.Credentials.Note, StringComparison.Ordinal);
+        Assert.Contains("A console window was opened", h.Credentials.Note, StringComparison.Ordinal);
         Assert.Contains("did not show its hidden prompt", h.Credentials.Note, StringComparison.Ordinal);
         Assert.Equal("Warn", h.Credentials.NoteKey);
         Assert.False(row.HasEntry);
@@ -744,7 +744,7 @@ public sealed class CredentialsInAppTests
         await h.Review.ConfirmCommand.ExecuteAsync(null);
 
         Assert.Equal("Warn", h.Credentials.NoteKey);
-        Assert.Contains("the list still shows EXAMPLE_JUDGE_KEY as unset", h.Credentials.Note, StringComparison.Ordinal);
+        Assert.Contains("EXAMPLE_JUDGE_KEY still reads unset", h.Credentials.Note, StringComparison.Ordinal);
     }
 
     // ----------------------------------------------------------------------------------------------------------- Fill missing
@@ -807,7 +807,7 @@ public sealed class CredentialsInAppTests
         Assert.False(h.Credentials.IsFilling);
         Assert.All(h.Credentials.Rows, r => Assert.False(r.IsEditing || r.HasEntry));
         Assert.Equal(0, h.Credentials.MissingRequiredCount);
-        Assert.Equal("Stored 2 values: EXAMPLE_JUDGE_KEY, EXAMPLE_REVIEWER_KEY. They are shown nowhere; the rows now read set.", h.Credentials.Note);
+        Assert.Equal("Stored 2 values: EXAMPLE_JUDGE_KEY, EXAMPLE_REVIEWER_KEY. The rows now read set.", h.Credentials.Note);
         Assert.Equal("Ok", h.Credentials.NoteKey);
         AssertNothingHolds(h, Value, SecondValue);
     }
@@ -825,7 +825,7 @@ public sealed class CredentialsInAppTests
 
         Assert.Equal(new[] { (Reviewer, SecondValue) }, h.Stored);
         Assert.Equal(1, h.Credentials.MissingRequiredCount); // the judge's key is still unset: it was not asked for
-        Assert.Equal("Stored EXAMPLE_REVIEWER_KEY. The value is shown nowhere; the row now reads set.", h.Credentials.Note);
+        Assert.Equal("Stored EXAMPLE_REVIEWER_KEY. The row now reads set.", h.Credentials.Note);
     }
 
     [Fact]

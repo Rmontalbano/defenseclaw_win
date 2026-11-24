@@ -72,7 +72,7 @@
             <ui:InfoBar Margin="{StaticResource DcCardGap}"
                         IsClosable="False"
                         Severity="Warning"
-                        Title="State-changing actions disabled - the list is still read"
+                        Title="State-changing actions disabled. The list is still read."
                         IsOpen="{Binding HasInstallationBlock, Mode=OneWay}"
                         Message="{Binding InstallationBlockedReason}" />
 
@@ -143,7 +143,7 @@
                                     </ItemsControl>
                                     <TextBlock Style="{StaticResource DcCaption}" Margin="0,8,0,0"
                                                Visibility="{Binding HasUntrustedConnectors, Converter={StaticResource BoolToVisibility}}"
-                                               Text="Trust a folder only if you control it: anything placed in a trusted folder can be run while DefenseClaw looks for connectors. Trust opens the setup wizard with the folder filled in; the command is shown before anything runs." />
+                                               Text="Trust a folder only if you control it. Anything in a trusted folder can be run. Trust opens the setup wizard with the folder filled in." />
                                 </StackPanel>
                             </Border>
                         </StackPanel>

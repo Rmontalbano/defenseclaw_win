@@ -60,7 +60,7 @@ public sealed partial class TrustedPathsViewModel : SetupResourceViewModel
     public override string Title => "Trusted binary locations";
 
     public override string Subtitle =>
-        "The folders DefenseClaw may run connector programs from while it looks for them. Trust only folders you control: anything placed in a trusted folder can be run. Built-in folders are protected.";
+        "Folders DefenseClaw may run connector programs from. Trust only folders you control. Built-in folders are protected.";
 
     public override string Singular => "trusted folder";
 
@@ -75,16 +75,16 @@ public sealed partial class TrustedPathsViewModel : SetupResourceViewModel
     public override string EmptyTitle => "The allow-list is empty";
 
     public override string EmptyDetail =>
-        "defenseclaw setup trusted-paths list answered with an empty list. The built-in folders normally fill it, so an empty list means connector programs are trusted nowhere. Trust a folder with the Add button.";
+        "defenseclaw setup trusted-paths list returned an empty list. No connector programs are trusted. Use Add to trust a folder.";
 
     public override string FailedTitle => "Could not read the trusted-path allow-list";
 
     public override string FailedDetail =>
-        "Treat the allow-list as unknown, not empty: it may hold folders this window cannot show. Nothing here can be changed until it has been read.";
+        "The allow-list is unknown and may hold folders not shown here. Nothing can be changed until it is read.";
 
     protected override string TipFor(SetupVerb verb) => verb switch
     {
-        SetupVerb.Add => "Open the setup wizard on add: type the folder to trust. The wizard shows the exact command before anything runs.",
+        SetupVerb.Add => "Opens the setup wizard to type the folder to trust. The command is shown first.",
         SetupVerb.Remove => "Stop trusting this folder. The command is shown first.",
         _ => string.Empty,
     };
@@ -123,11 +123,11 @@ public sealed partial class TrustedPathsViewModel : SetupResourceViewModel
         var blocked = new Dictionary<SetupVerb, string>();
         if (p.IsBuiltIn)
         {
-            blocked[SetupVerb.Remove] = "Built-in defaults are protected: the CLI never removes one.";
+            blocked[SetupVerb.Remove] = "Built-in defaults are protected. The CLI does not remove them.";
         }
         else if (p.IsEnvironmentOnly)
         {
-            blocked[SetupVerb.Remove] = "Only the running program's environment (DEFENSECLAW_TRUSTED_BIN_PREFIXES) names this folder, and nothing here can change that. Remove it from the environment.";
+            blocked[SetupVerb.Remove] = "Only the environment variable DEFENSECLAW_TRUSTED_BIN_PREFIXES names this folder. Remove it from the environment.";
         }
         else if (!p.Removable)
         {
@@ -158,8 +158,8 @@ public sealed partial class TrustedPathsViewModel : SetupResourceViewModel
     {
         "ok" => "ok: it exists, is a folder, and no one else can write to it",
         "missing" => "missing: the folder does not exist (yet)",
-        "not-a-dir" => "not-a-dir: this path is a file, not a folder",
-        "unsafe-permissions" => "unsafe-permissions: other accounts can write to this folder, so something could be planted in it; the CLI will not honor it",
+        "not-a-dir" => "not-a-dir: this path is a file",
+        "unsafe-permissions" => "unsafe-permissions: other accounts can write to this folder. The CLI ignores it.",
         "error" => "error: the CLI could not check this folder",
         _ => p.Status,
     };
@@ -178,7 +178,7 @@ public sealed partial class TrustedPathsViewModel : SetupResourceViewModel
             row,
             argv,
             $"Stop trusting “{row.Title}”?",
-            $"Takes this folder out of the allow-list ({p.Source}). A connector program that lives in it is no longer discovered or checked from there, and an action-mode setup for that connector stops until the folder is trusted again. Built-in folders are not touched.",
+            $"Takes this folder out of the allow-list ({p.Source}). Connector programs in it are no longer discovered or checked, and action-mode setup for them stops until you trust it again.",
             "Remove folder",
             CommandTier.Destructive,
             ChangeTimeout,
@@ -295,7 +295,7 @@ public sealed partial class TrustedPathsViewModel : SetupResourceViewModel
             var info = new FileInfo(path);
             if (!info.Exists)
             {
-                return UntrustedConnectorReport.Unavailable("No discovery scan has been recorded yet, so connectors outside a trusted folder cannot be listed. AI Discovery runs one.");
+                return UntrustedConnectorReport.Unavailable("No discovery scan has been recorded yet. Run AI Discovery to list connectors outside trusted folders.");
             }
 
             if (info.Length > MaxDiscoveryBytes)

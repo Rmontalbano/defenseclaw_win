@@ -105,11 +105,10 @@ public sealed partial class RuntimeMonitoringViewModel : SetupDialogViewModel
         "Runtime monitoring needs DefenseClaw 1.0 or later. " + RuntimeCapabilityCatalog.UnsupportedMessage + ".";
 
     public const string ScopeNote =
-        "Runtime monitoring is AI Discovery's second half: while the inventory scan looks at files and settings, these planes watch what is running now. " +
-        "It is off by default. Everything is read on this PC and recorded locally; nothing here sends anything anywhere by itself.";
+        "These planes watch what is running now. It is off by default. Everything is read and recorded on this PC.";
 
     public const string NoSingleAbNote =
-        "DefenseClaw has no switch for plane A or plane B alone: turning monitoring on starts both, and turning it off stops every plane. Plane C and DNS capture are separate opt-ins.";
+        "Plane A and plane B start together. Turning monitoring off stops every plane. Plane C and DNS capture are separate opt-ins.";
 
     private static readonly string[] EnablePath = { "agent", "discovery", "runtime", "enable" };
     private static readonly string[] DisablePath = { "agent", "discovery", "runtime", "disable" };
@@ -154,7 +153,7 @@ public sealed partial class RuntimeMonitoringViewModel : SetupDialogViewModel
 
     public string Title => DialogTitle;
 
-    public string Subtitle => "Whether DefenseClaw is watching what runs on this PC for AI use, plane by plane, and what each plane needs.";
+    public string Subtitle => "Whether DefenseClaw watches this PC for AI use, by plane, and what each plane needs.";
 
     public string Scope => ScopeNote;
 
@@ -181,7 +180,7 @@ public sealed partial class RuntimeMonitoringViewModel : SetupDialogViewModel
             {
                 if (!capabilities.HasAiRuntimeCommand(verb))
                 {
-                    return $"This DefenseClaw does not list 'agent discovery runtime {verb}', so monitoring cannot be changed from here.";
+                    return $"This DefenseClaw does not list 'agent discovery runtime {verb}'.";
                 }
             }
 
@@ -212,22 +211,22 @@ public sealed partial class RuntimeMonitoringViewModel : SetupDialogViewModel
             var snapshot = CurrentSnapshot;
             if (snapshot.Health is null)
             {
-                return "Gateway: not answering, so what it is running is not known.";
+                return "Gateway: not answering.";
             }
 
             if (!State.Health.Reported)
             {
-                return "Gateway: answering, and it does not report runtime monitoring.";
+                return "Gateway: answering. It does not report runtime monitoring.";
             }
 
             var line = "Gateway reports runtime monitoring: " + State.Health.State;
-            return State.Health.Degraded ? line + " (degraded: at least one plane is not delivering everything it can)." : line + ".";
+            return State.Health.Degraded ? line + ". Degraded: at least one plane is not delivering everything." : line + ".";
         }
     }
 
     /// <summary>The config schema line: <c>config_version 9</c>, or why there is none.</summary>
     public string ConfigLine => _config.ConfigVersion is { } version
-        ? $"config.yaml: config_version {version.ToString(CultureInfo.InvariantCulture)}" + (_config.Enabled || _config.Planes.Count > 0 || _config.EnableHostPlane ? ", ai_discovery.runtime present." : ", no ai_discovery.runtime settings (the default: off).")
+        ? $"config.yaml: config_version {version.ToString(CultureInfo.InvariantCulture)}" + (_config.Enabled || _config.Planes.Count > 0 || _config.EnableHostPlane ? ", ai_discovery.runtime present." : ", no ai_discovery.runtime settings. Default: off.")
         : "config.yaml: no config_version.";
 
     /// <summary>Rebuilds <see cref="State"/> from config.yaml, the last health poll and the elevation status. No I/O beyond what is already held.</summary>
@@ -281,16 +280,16 @@ public sealed partial class RuntimeMonitoringViewModel : SetupDialogViewModel
     public bool CanEditPlaneSwitches => CanEdit && IsSupported && MonitoringOn;
 
     public string RestartNote => RestartAfter
-        ? "The verb restarts the gateway so the change takes effect now."
-        : "The gateway is not restarted (--no-restart): the setting is saved in config.yaml and takes effect the next time the gateway restarts.";
+        ? "The gateway restarts so the change takes effect now."
+        : "Not restarted (--no-restart). Saved in config.yaml, in effect after the next gateway restart.";
 
     public bool CanChooseRestart => _canSkipRestart;
 
     public string HostPlaneNote =>
-        "Plane C reads process, identity and privilege events from the Windows Security log. It needs a gateway running as administrator and Advanced Audit Policy; until both are in place it reports itself blind and records nothing.";
+        "Plane C reads process, identity and privilege events from the Windows Security log. It needs an administrator gateway and Advanced Audit Policy. Without both it records nothing.";
 
     public string DnsNote =>
-        "DNS capture names the peer of each connection from the answer this PC resolved (recording the domains it looked up) instead of by reverse DNS. It reads the DNS Client operational log, which Windows keeps off by default.";
+        "DNS capture names each connection's peer from the domains this PC looked up. It reads the DNS Client operational log, which Windows keeps off by default.";
 
     partial void OnMonitoringOnChanged(bool value) => Recompute();
 
@@ -476,13 +475,13 @@ public sealed partial class RuntimeMonitoringViewModel : SetupDialogViewModel
         _enableFlags = null;
         if (!result.Succeeded)
         {
-            return "The options of agent discovery runtime enable could not be read (" + result.Error + "), so changes cannot be checked against this DefenseClaw. Press Refresh to try again.";
+            return "The options of agent discovery runtime enable could not be read (" + result.Error + "). Press Refresh to try again.";
         }
 
         var help = SetupHelpParser.Parse(result.Text, commandDepth: 4);
         if (!help.Lists("--yes"))
         {
-            return "The installed DefenseClaw's agent discovery runtime enable has no --yes, so it would stop at a question this app cannot answer. Nothing can be sent from here.";
+            return "agent discovery runtime enable has no --yes. It would stop at a question this app cannot answer, so nothing can be sent.";
         }
 
         _enableFlags = new HashSet<string>(StringComparer.Ordinal);
@@ -574,7 +573,7 @@ public sealed partial class RuntimeMonitoringViewModel : SetupDialogViewModel
 
             if (!MonitoringOn && Wanted().Enabled == false && _config.Enabled && !_canDisable)
             {
-                return "This DefenseClaw's agent discovery runtime disable has no --yes, so monitoring cannot be turned off from here.";
+                return "agent discovery runtime disable has no --yes, so monitoring cannot be turned off here.";
             }
 
             if (Review.IsOpen || Review.IsRunning)
@@ -582,7 +581,7 @@ public sealed partial class RuntimeMonitoringViewModel : SetupDialogViewModel
                 return "Another command is running.";
             }
 
-            return HasChanges ? null : "Nothing to apply: no switch differs from config.yaml.";
+            return HasChanges ? null : "Nothing to apply. No switch differs from config.yaml.";
         }
     }
 
@@ -623,7 +622,7 @@ public sealed partial class RuntimeMonitoringViewModel : SetupDialogViewModel
         {
             warnings.Add(new CommandReviewWarning(
                 "Gateway not restarted",
-                "The gateway is not restarted, so the setting is saved but runtime monitoring does not change until it next restarts."));
+                "The setting is saved but does not take effect until the gateway restarts."));
         }
 
         var summary = turningOff

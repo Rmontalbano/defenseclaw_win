@@ -189,7 +189,7 @@ public sealed class RuntimeMonitoringViewModelTests : IDisposable
         Assert.Equal("Gateway reports runtime monitoring: running.", vm.GatewayLine);
         Assert.False(vm.HasChanges);
         Assert.Equal("Nothing to apply", vm.Summary);
-        Assert.Equal("Nothing to apply: no switch differs from config.yaml.", vm.ReviewBlockedReason);
+        Assert.Equal("Nothing to apply. No switch differs from config.yaml.", vm.ReviewBlockedReason);
         Assert.Empty(cli.Ran);
 
         // The only machine read is the registry value, and it came through the probe seam.

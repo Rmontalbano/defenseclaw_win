@@ -117,8 +117,8 @@ public sealed class FirstRunFailMode105Tests : IDisposable
         Assert.Equal(selfProtection, vm.ObserveBlocksSelfChanges);
         foreach (var text in new[] { vm.Subtitle, vm.ProfileCaption })
         {
-            Assert.Equal(selfProtection, text.Contains("never blocks on policy findings (DefenseClaw still blocks changes to its own files)", StringComparison.Ordinal));
-            Assert.Equal(!selfProtection, text.Contains("never blocks;", StringComparison.Ordinal));
+            Assert.Equal(selfProtection, text.Contains("blocks only changes to DefenseClaw's own files", StringComparison.Ordinal));
+            Assert.Equal(!selfProtection, text.Contains("does not block", StringComparison.Ordinal));
         }
     }
 

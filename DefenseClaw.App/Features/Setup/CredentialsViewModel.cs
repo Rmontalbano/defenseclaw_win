@@ -50,7 +50,7 @@ public sealed partial class CredentialRowViewModel : ObservableObject
 
     /// <summary>The console button's tooltip: what it opens, or why it cannot (a read-only installation).</summary>
     public string SetToolTip => _installationBlockedReason?.Invoke() ??
-        $"Opens a console window running {SetCommandText}; the value is typed there, never here";
+        $"Opens a console window running {SetCommandText}. Type the value there.";
 
     internal CredentialRow Row { get; }
 
@@ -403,7 +403,7 @@ public sealed partial class CredentialsViewModel : ObservableObject
 
     /// <summary>The tooltip of the console button for Fill missing: what it opens, or why it cannot.</summary>
     public string FillMissingToolTip => ChangesBlockedReason ??
-        "Opens a console window running defenseclaw keys fill-missing --yes: a hidden prompt for each required key that is unset";
+        "Opens a console window running defenseclaw keys fill-missing --yes. It prompts for each unset required key.";
 
     /// <summary>Opens a console running <c>defenseclaw keys fill-missing --yes</c>: a hidden prompt for each required key that is unset.</summary>
     [RelayCommand]
@@ -439,11 +439,10 @@ public sealed partial class CredentialsViewModel : ObservableObject
         _ = _services.Cli.RecordHandOff(
             result.ExecutablePath ?? "defenseclaw",
             argv,
-            "Opened in a console window: the value is typed at the CLI's own hidden prompt and never passes through this app. " +
-            "The outcome is not observed here; the credential list is re-read when you return.");
+            "Opened a console window. Type the value at the CLI's hidden prompt. The list refreshes when you come back.");
 
         _awaitingReturn = true;
-        Note = "Opened a console window running `defenseclaw " + string.Join(' ', argv) + "`. Type the value there; the list refreshes when you come back to this window.";
+        Note = "Opened a console window running `defenseclaw " + string.Join(' ', argv) + "`. Type the value there. The list refreshes when you come back.";
         NoteKey = "Neutral";
     }
 

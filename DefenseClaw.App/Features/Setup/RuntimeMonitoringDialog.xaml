@@ -283,7 +283,7 @@
                                        Content="Refresh"
                                        Icon="{ctl:DcSymbolIcon ArrowClockwise24}"
                                        Command="{Binding RefreshCommand}"
-                                       ToolTip="Reads config.yaml and this DefenseClaw's options again and starts the switches from what the file says."
+                                       ToolTip="Re-reads config.yaml and the CLI options, and resets the switches to the file."
                                        AutomationProperties.Name="Read config.yaml again" />
                             <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right">
                                 <ui:Button Margin="0,0,8,0"

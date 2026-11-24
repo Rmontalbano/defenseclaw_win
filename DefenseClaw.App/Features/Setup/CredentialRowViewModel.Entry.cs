@@ -68,7 +68,7 @@ public sealed partial class CredentialRowViewModel
     /// <summary>What the Set button does, or why it cannot (a read-only installation).</summary>
     public string SetButtonToolTip => _installationBlockedReason?.Invoke() ??
         (OffersInApp
-            ? "Type a value into a masked box here. You review the exact command first; the app then hands the value to the CLI's own hidden prompt."
+            ? "Type a value in the masked box. You review the command first."
             : SetToolTip);
 
     public string SetButtonAutomationName => OffersInApp ? $"Set {Row.EnvName}" : SetAutomationName;
@@ -90,7 +90,7 @@ public sealed partial class CredentialRowViewModel
         ? EntryProblem
         : HasEntry
             ? $"A value is entered ({_entryLength} characters, hidden). Nothing runs until you review the command and confirm."
-            : "Type or paste the value. It is hidden as you type, and it never appears on a command line or in Activity.";
+            : "Type or paste the value. It is hidden and is not shown on a command line or in Activity.";
 
     /// <summary>Review is live: a value is held, the installation may be changed and nothing else is being stored.</summary>
     public bool CanReview => HasEntry && CanSet && (_owner?.CanStartReview ?? false);
@@ -154,9 +154,9 @@ public sealed partial class CredentialRowViewModel
         previous?.Dispose();
 
         EntryProblem = shape.HasControlCharacter
-            ? "That value has a line break or another control character in it, which the CLI refuses. Paste it again."
+            ? "The value has a line break or control character, which the CLI refuses. Paste it again."
             : tooLong
-                ? $"That value is longer than {MaxValueLength:N0} characters, which is not a credential. Paste it again."
+                ? $"The value is longer than {MaxValueLength:N0} characters. Paste it again."
                 : string.Empty;
 
         HasEntry = usable;

@@ -76,7 +76,7 @@ public sealed class ConfigEditorMaskGuardTests
         Assert.Equal(harness.Raw, vm.RawText);
         Assert.False(vm.IsRawModified);
         Assert.NotNull(vm.FieldErrorMessage);
-        Assert.Contains("never writes masked text back", vm.FieldErrorMessage, StringComparison.Ordinal);
+        Assert.Contains("Form never writes back", vm.FieldErrorMessage, StringComparison.Ordinal);
     }
 
     [Theory]
@@ -89,7 +89,7 @@ public sealed class ConfigEditorMaskGuardTests
         harness.Field("gateway.token_env").TextValue = "[REDACTED]";
 
         Assert.Equal(harness.Raw, vm.RawText);
-        Assert.Contains("never writes masked text back", vm.FieldErrorMessage, StringComparison.Ordinal);
+        Assert.Contains("Form never writes back", vm.FieldErrorMessage, StringComparison.Ordinal);
     }
 
     [Theory]
@@ -119,7 +119,7 @@ public sealed class ConfigEditorMaskGuardTests
 
         harness.List("guardrail.scan_roots").Items.Add("[REDACTED]");
         Assert.Equal(harness.Raw, vm.RawText);
-        Assert.Contains("never writes masked text back", vm.FieldErrorMessage, StringComparison.Ordinal);
+        Assert.Contains("Form never writes back", vm.FieldErrorMessage, StringComparison.Ordinal);
 
         harness.List("guardrail.allowed_hosts").Items.Add("another.example.test");
         harness.List("guardrail.api_keys").Items.Add("key-three");
@@ -344,7 +344,7 @@ public sealed class ConfigEditorMaskGuardTests
         harness.Field("guardrail.mode").TextValue = "action";
 
         Assert.Equal(edited, vm.RawText);
-        Assert.Contains("RAW tab has changes FORM has not picked up", vm.FieldErrorMessage, StringComparison.Ordinal);
+        Assert.Contains("Raw tab has changes Form has not picked up", vm.FieldErrorMessage, StringComparison.Ordinal);
 
         vm.NotifyFormTabSelected();
         Assert.True(vm.IsFormEditable);

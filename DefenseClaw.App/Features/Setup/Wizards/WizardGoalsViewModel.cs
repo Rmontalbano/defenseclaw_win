@@ -121,7 +121,7 @@ public sealed class WizardGoalsViewModel
 
     public bool HasStateSummary => StateSummary.Length > 0;
 
-    public string Intro => "Pick what you want to do. The pages that follow show only what it needs; Advanced shows every setting this command has.";
+    public string Intro => "Pick what you want to do. The pages that follow show only what it needs. Advanced shows every setting.";
 
     /// <summary>True when a goal has been chosen.</summary>
     public bool HasSelection => Options.Any(o => o.IsSelected);

@@ -70,7 +70,7 @@ public sealed class CredentialTerminal
 
         if (argv.Count == 0 || !argv.All(IsSafeToken))
         {
-            return new CredentialTerminalResult(false, "The command has characters a console command line cannot carry safely, so it was not started.", null);
+            return new CredentialTerminalResult(false, "The command has characters a console command line cannot carry safely. It was not started.", null);
         }
 
         var executable = ResolveExecutable is { } resolve
@@ -78,13 +78,13 @@ public sealed class CredentialTerminal
             : await _paths.FindExecutableAsync("defenseclaw").ConfigureAwait(true);
         if (executable is null)
         {
-            return new CredentialTerminalResult(false, "defenseclaw is not on PATH or in the installer's bin directory, so there is nothing to run.", null);
+            return new CredentialTerminalResult(false, "defenseclaw is not on PATH or in the installer's bin directory.", null);
         }
 
         // `"` would end the quoted program name and `%` expands inside a cmd line: neither is a character a real install path has.
         if (executable.Contains('"', StringComparison.Ordinal) || executable.Contains('%', StringComparison.Ordinal))
         {
-            return new CredentialTerminalResult(false, "The defenseclaw path has a character a console command line cannot carry safely, so it was not started.", null);
+            return new CredentialTerminalResult(false, "The defenseclaw path has a character a console command line cannot carry safely. It was not started.", null);
         }
 
         var startInfo = StartInfo(executable, argv, _paths.DataDirectoryExists ? _paths.DataDirectory : Environment.CurrentDirectory);

@@ -59,7 +59,7 @@
                            Icon="{ctl:DcSymbolIcon ShieldCheckmark24}"
                            Command="{Binding ReviewChangeCommand}"
                            AutomationProperties.Name="Review the change to the protected-file watch"
-                           AutomationProperties.HelpText="Shows the exact defenseclaw config command and what it does; nothing runs until you confirm." />
+                           AutomationProperties.HelpText="Shows the defenseclaw config command. Nothing runs until you confirm." />
             </WrapPanel>
 
             <TextBlock Style="{StaticResource DcCaption}" TextWrapping="Wrap" Text="{Binding SelectedNote}" />

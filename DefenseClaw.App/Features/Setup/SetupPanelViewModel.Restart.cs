@@ -29,7 +29,7 @@ public sealed partial class SetupPanelViewModel
 
     /// <summary>Restart now's tooltip: what it does, or why it is off.</summary>
     public string RestartNowTip => RestartNowBlockedReason ??
-        "Review defenseclaw-gateway restart. The gateway is not restarted until you confirm it there.";
+        "Opens the defenseclaw-gateway restart review. Nothing restarts until you confirm.";
 
     /// <summary>Opens the review of <c>defenseclaw-gateway restart</c>; nothing restarts until it is confirmed.</summary>
     [RelayCommand(CanExecute = nameof(CanRestartNow))]

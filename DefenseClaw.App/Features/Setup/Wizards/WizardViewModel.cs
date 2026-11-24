@@ -567,7 +567,7 @@ public sealed partial class WizardViewModel : ObservableObject, IDisposable
 
         return onlyReads
             ? failure + ". The command only reads, so nothing was left half-done."
-            : failure + ". The command may have left setup half-applied — read the output above and the Activity panel before running it again.";
+            : failure + ". The command may have left setup half-applied. Read the output above and the Activity panel before running it again.";
     }
 
     /// <summary>
@@ -583,7 +583,7 @@ public sealed partial class WizardViewModel : ObservableObject, IDisposable
 
         return lead + (onlyReads
             ? " It only reads, so nothing is left half-done."
-            : " It may leave setup half-applied — read the output and the Activity panel afterwards before running it again.");
+            : " It may leave setup half-applied. Read the output and the Activity panel afterwards before running it again.");
     }
 
     /// <summary>The operator said yes: cancel the run's token, which makes the runner kill its process tree.</summary>
@@ -600,7 +600,7 @@ public sealed partial class WizardViewModel : ObservableObject, IDisposable
         }
 
         _stopRequested = true;
-        ResultMessage = "Stopping the command — ending its process tree…";
+        ResultMessage = "Stopping the command and its process tree…";
 
         try
         {
@@ -804,7 +804,7 @@ public sealed partial class WizardViewModel : ObservableObject, IDisposable
             }
             else if (previewSkipsSecrets)
             {
-                ResultMessage = (ResultMessage + " The value you entered is not used by a preview; it is supplied only when you press Execute." +
+                ResultMessage = (ResultMessage + " A preview does not use the value you entered. Execute supplies it." +
                                  PreviewSecretNotes()).Trim();
             }
 
@@ -905,10 +905,10 @@ public sealed partial class WizardViewModel : ObservableObject, IDisposable
 
             ResultMessage = (preview, code) switch
             {
-                (true, 0) => "Preview finished. Nothing was written. Read the output, then press Execute to apply it for real.",
-                (true, _) => "The preview failed. The output above is kept exactly as it was produced; nothing was written.",
+                (true, 0) => "Preview finished. Nothing was written. Read the output, then press Execute to apply it.",
+                (true, _) => "The preview failed. Nothing was written. The output above is as the command printed it.",
                 (false, 0) => "The command completed. Its argv, output and exit code are in the Activity panel.",
-                _ => "The command failed. The output above is kept exactly as it was produced.",
+                _ => "The command failed. The output above is as the command printed it.",
             };
             return;
         }
@@ -1153,7 +1153,7 @@ public sealed partial class WizardViewModel : ObservableObject, IDisposable
         {
             Title = steps.Length > 1 ? "Commands" : "Command",
             Summary = steps.Length > 1
-                ? "The first stores the key you typed; the value is shown nowhere and is on no command line."
+                ? "The first stores the key you typed. The value is not shown and is not on a command line."
                 : string.Empty,
             Steps = steps,
             RestartsGateway = restartWarning.Length > 0,
@@ -1207,8 +1207,8 @@ public sealed partial class WizardViewModel : ObservableObject, IDisposable
             .ToArray();
 
         PromptWarning = prompting.Length > 0
-            ? $"{string.Join(" and ", prompting)} is off, so the command will try to prompt for input. This app cannot answer prompts, " +
-              "so it will stop at the first question. Turn it back on unless you are only previewing."
+            ? $"{string.Join(" and ", prompting)} is off, so the command will prompt for input and stop at the first question, " +
+              "because this app cannot answer prompts. Turn it back on unless you are only previewing."
             : string.Empty;
         HasPromptWarning = PromptWarning.Length > 0;
 
@@ -1241,10 +1241,10 @@ public sealed partial class WizardViewModel : ObservableObject, IDisposable
 
         return (hasChanges, tier == CommandTier.ReadOnly) switch
         {
-            (true, true) => "What you chose (this command only reads; it changes nothing):",
+            (true, true) => "What you chose. This command only reads:",
             (true, false) => "Changed from the current configuration:",
             (false, true) => "This command only reads. Running it changes nothing.",
-            _ => "Nothing was changed from the current configuration. Running this re-applies it as it stands.",
+            _ => "No change from the current configuration. Running this re-applies it as it is.",
         };
     }
 

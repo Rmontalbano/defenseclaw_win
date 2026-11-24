@@ -135,7 +135,7 @@ public sealed class OpenCodeSupportedTests
             var card = vm.Groups.SelectMany(g => g.Cards).Single(c => c.Target == "opencode");
             Assert.Equal(PlatformStatus.Certified, card.PlatformStatus);
             Assert.NotEqual("Preview on Windows", card.Badge);
-            Assert.Contains("2 certified connector(s)", vm.StatusNote, StringComparison.Ordinal);
+            Assert.Contains("2 certified connectors", vm.StatusNote, StringComparison.Ordinal);
 
             vm.CertifiedOnly = true;
             Assert.Contains(vm.Groups.SelectMany(g => g.Cards), c => c.Target == "opencode");

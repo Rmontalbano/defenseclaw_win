@@ -406,7 +406,7 @@ public sealed class RedactionViewModelTests : IDisposable
         var rewrite = await OpenAsync(cli => cli.PreviewAnswer = _ => FakeRedactionCli.Fixture("dry-remove-all.json"));
         await rewrite.Vm.PreviewQuickCommand.ExecuteAsync(null);
         Assert.Contains("The configuration file would change, but no delivery leg would be redacted differently.", rewrite.Vm.Outcome!.Headline, StringComparison.Ordinal);
-        Assert.Contains(rewrite.Vm.Outcome.Notes, n => n.Contains("only the file would be rewritten", StringComparison.Ordinal));
+        Assert.Contains(rewrite.Vm.Outcome.Notes, n => n.Contains("Only the file would be rewritten", StringComparison.Ordinal));
         Assert.True(rewrite.Vm.Outcome.CanApply);
     }
 
@@ -457,7 +457,7 @@ public sealed class RedactionViewModelTests : IDisposable
         Assert.Contains(review.Warnings, w => w.Title == "Gateway not restarted" && w.Message.Contains("--no-restart", StringComparison.Ordinal));
         Assert.DoesNotContain(review.Warnings, w => w.Title == "Gateway restart");
         Assert.Contains("14 delivery legs would change", review.Summary, StringComparison.Ordinal);
-        Assert.Contains("A copy of config.yaml is saved", review.Summary, StringComparison.Ordinal);
+        Assert.Contains("config.yaml is backed up first", review.Summary, StringComparison.Ordinal);
         Assert.Equal(CommandTier.StateChanging, review.Tier);
         Assert.False(vm.Review.RequiresAcknowledgement); // nothing starts unredacted
         Assert.False(vm.CanAct); // a review is waiting: nothing else starts
@@ -1030,7 +1030,7 @@ public sealed class RedactionViewModelTests : IDisposable
 
         Assert.Equal(["example-otlp"], vm.Form.DestinationChoices.Select(c => c.Value).ToArray());
         Assert.Equal("example-otlp", vm.Form.Destination);
-        Assert.Contains("generated and read-only", vm.Form.DestinationHint, StringComparison.Ordinal);
+        Assert.Contains("read-only and not listed", vm.Form.DestinationHint, StringComparison.Ordinal);
         Assert.Equal("Select at least one signal.", vm.Problem);
     }
 

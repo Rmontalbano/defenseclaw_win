@@ -49,17 +49,17 @@
                         Orientation="Horizontal">
                 <ui:Button x:Name="SaveButton"
                            Appearance="Primary"
-                           AutomationProperties.HelpText="Back up and write config.yaml, validate it, then carry on only if that worked."
+                           AutomationProperties.HelpText="Back up, write and validate config.yaml, then carry on only if that worked."
                            Click="OnSaveClicked" />
                 <ui:Button x:Name="DiscardButton"
                            Margin="8,0,0,0"
-                           AutomationProperties.HelpText="Carry on without saving. The edits in the editor are dropped."
+                           AutomationProperties.HelpText="Carry on without saving. Your edits are dropped."
                            Click="OnDiscardClicked" />
                 <ui:Button x:Name="CancelButton"
                            Margin="8,0,0,0"
                            Content="Cancel"
                            IsCancel="True"
-                           AutomationProperties.HelpText="Keep the editor and its edits exactly as they are. Esc does the same." />
+                           AutomationProperties.HelpText="Keep the editor and your edits. Esc does the same." />
             </StackPanel>
         </StackPanel>
     </Grid>

@@ -78,7 +78,7 @@
                     <ui:InfoBar Margin="{StaticResource DcCardGap}"
                                 IsClosable="False"
                                 Severity="Warning"
-                                Title="State-changing actions disabled — previews still work"
+                                Title="State-changing actions disabled. Previews still work"
                                 IsOpen="{Binding HasInstallationBlock, Mode=OneWay}"
                                 Message="{Binding InstallationBlockedReason}" />
 
@@ -114,7 +114,7 @@
                             <TextBlock Style="{StaticResource DcCaption}" Text="{Binding PlanText}" />
                             <TextBlock Style="{StaticResource DcCaption}" Margin="0,0,0,10" Text="{Binding ConfigPathText}" />
 
-                            <TextBlock Style="{StaticResource DcFieldLabel}" Margin="0,0,0,4" Text="Buckets: the profile each group of events is stored and sent with" />
+                            <TextBlock Style="{StaticResource DcFieldLabel}" Margin="0,0,0,4" Text="Buckets and the profile each one uses" />
                             <ItemsControl ItemsSource="{Binding BucketRows}" IsTabStop="False" Margin="0,0,0,10"
                                           AutomationProperties.Name="Buckets and their profiles">
                                 <ItemsControl.ItemsPanel>
@@ -208,12 +208,12 @@
                                               AutomationProperties.HeadingLevel="Level2"
                                               Symbol="ShieldCheckmark24" Section="Setup" Content="Quick apply: one profile everywhere" />
                             <TextBlock Style="{StaticResource DcCaption}" Margin="0,0,0,8"
-                                       Text="Every bucket and every destination you can configure uses the profile you choose; more specific profiles are removed. You see the difference first, then the exact command." />
+                                       Text="Applies one profile to every bucket and destination and removes more specific profiles. The preview comes first." />
 
                             <ctl:DcSegmented Margin="0,0,0,6" HorizontalAlignment="Left"
                                              SelectedValue="{Binding QuickProfile, Mode=TwoWay}"
                                              AutomationProperties.Name="Redaction profile to apply everywhere"
-                                             AutomationProperties.HelpText="none sends everything as recorded; sensitive, content and strict redact progressively more.">
+                                             AutomationProperties.HelpText="none sends everything as recorded. sensitive, content and strict redact progressively more.">
                                 <ctl:DcSegment Value="none" Content="none" ToolTip="No redaction: everything is sent as recorded." />
                                 <ctl:DcSegment Value="sensitive" Content="sensitive" ToolTip="Removes credentials, hashes file paths, and masks PII, credentials and secrets found in content, reasons, evidence and errors." />
                                 <ctl:DcSegment Value="content" Content="content" ToolTip="Like sensitive, but replaces content, reasons, evidence and errors whole." />
@@ -234,7 +234,7 @@
                                        Text="{Binding QuickArmedText}" />
 
                             <CheckBox Style="{StaticResource Option}" Content="Restart the gateway after applying"
-                                      AutomationProperties.HelpText="Off by default. The command says --restart or --no-restart; the review spells out what each means."
+                                      AutomationProperties.HelpText="Off by default. The command shows --restart or --no-restart, and the review explains each."
                                       IsChecked="{Binding QuickRestart, Mode=TwoWay}" />
 
                             <WrapPanel Style="{StaticResource DcToolbarPanel}">
@@ -263,7 +263,7 @@
                                               AutomationProperties.HeadingLevel="Level2"
                                               Symbol="ShieldSettings24" Section="Setup" Content="Advanced: every operation" />
                             <TextBlock Style="{StaticResource DcCaption}" Margin="0,0,0,8"
-                                       Text="Buckets, defaults, profiles, destinations and ordered routes. A change is previewed (dry run) by default; turn that off to review the command and apply." />
+                                       Text="Buckets, defaults, profiles, destinations and routes. Dry run is on by default; turn it off to apply." />
 
                             <StackPanel Style="{StaticResource Field}">
                                 <TextBlock Style="{StaticResource FieldLabel}" Text="Operation" />
@@ -308,11 +308,11 @@
                             </StackPanel>
                             <TextBlock Style="{StaticResource DcCaption}" Margin="0,-6,0,10"
                                        Visibility="{Binding Form.ShowRouteProfileNote, Converter={StaticResource BoolToVisibility}}"
-                                       Text="A profile redacts what a route sends, and only logs and traces carry content: tick a send route with logs or traces to choose one." />
+                                       Text="Only logs and traces carry content, so a profile needs a send route with logs or traces." />
 
                             <CheckBox Style="{StaticResource Option}" Content="Give the bucket back the default profile"
                                       Visibility="{Binding Form.ShowInheritProfile, Converter={StaticResource BoolToVisibility}}"
-                                      AutomationProperties.HelpText="Drops this bucket's own profile (--inherit-profile). It cannot be combined with choosing a profile."
+                                      AutomationProperties.HelpText="Drops this bucket's own profile (--inherit-profile). Cannot be combined with choosing a profile."
                                       IsChecked="{Binding Form.InheritProfile, Mode=TwoWay}" />
 
                             <StackPanel Style="{StaticResource Field}" Visibility="{Binding Form.ShowBucket, Converter={StaticResource BoolToVisibility}}">
@@ -436,7 +436,7 @@
                             </StackPanel>
 
                             <StackPanel Style="{StaticResource Field}" Visibility="{Binding Form.ShowDetectors, Converter={StaticResource BoolToVisibility}}">
-                                <TextBlock Style="{StaticResource FieldLabel}" Text="Detector groups (none ticked: keep the profile's)" />
+                                <TextBlock Style="{StaticResource FieldLabel}" Text="Detector groups. None ticked keeps the profile's." />
                                 <ItemsControl ItemsSource="{Binding Form.DetectorChecks}" IsTabStop="False" AutomationProperties.Name="Detector groups">
                                     <ItemsControl.ItemsPanel>
                                         <ItemsPanelTemplate>
@@ -499,7 +499,7 @@
                                               AutomationProperties.Name="Minimum severity it matches" />
                                 </StackPanel>
                                 <StackPanel Style="{StaticResource Field}">
-                                    <TextBlock Style="{StaticResource FieldLabel}" Text="Event sources (separate several with commas; empty matches any)" />
+                                    <TextBlock Style="{StaticResource FieldLabel}" Text="Event sources, comma-separated. Empty matches any." />
                                     <ui:TextBox MinWidth="320" Text="{Binding Form.SourcesText, UpdateSourceTrigger=PropertyChanged}" IsEnabled="{Binding CanAct}"
                                                 AutomationProperties.Name="Event sources it matches" />
                                 </StackPanel>
@@ -534,7 +534,7 @@
                             <WrapPanel Style="{StaticResource DcToolbarPanel}">
                                 <CheckBox Style="{StaticResource Option}" Content="Preview only (dry run)"
                                           Visibility="{Binding IsChange, Converter={StaticResource BoolToVisibility}}"
-                                          AutomationProperties.HelpText="On by default. A preview computes what would change and writes nothing; it never restarts the gateway."
+                                          AutomationProperties.HelpText="On by default. A preview writes nothing and does not restart the gateway."
                                           IsChecked="{Binding DryRun, Mode=TwoWay}" />
                                 <CheckBox Style="{StaticResource Option}" Content="Restart the gateway after applying"
                                           Visibility="{Binding IsChange, Converter={StaticResource BoolToVisibility}}"
@@ -578,7 +578,7 @@
                                        Text="{Binding Breakdown}" />
                             <TextBlock Style="{StaticResource DcCaption}" Margin="0,0,0,8"
                                        Visibility="{Binding HasDiff, Converter={StaticResource BoolToVisibility}}"
-                                       Text="A delivery leg is one bucket's logs or traces on their way to one destination. Rows that would change the same way are folded together." />
+                                       Text="A delivery leg is one bucket's logs or traces going to one destination. Rows that change the same way are folded." />
 
                             <ItemsControl ItemsSource="{Binding Diff}" IsTabStop="False" Margin="0,0,0,6"
                                           Visibility="{Binding HasDiff, Converter={StaticResource BoolToVisibility}}"

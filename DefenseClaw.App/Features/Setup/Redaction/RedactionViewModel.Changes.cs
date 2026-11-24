@@ -203,7 +203,7 @@ public sealed partial class RedactionViewModel
     public bool IsQuickNone => string.Equals(QuickProfile, RedactionVocabulary.NoRedaction, StringComparison.Ordinal);
 
     public string QuickNoneWarning =>
-        "Profile none stops redacting: raw governed content is kept in local SQLite and sent to every destination you configured. The managed enterprise destination, if there is one, stays locked.";
+        "Profile none stops redacting. Raw governed content is kept in local SQLite and sent to every destination you configured. A managed enterprise destination stays locked.";
 
     public string QuickArmedText => "Danger: press Apply again to review removing all redaction.";
 
@@ -373,7 +373,7 @@ public sealed partial class RedactionViewModel
         if (result.Changed)
         {
             notes.Add(result.PlanUnchanged
-                ? $"The effective plan stays exactly the same (digest {Short(result.AfterPlanDigest)}): only the file would be rewritten."
+                ? $"The effective plan stays the same (digest {Short(result.AfterPlanDigest)}). Only the file would be rewritten."
                 : $"The effective plan would go from {Short(result.BeforePlanDigest)} to {Short(result.AfterPlanDigest)}.");
         }
 
@@ -489,7 +489,7 @@ public sealed partial class RedactionViewModel
                     _routes[inputs.Destination] = routes.Routes;
                     Form.RefreshRoutes();
                     return Read(
-                        routes.Routes.Count == 0 ? DisplayNames.Visible($"{inputs.Destination} has no ordered routes: it uses its default policy or one send policy.") : $"{Plural(routes.Routes.Count, "route")}, tried in this order.",
+                        routes.Routes.Count == 0 ? DisplayNames.Visible($"{inputs.Destination} has no ordered routes. It uses its default policy or one send policy.") : $"{Plural(routes.Routes.Count, "route")}, tried in this order.",
                         routes.Routes.Select(static r => new RedactionFact(DisplayNames.Visible($"{r.Position.ToString(CultureInfo.InvariantCulture)}. {r.Name}"), DisplayNames.Visible(r.Summary))).ToArray(),
                         stdout);
                 }

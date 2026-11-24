@@ -19,7 +19,7 @@ namespace DefenseClaw.App.ViewModels.SetupResources;
 /// </summary>
 public sealed class WebhooksViewModel : SetupResourceViewModel
 {
-    private const string UnsafeNameReason = "This webhook's name has characters that cannot be passed to the CLI safely, so the app will not act on it.";
+    private const string UnsafeNameReason = "This webhook's name has characters that cannot be passed to the CLI safely.";
 
     private static readonly SetupColumn[] ColumnList =
     [
@@ -41,7 +41,7 @@ public sealed class WebhooksViewModel : SetupResourceViewModel
     public override string Title => "Webhooks";
 
     public override string Subtitle =>
-        "Chat and incident notifiers: Slack, PagerDuty, Webex and signed generic webhooks. Test delivers a real message to the webhook. Every change is shown as the exact command first, and nothing runs until you confirm it.";
+        "Slack, PagerDuty, Webex and signed generic webhooks. Test sends a real message to the webhook.";
 
     public override string Singular => "webhook";
 
@@ -54,14 +54,14 @@ public sealed class WebhooksViewModel : SetupResourceViewModel
     public override string EmptyTitle => "No webhooks are configured";
 
     public override string EmptyDetail =>
-        "defenseclaw setup webhook list answered with an empty list: no notifier is sent anything. Add one with the Add button; the setup wizard shows the exact command before anything is written.";
+        "defenseclaw setup webhook list returned an empty list, so no notifier is sent anything. Use Add to add one.";
 
     protected override string TipFor(SetupVerb verb) => verb switch
     {
-        SetupVerb.Add => "Open the setup wizard on add: pick Slack, PagerDuty, Webex or a generic webhook and fill it in. The wizard shows the exact command before anything runs.",
+        SetupVerb.Add => "Opens the setup wizard for Slack, PagerDuty, Webex or a generic webhook. The command is shown first.",
         SetupVerb.Enable => "Turn this webhook on. The command is shown first.",
         SetupVerb.Disable => "Turn this webhook off without deleting it. The command is shown first.",
-        SetupVerb.Test => "Deliver one synthetic test event to this webhook: a real message. The command is shown first and nothing is sent until you confirm it.",
+        SetupVerb.Test => "Sends one synthetic test event to this webhook. It arrives as a real message. The command is shown first.",
         SetupVerb.Show => "Read this webhook with the CLI's show command. It only reads.",
         SetupVerb.Remove => "Delete this webhook from config.yaml. The command is shown first.",
         _ => string.Empty,
@@ -91,7 +91,7 @@ public sealed class WebhooksViewModel : SetupResourceViewModel
 
         if (!string.Equals(webhook.Name, row.Key, StringComparison.Ordinal))
         {
-            error = "The CLI answered for a different webhook than the one selected, so nothing was shown.";
+            error = "The CLI answered for a different webhook than the one selected.";
             return false;
         }
 
@@ -174,7 +174,7 @@ public sealed class WebhooksViewModel : SetupResourceViewModel
                     row,
                     on,
                     $"Enable webhook “{name}”?",
-                    $"Sets enabled: true for this {w.Type} webhook in config.yaml. From then on events of severity {w.MinSeverity} and above ({w.EventsText}) are delivered to {where}.",
+                    $"Sets enabled: true for this {w.Type} webhook in config.yaml. Events of severity {w.MinSeverity} and above ({w.EventsText}) are then delivered to {where}.",
                     "Enable webhook",
                     CommandTier.StateChanging,
                     ChangeTimeout,
@@ -189,7 +189,7 @@ public sealed class WebhooksViewModel : SetupResourceViewModel
                     row,
                     off,
                     $"Disable webhook “{name}”?",
-                    $"Sets enabled: false for this webhook in config.yaml. Nothing is deleted and Enable turns it back on; nothing is delivered to {where} meanwhile.",
+                    $"Sets enabled: false for this webhook in config.yaml. Nothing is deleted. Nothing is delivered to {where} while it is off.",
                     "Disable webhook",
                     CommandTier.StateChanging,
                     ChangeTimeout,
@@ -200,20 +200,20 @@ public sealed class WebhooksViewModel : SetupResourceViewModel
             case SetupVerb.Test:
                 warnings.Add(new CommandReviewWarning(
                     "Sends a real message",
-                    $"One synthetic test event is delivered to {where}: a message in the chat, or an incident, depending on the type ({w.Type}). Each test has its own event id, so the receiver does not drop a repeat as a duplicate."));
+                    $"One synthetic test event is delivered to {where}, as a chat message or an incident depending on the type ({w.Type}). Each test has its own event id."));
                 warnings.Add(new CommandReviewWarning(
                     "The address is not shown whole",
-                    "The CLI prints the webhook's full address on its first line, and for a chat webhook the secret is in it. This app keeps only the host of every address in the output, here and in Activity."));
+                    "The CLI prints the full webhook address, which holds the secret for a chat webhook. Only the host is kept, here and in Activity."));
                 var test = SetupResourceArgv.Test(Resource, row.Key);
                 var secret = w.SecretEnv.Length > 0
-                    ? $" It takes the secret from the variable {w.SecretEnv} (the environment, or .env); if that is not set the test stops before it sends."
+                    ? $" The secret comes from the variable {w.SecretEnv}, in the environment or .env. If it is not set, the test stops before it sends."
                     : string.Empty;
                 return new SetupChangePlan(
                     verb,
                     row,
                     test,
                     $"Send a test event through webhook “{name}”?",
-                    $"Delivers one synthetic event through this {w.Type} webhook, even if it is disabled.{secret} The configuration is not changed.",
+                    $"Delivers one synthetic event through this {w.Type} webhook, even if it is disabled.{secret}",
                     "Send test event",
                     CommandTier.StateChanging,
                     TestTimeout,
@@ -228,7 +228,7 @@ public sealed class WebhooksViewModel : SetupResourceViewModel
                     row,
                     remove,
                     $"Remove webhook “{name}”?",
-                    "Deletes this webhook from config.yaml (the top-level webhooks list). The variable that holds its secret is left alone. The app cannot bring it back: add it again with Add.",
+                    "Deletes this webhook from config.yaml. The variable that holds its secret stays. This cannot be undone here. Add it again with Add.",
                     "Remove webhook",
                     CommandTier.Destructive,
                     ChangeTimeout,

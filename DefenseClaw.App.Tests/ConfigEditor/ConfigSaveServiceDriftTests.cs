@@ -43,7 +43,7 @@ public sealed class ConfigSaveServiceDriftTests : IDisposable
 
         Assert.False(outcome.Success);
         Assert.Equal(SaveStage.DriftDetected, outcome.Stage);
-        Assert.Contains("while the save was starting", outcome.Message, StringComparison.Ordinal);
+        Assert.Contains("as the save started", outcome.Message, StringComparison.Ordinal);
         Assert.Equal(CliWrite, File.ReadAllText(configPath));
         Assert.Empty(Backups());
         Assert.Empty(Directory.GetFiles(_temp.Path, ".config.yaml.tmp-*"));
@@ -92,7 +92,7 @@ public sealed class ConfigSaveServiceDriftTests : IDisposable
         var outcome = await service.SaveAsync(Edited, signature);
 
         Assert.Equal(SaveStage.DriftDetected, outcome.Stage);
-        Assert.DoesNotContain("while the save was starting", outcome.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("as the save started", outcome.Message, StringComparison.Ordinal);
         Assert.Empty(Backups());
     }
 }

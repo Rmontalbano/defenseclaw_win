@@ -133,7 +133,7 @@ public sealed class Runtime105FailModeRenderTests : IDisposable
                 Assert.Equal(FirstRunFailMode.Policy, box.SelectedValue);
                 Assert.Equal(3, box.Items.Count);
                 Assert.Contains(VisualTree.Descendants<TextBlock>(content), t => t.IsVisible && t.Text == FirstRunFailMode.SavedOrPolicyHint);
-                Assert.Contains(VisualTree.Descendants<TextBlock>(content), t => t.IsVisible && t.Text == vm.ProfileCaption && t.Text.Contains("its own files", StringComparison.Ordinal));
+                Assert.Contains(VisualTree.Descendants<TextBlock>(content), t => t.IsVisible && t.Text == vm.ProfileCaption && t.Text.Contains("DefenseClaw's own files", StringComparison.Ordinal));
                 Assert.True(scroll.ExtentWidth <= scroll.ViewportWidth + 1, "the page needs no horizontal scrolling");
             });
         }

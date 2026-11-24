@@ -70,7 +70,7 @@ public sealed class ReadinessViewModelTests
 
         Assert.Equal("anthropic/example-model", h.Row("LLM Config").Detail);
         Assert.Equal(ReadinessStatus.Fail, h.Row("Required Credentials").Status);
-        Assert.Equal("1 required credential(s) missing", h.Row("Required Credentials").Detail);
+        Assert.Equal("1 required credential missing", h.Row("Required Credentials").Detail);
         Assert.Equal(ReadinessStatus.Warn, h.Row("Scanner Availability").Status);
         Assert.True(h.Readiness.AttentionCount >= 2);
         Assert.Equal(h.Readiness.Rows.Count(r => r.Status != ReadinessStatus.Pass), h.Readiness.AttentionCount);

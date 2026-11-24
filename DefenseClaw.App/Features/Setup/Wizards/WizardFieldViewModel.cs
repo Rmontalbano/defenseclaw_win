@@ -194,11 +194,11 @@ public sealed partial class WizardFieldViewModel : ObservableObject
     /// (<see cref="OffersInAppEntry"/>) it is the alternative; otherwise it is the only way.
     /// </summary>
     public string CredentialExplanation => ShowsEntryBox
-        ? "Or store it once from a real console instead: `defenseclaw keys set` is the CLI's own hidden prompt, and the " +
-          "command then reads the value from ~/.defenseclaw/.env by name. On Windows that prompt reads a console, not a pipe."
-        : "This app never takes the secret itself. The command reads it from a variable in ~/.defenseclaw/.env, and " +
-          "`defenseclaw keys set` — the CLI's own hidden prompt — is the only way to store it that does not put it on a command " +
-          "line, and on Windows it reads a real console, not a pipe.";
+        ? "Or store it once from a real console: `defenseclaw keys set` has a hidden prompt, and the " +
+          "command then reads the value from ~/.defenseclaw/.env by name. On Windows that prompt needs a console."
+        : "The command reads the secret from a variable in ~/.defenseclaw/.env. Store it with " +
+          "`defenseclaw keys set`, which asks for it at a hidden prompt in a real console " +
+          "and keeps it off the command line.";
 
     // ------------------------------------------------------------------ in-app entry
 
@@ -253,8 +253,8 @@ public sealed partial class WizardFieldViewModel : ObservableObject
 
     /// <summary>The password box's tooltip: where the value goes, said for the route in use.</summary>
     public string EntryToolTip => OffersKeysSetEntry
-        ? "Stored by the CLI's own keys set prompt when you press Execute. Never on a command line."
-        : "Supplied to the command as an environment variable for one run. Never on the command line.";
+        ? "Stored by the keys set prompt when you press Execute. It is not put on a command line."
+        : "Supplied to the command as an environment variable for one run. It is not put on the command line.";
 
     public bool HasEntryProblem => EntryProblem.Length > 0;
 
@@ -270,9 +270,9 @@ public sealed partial class WizardFieldViewModel : ObservableObject
         {
             if (OffersKeysSetEntry)
             {
-                return $"Type it here and this app stores it for you. Execute runs two commands, both shown on the review page: `defenseclaw keys set {CredentialEnvName}`, " +
-                       "where this app types the value at that command's own hidden prompt, and then the command below, which reads it by name. " +
-                       "The value is never on a command line, in Activity or in this window's output, and the box is cleared as soon as it has been used.";
+                return $"Type it here. Execute stores it with `defenseclaw keys set {CredentialEnvName}` and then runs the command below, which reads it by name. " +
+                       "Both commands are on the review page. " +
+                       "The value stays out of command lines, Activity and this output, and the box is cleared after use.";
             }
 
             var stored = Field.Credential?.InAppStorage is { Length: > 0 } custom
@@ -281,8 +281,8 @@ public sealed partial class WizardFieldViewModel : ObservableObject
                     ? $" the CLI stores it as {CredentialEnvName} in ~/.defenseclaw/.env."
                     : " the CLI stores it in ~/.defenseclaw/.env.";
 
-            return $"Type it here and this app supplies it to the command as the environment variable {InAppEnvName} — for that one " +
-                   $"run only, never on the command line — and{stored} The box is cleared as soon as the run ends.";
+            return $"Type it here and this app supplies it to the command as the environment variable {InAppEnvName} for this " +
+                   $"run only, not on the command line, and{stored} The box is cleared when the run ends.";
         }
     }
 
@@ -290,14 +290,14 @@ public sealed partial class WizardFieldViewModel : ObservableObject
     public string EntryStatus => EntryProblem.Length > 0
         ? EntryProblem
         : HasEntry && OffersKeysSetEntry
-            ? $"A value is entered (hidden). Execute stores it as {CredentialEnvName} first, then runs the command; nothing runs before you press Execute."
+            ? $"A value is entered (hidden). Execute stores it as {CredentialEnvName} first, then runs the command. Nothing runs before you press Execute."
             : HasEntry
             ? $"A value is entered (hidden). It goes to the command as {InAppEnvName}, then is cleared." +
               (PersistSentence.Length > 0 ? " " + PersistSentence : string.Empty)
             : EntryNotice.Length > 0
                 ? EntryNotice
                 : IsStored
-                    ? $"Nothing entered. {CredentialEnvName} is already stored and the command uses it: leave this blank to keep it, or type a value to replace it."
+                    ? $"Nothing entered. {CredentialEnvName} is already stored and the command uses it. Leave this blank to keep it, or type a value to replace it."
                     : "Nothing entered. The command uses the stored variable, if any.";
 
     /// <summary>True when the variable the command reads already has a value (in <c>.env</c> or this app's environment).</summary>
@@ -318,7 +318,7 @@ public sealed partial class WizardFieldViewModel : ObservableObject
 
             return persists
                 ? $"The CLI will save it to ~/.defenseclaw/.env ({flag} is on)."
-                : $"It will not be saved ({flag} is off): nothing keeps it after this run, so it cannot authenticate afterwards unless it is stored some other way.";
+                : $"It will not be saved ({flag} is off), so it cannot authenticate after this run unless it is stored another way.";
         }
     }
 
@@ -348,19 +348,19 @@ public sealed partial class WizardFieldViewModel : ObservableObject
             if (OffersKeysSetEntry)
             {
                 return HasEntry
-                    ? $"Step 1 stores the value you typed as {CredentialEnvName} (value masked: typed at the keys set prompt, never on a command line); step 2 reads it by that name."
-                    : $"Nothing entered here; the command reads {CredentialEnvName} from ~/.defenseclaw/.env if it is stored. Go back to type a value and the review will store it first.";
+                    ? $"Step 1 stores the value you typed as {CredentialEnvName} (value masked, typed at the keys set prompt and not on a command line). Step 2 reads it by that name."
+                    : $"Nothing entered here. The command reads {CredentialEnvName} from ~/.defenseclaw/.env if it is stored. Go back to type a value, and the review will store it first.";
             }
 
             if (!OffersInAppEntry)
             {
-                return "This app does not send it; the command reads it by name.";
+                return "This app does not send it. The command reads it by name.";
             }
 
             return HasEntry
-                ? $"Supplied to the command as the environment variable {InAppEnvName}=••• (value masked; this run only, not on the command line)." +
+                ? $"Supplied to the command as the environment variable {InAppEnvName}=••• (value masked, this run only, not on the command line)." +
                   (PersistSentence.Length > 0 ? " " + PersistSentence : string.Empty)
-                : $"Nothing entered here; the command reads {(CredentialEnvName.Length > 0 ? CredentialEnvName : InAppEnvName)} from ~/.defenseclaw/.env if it is stored. Go back to type a value.";
+                : $"Nothing entered here. The command reads {(CredentialEnvName.Length > 0 ? CredentialEnvName : InAppEnvName)} from ~/.defenseclaw/.env if it is stored. Go back to type a value.";
         }
     }
 
@@ -517,7 +517,7 @@ public sealed partial class WizardFieldViewModel : ObservableObject
     {
         if (_credentials is null)
         {
-            CredentialMessage = "This wizard has no credential helper to start a console with. Run the command above in your own terminal.";
+            CredentialMessage = "This wizard cannot open a console. Run the command above in your own terminal.";
             return;
         }
 
@@ -561,13 +561,13 @@ public sealed partial class WizardFieldViewModel : ObservableObject
             (!double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var number) ||
              double.IsNaN(number) || double.IsInfinity(number)))
         {
-            return $"{Label} must be a number such as 15 or 2.5 (use a dot for the decimal point).";
+            return $"{Label} must be a number such as 15 or 2.5, with a dot as the decimal point.";
         }
 
         if (Field.Kind == WizardFieldKind.EnvVarName && value.Length > 0 &&
             value.Any(c => !char.IsLetterOrDigit(c) && c != '_'))
         {
-            return $"{Label} is the NAME of an environment variable — letters, digits and underscores only.";
+            return $"{Label} is the NAME of an environment variable: letters, digits and underscores only.";
         }
 
         if (Field.Kind == WizardFieldKind.Lines)
@@ -575,7 +575,7 @@ public sealed partial class WizardFieldViewModel : ObservableObject
             var bad = WizardDefinition.SplitLines(Value).FirstOrDefault(l => l.StartsWith('-'));
             if (bad is not null)
             {
-                return $"{Label}: a value cannot start with a dash (\"{bad}\") — the CLI would read it as another flag.";
+                return $"{Label}: a value cannot start with a dash (\"{bad}\"). The CLI would read it as another flag.";
             }
         }
 

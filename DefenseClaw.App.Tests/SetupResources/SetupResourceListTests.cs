@@ -168,7 +168,7 @@ public sealed class SetupResourceListTests : IDisposable
         Assert.Equal(vm.FailedTitle, vm.ErrorTitle);
         Assert.Contains("exited 1", vm.ErrorMessage, StringComparison.Ordinal);
         Assert.Contains("could not load config.yaml", vm.ErrorMessage, StringComparison.Ordinal);
-        Assert.Contains("empty", vm.FailedDetail, StringComparison.Ordinal);
+        Assert.Contains("unknown", vm.FailedDetail, StringComparison.Ordinal);
         Assert.NotEqual(vm.EmptyTitle, vm.ErrorTitle);
     }
 
@@ -204,7 +204,7 @@ public sealed class SetupResourceListTests : IDisposable
         var (empty, _) = await _harness.OpenAsync(SetupResource.TrustedPaths, c => c.TrustedPaths = "[]");
 
         Assert.Equal("Could not read the trusted-path allow-list", failed.ErrorTitle);
-        Assert.Contains("unknown, not empty", failed.FailedDetail, StringComparison.Ordinal);
+        Assert.Contains("unknown and may hold folders", failed.FailedDetail, StringComparison.Ordinal);
         Assert.Equal("The allow-list is empty", empty.EmptyTitle);
         Assert.NotEqual(failed.ErrorTitle, empty.EmptyTitle);
         Assert.False(failed.ShowEmpty);

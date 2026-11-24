@@ -89,13 +89,15 @@
                         <ctl:DcCardHeader Symbol="ArrowDownload24" Tint="Amber" Content="Install the DefenseClaw runtime" />
                         <TextBlock Style="{StaticResource DcTextSecondary}"
                                    TextWrapping="Wrap"
-                                   Text="No defenseclaw command was found on this machine. The Updates window downloads the release's Setup installer, compares its SHA-256 with the release's checksums.txt (and verifies that file's sigstore signature when cosign is installed), shows the exact command, and only then runs it. When it has finished, come back here and press Check again." />
+                                   Text="No defenseclaw command was found. The Updates window downloads the Setup installer, checks its SHA-256 against checksums.txt, shows the exact command and then runs it. When it finishes, press Check again." />
                         <StackPanel Style="{StaticResource DcActionBar}" Margin="0,12,0,0">
                             <ui:Button Appearance="Primary"
                                        Content="Open the installer"
                                        Icon="{ctl:DcSymbolIcon ArrowDownload24}"
                                        Command="{Binding OpenUpdatesCommand}"
-                                       AutomationProperties.Name="Open the verified Setup installer download" />
+                                       AutomationProperties.Name="Open the verified Setup installer download"
+                                       AutomationProperties.HelpText="Also verifies the sigstore signature of checksums.txt when cosign is installed."
+                                       ToolTip="Also verifies the sigstore signature of checksums.txt when cosign is installed." />
                         </StackPanel>
                     </StackPanel>
                 </Border>
@@ -119,7 +121,7 @@
                         <TextBlock Style="{StaticResource DcCaption}"
                                    Margin="0,6,0,0"
                                    TextWrapping="Wrap"
-                                   Text="Detect reads the gateway's last AI discovery scan (ai_discovery_state.json). It executes nothing and never runs on its own." />
+                                   Text="Detect reads the gateway's last AI discovery scan (ai_discovery_state.json). It executes nothing and runs only when you press it." />
                         <TextBlock Style="{StaticResource DcBody}"
                                    Margin="0,8,0,0"
                                    TextWrapping="Wrap"
@@ -236,7 +238,7 @@
                                                  AutomationProperties.Name="Block calls during a gateway outage"
                                                  AutomationProperties.HelpText="Adds a separate, reviewed step after setup: defenseclaw guardrail use-pack strict." />
                                 <TextBlock Style="{StaticResource DcCaption}" TextWrapping="Wrap"
-                                           Text="On this runtime the rule pack decides: the default pack lets a call run with a warning while the gateway is not running, strict blocks it. Every other failure blocks." />
+                                           Text="On this runtime the rule pack decides. While the gateway is not running, the default pack allows a call with a warning and strict blocks it. Every other failure blocks." />
                             </StackPanel>
 
                             <TextBlock Grid.Row="3" Style="{StaticResource DcFieldLabelInline}" VerticalAlignment="Center" Text="LLM judge" />
@@ -294,7 +296,7 @@
                                          AutomationProperties.Name="Verify readiness"
                                          IsChecked="{Binding Verify, Mode=TwoWay}" />
                         <TextBlock Style="{StaticResource DcCaption}" Margin="0,6,0,0" TextWrapping="Wrap"
-                                   Text="Review and run shows every command first. The gateway start is its own step and only runs when the setup report says setup finished." />
+                                   Text="Review and run shows every command first. The gateway start is a separate step and runs only if setup finished." />
                     </StackPanel>
                 </Border>
 

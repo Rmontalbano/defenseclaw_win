@@ -153,7 +153,7 @@ public sealed partial class RuntimeConfigCatalog
 
     /// <summary>Why a header row with a key is read-only: the runtime's own hint, or a sentence that says whose rule it is.</summary>
     internal static string ReadOnlyReason(RuntimeCatalogField field) =>
-        field.Hint.Length > 0 ? field.Hint : "Read-only in DefenseClaw's own editor. Edit it in the RAW tab.";
+        field.Hint.Length > 0 ? field.Hint : "Read-only here. Edit it in the Raw tab.";
 
     /// <summary>
     /// The catalog in the dump's stdout, or null: no sentinel line, JSON that does not parse, or no section with a name (a renamed symbol in a future

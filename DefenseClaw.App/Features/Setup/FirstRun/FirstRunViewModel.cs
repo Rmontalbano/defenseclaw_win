@@ -288,9 +288,9 @@ public sealed partial class FirstRunViewModel : ObservableObject, IDisposable
 
     public string Subtitle => IsInstalled
         ? ObserveBlocksSelfChanges
-            ? "DefenseClaw registers the hook connectors you select. Observe mode records and never blocks on policy findings (DefenseClaw still blocks changes to " +
-              "its own files); Action enforces policy on the connectors you choose."
-            : "DefenseClaw registers the hook connectors you select. Observe mode records and never blocks; Action enforces policy on the connectors you choose."
+            ? "DefenseClaw registers the hook connectors you select. Observe mode records policy findings and blocks only changes to " +
+              "DefenseClaw's own files. Action enforces policy on the connectors you choose."
+            : "DefenseClaw registers the hook connectors you select. Observe mode records and does not block. Action enforces policy on the connectors you choose."
         : "Install the DefenseClaw runtime first, then return here to configure it.";
 
     /// <summary>The release from which observe mode blocks a proven change to DefenseClaw's own files (1.0.5 changelog, "Observe mode blocks a proven change").</summary>
@@ -304,8 +304,8 @@ public sealed partial class FirstRunViewModel : ObservableObject, IDisposable
 
     /// <summary>The caption under the profile and enforce choices.</summary>
     public string ProfileCaption => ObserveBlocksSelfChanges
-        ? "Observe never blocks on policy findings (DefenseClaw still blocks changes to its own files); Action applies only to the connectors marked Enforce."
-        : "Observe never blocks; Action applies only to the connectors marked Enforce.";
+        ? "Observe blocks only changes to DefenseClaw's own files. Action applies only to the connectors marked Enforce."
+        : "Observe does not block. Action applies only to the connectors marked Enforce.";
 
     /// <summary>Closes the window (raised for "Continue without setup").</summary>
     public event EventHandler? CloseRequested;
@@ -525,8 +525,8 @@ public sealed partial class FirstRunViewModel : ObservableObject, IDisposable
             if (!File.Exists(path))
             {
                 found = Array.Empty<string>();
-                note = "No AI discovery scan has been recorded yet, so there is nothing to read. Choose a connector below. After setup, " +
-                       "the gateway's scan fills AI Discovery and Detect will find agents.";
+                note = "No AI discovery scan has been recorded yet. Choose a connector below. After setup, " +
+                       "the gateway's scan fills AI Discovery and Detect finds agents.";
             }
             else
             {

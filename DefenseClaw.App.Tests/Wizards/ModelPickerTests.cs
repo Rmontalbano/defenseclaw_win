@@ -310,7 +310,7 @@ public sealed class ModelPickerTests : IDisposable
         Assert.True(box.ShowsModelPicker);
         Assert.False(box.IsPlainText);
         Assert.Equal(new[] { "acme-large-2", "acme-large-1", "acme-small-1", "acme-mini" }, box.ModelRows.Select(r => r.Value).ToArray());
-        Assert.Contains("4 model(s)", box.ModelListNote, StringComparison.Ordinal);
+        Assert.Contains("4 models", box.ModelListNote, StringComparison.Ordinal);
         Assert.Contains("Anthropic (Claude)", box.ModelListNote, StringComparison.Ordinal);
 
         box.Value = "small";

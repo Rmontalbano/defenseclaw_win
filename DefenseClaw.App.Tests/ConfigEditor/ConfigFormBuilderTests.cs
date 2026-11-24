@@ -316,7 +316,7 @@ public class ConfigFormBuilderTests
             source: "gateway:\n  host: 127.0.0.1\n",
             raw: "gateway: {host: 127.0.0.1}\n");
         Assert.False(inline.Field("gateway.host").IsEditable);
-        Assert.Contains("not on a line of its own", inline.Field("gateway.host").DisabledReason, StringComparison.Ordinal);
+        Assert.Contains("not on its own line", inline.Field("gateway.host").DisabledReason, StringComparison.Ordinal);
 
         var commented = Build(
             source: "gateway:\n  host: 127.0.0.1\n",

@@ -101,8 +101,8 @@ public class SecretEntryTests
             Assert.True(token.OffersInAppEntry);
             Assert.Equal("SPLUNK_ACCESS_TOKEN", token.InAppEnvName);
             Assert.Contains("SPLUNK_ACCESS_TOKEN", token.InAppExplanation, StringComparison.Ordinal);
-            Assert.Contains("never on the command line", token.InAppExplanation, StringComparison.Ordinal);
-            Assert.DoesNotContain("never takes the secret", token.CredentialExplanation, StringComparison.Ordinal);
+            Assert.Contains("not on the command line", token.InAppExplanation, StringComparison.Ordinal);
+            Assert.DoesNotContain("The command reads the secret from a variable", token.CredentialExplanation, StringComparison.Ordinal);
             Assert.False(token.HasEntry);
         });
     }
@@ -120,7 +120,7 @@ public class SecretEntryTests
 
             Assert.False(key.OffersInAppEntry);
             Assert.False(key.OffersKeysSetEntry);
-            Assert.Contains("never takes the secret", key.CredentialExplanation, StringComparison.Ordinal);
+            Assert.Contains("The command reads the secret from a variable", key.CredentialExplanation, StringComparison.Ordinal);
 
             key.SetEntry(Secure(Value));
 
@@ -438,7 +438,7 @@ public class SecretEntryTests
             // command only: still held, and the result line says a preview leaves it alone.
             Assert.True(vm.HasRun);
             Assert.True(token.HasEntry);
-            Assert.Contains("not used by a preview", vm.ResultMessage, StringComparison.Ordinal);
+            Assert.Contains("A preview does not use the value you entered", vm.ResultMessage, StringComparison.Ordinal);
             Assert.DoesNotContain(Value, vm.ResultMessage, StringComparison.Ordinal);
         });
     }

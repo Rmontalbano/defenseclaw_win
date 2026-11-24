@@ -103,7 +103,7 @@
                            Command="{Binding BuildPluginCommand}"
                            ToolTipService.ShowOnDisabled="True"
                            ToolTip="{Binding BlockedReason}"
-                           AutomationProperties.HelpText="Shows the exact defenseclaw command; nothing runs until you confirm." />
+                           AutomationProperties.HelpText="Shows the defenseclaw command. Nothing runs until you confirm." />
 
                 <!-- What the run said -->
                 <Border Style="{StaticResource DcSubtleRow}"
@@ -126,7 +126,7 @@
                         <TextBlock Style="{StaticResource DcCaption}"
                                    Margin="0,4,0,0"
                                    TextWrapping="Wrap"
-                                   Text="DefenseClaw cannot add the plugin to your Claude account. Cowork stays unprotected until you do these steps." />
+                                   Text="DefenseClaw cannot add the plugin to Claude. Cowork stays unprotected until you do these steps." />
                         <ItemsControl Margin="0,8,0,0"
                                       ItemsSource="{Binding UploadSteps}"
                                       IsTabStop="False"

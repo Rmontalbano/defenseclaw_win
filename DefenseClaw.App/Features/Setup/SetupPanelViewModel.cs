@@ -300,7 +300,7 @@ public sealed partial class SetupPanelViewModel : PanelViewModelBase, IAcceptsNa
     }
 
     public override string Description =>
-        "The setup areas, then the config editor. Every defenseclaw setup flow on this machine is discovered from the CLI at runtime, and each one ends on a review screen showing the exact command before anything runs.";
+        "The setup areas, then the config editor. Each setup flow ends on a review of the command.";
 
     /// <summary>Cards, bucketed by <see cref="WizardGroups"/>, filtered by search and certification.</summary>
     public ObservableCollection<WizardGroupViewModel> Groups { get; } = new();
@@ -797,10 +797,12 @@ public sealed partial class SetupPanelViewModel : PanelViewModelBase, IAcceptsNa
         SyncCollection(Connectors, desired, chip => chip.Name, static (existing, wanted) => existing.IsSameAs(wanted));
 
         ConnectorNote = Connectors.Count == 0
-            ? "No connectors are configured yet. Start with a certified one — Claude Code or Codex on this platform."
+            ? "No connectors are configured. Claude Code and Codex are certified on Windows."
             : string.Format(
                 CultureInfo.CurrentCulture,
-                "{0} connector(s) configured. Mode and fail-mode come from guardrail.connectors in config.yaml; names without chips were reported by /health only.",
+                Connectors.Count == 1
+                    ? "{0} connector configured. Mode and fail mode come from guardrail.connectors in config.yaml."
+                    : "{0} connectors configured. Mode and fail mode come from guardrail.connectors in config.yaml.",
                 Connectors.Count);
 
         OnPropertyChanged(nameof(HasConnectors));
@@ -886,12 +888,15 @@ public sealed partial class SetupPanelViewModel : PanelViewModelBase, IAcceptsNa
 
         StatusNote = string.Format(
             CultureInfo.CurrentCulture,
-            "{0} of {1} setup target(s) shown · {2} certified connector(s) on Windows · {3} help screen(s) read{4}",
+            "{0} of {1} setup {2} shown · {3} certified {4} on Windows · {5} help {6} read{7}",
             shown,
             _all.Count,
+            _all.Count == 1 ? "target" : "targets",
             certified,
+            certified == 1 ? "connector" : "connectors",
             _catalog.ProbeCount,
-            pending > 0 ? $" · {pending} still loading" : string.Empty);
+            _catalog.ProbeCount == 1 ? "screen" : "screens",
+            pending > 0 ? $", {pending} still loading" : string.Empty);
     }
 
     // ------------------------------------------------------------------ guardrail quick controls
@@ -1101,7 +1106,7 @@ public sealed partial class SetupPanelViewModel : PanelViewModelBase, IAcceptsNa
         {
             true => ("The guardrail is enabled.", "Ok"),
             false => ("The guardrail is disabled: no connector is being enforced.", "Warn"),
-            _ => ("The CLI's status text could not be interpreted; the verbatim output is below.", "Neutral"),
+            _ => ("The CLI status text could not be read. Its output is below.", "Neutral"),
         };
 
         ShowEnableGuardrail = status.Enabled != true;
@@ -1170,11 +1175,11 @@ public sealed partial class SetupPanelViewModel : PanelViewModelBase, IAcceptsNa
 
         _guardrailReviewNote = (verb, arg) switch
         {
-            ("disable", _) => "Disabling tears down the connector hooks (for example the live Claude Code hooks), so agents on this machine " +
-                              "run without DefenseClaw protection until you enable the guardrail again. The connector's policy is kept.",
+            ("disable", _) => "Disabling removes the connector hooks, so agents on this machine run without DefenseClaw protection " +
+                              "until you enable the guardrail again. The connector's policy is kept.",
             ("enable", _) => "Re-enables the guardrail from the existing configuration and runs connector setup at the next gateway start.",
-            (_, "closed") => "Closed blocks a tool call or prompt whenever the gateway answers with an error or cannot be reached — " +
-                             "including while the gateway restarts. Use it where every prompt must be inspected.",
+            (_, "closed") => "Closed blocks a tool call or prompt when the gateway returns an error or cannot be reached, including during a restart. " +
+                             "Use it where every prompt must be inspected.",
             _ => DefenseClaw.Core.Runtime.ObserveModeCopy.FailOpenNote(DefenseClaw.Core.Runtime.ObserveModeCopy.BlocksSelfChange(Services.Runtime.Capabilities)),
         };
 
@@ -1232,7 +1237,7 @@ public sealed partial class SetupPanelViewModel : PanelViewModelBase, IAcceptsNa
                     ? CommandReviewWarning.GatewayRestart()
                     : new CommandReviewWarning(
                         "Gateway not restarted",
-                        "The gateway is not restarted, so hooks are not regenerated until it next restarts: the change is saved but not yet in effect."),
+                        "Saved, but not in effect yet. Hooks are regenerated at the next gateway restart."),
             },
         }.GuardedBy(Services.Installation);
     }
@@ -1394,7 +1399,7 @@ public sealed class WizardGroupViewModel
     public string CountText => Cards.Count.ToString(CultureInfo.CurrentCulture);
 
     /// <summary>What a screen reader announces for the group heading.</summary>
-    public string AutomationName => $"{Name}, {Cards.Count} setup target(s)";
+    public string AutomationName => $"{Name}, {Cards.Count} setup {(Cards.Count == 1 ? "target" : "targets")}";
 
     public override string ToString() => AutomationName;
 }
@@ -1607,8 +1612,9 @@ public sealed partial class WizardCardViewModel : ObservableObject
             : definition.IsDetailLoaded
                 ? string.Format(
                     CultureInfo.CurrentCulture,
-                    "{0} step(s) · {1}",
+                    "{0} {1} · {2}",
                     definition.Steps.Count,
+                    definition.Steps.Count == 1 ? "step" : "steps",
                     definition.IsCurated ? "curated layout" : "generated from --help")
                 : "reading --help…";
 

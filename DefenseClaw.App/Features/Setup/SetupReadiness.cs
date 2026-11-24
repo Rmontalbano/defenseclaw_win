@@ -153,7 +153,7 @@ public static class SetupReadiness
         {
             checks.Add(new ReadinessCheck(
                 "Active Connector",
-                "No connector mode is configured. Add one from the setup cards below (Claude Code and Codex are the Windows connectors).",
+                "No connector mode is configured. Add one from the setup cards below.",
                 ReadinessStatus.Fail));
         }
 
@@ -181,12 +181,12 @@ public static class SetupReadiness
         checks.Add(missing > 0
             ? new ReadinessCheck(
                 "Required Credentials",
-                $"{missing} required credential(s) missing",
+                missing == 1 ? "1 required credential missing" : $"{missing} required credentials missing",
                 ReadinessStatus.Fail,
                 new ReadinessFix(
                     ReadinessFixKind.Terminal,
                     "keys fill-missing",
-                    new[] { new ReadinessFixStep(Cli, new[] { "keys", "fill-missing", "--yes" }, "Prompts for each missing required key with a hidden console prompt.") }))
+                    new[] { new ReadinessFixStep(Cli, new[] { "keys", "fill-missing", "--yes" }, "Prompts for each missing required key at a hidden console prompt.") }))
             : new ReadinessCheck("Required Credentials", "No missing required credentials detected.", ReadinessStatus.Pass));
 
         var provider = config.LlmProvider;
@@ -241,19 +241,19 @@ public static class SetupReadiness
                     "doctor --fix",
                     new[]
                     {
-                        new ReadinessFixStep(Cli, new[] { "doctor", "--fix", "--dry-run" }, "Previews the repairs doctor would make; changes nothing."),
+                        new ReadinessFixStep(Cli, new[] { "doctor", "--fix", "--dry-run" }, "Previews the repairs. Changes nothing."),
                         new ReadinessFixStep(Cli, new[] { "doctor", "--fix", "--yes" }, "Applies the repairs."),
                     })));
 
         checks.Add(new ReadinessCheck(
             "Observability v8",
-            "Canonical routing is active; local SQLite collection is mandatory.",
+            "Canonical routing is active. Local SQLite collection is required.",
             ReadinessStatus.Pass));
 
         checks.Add(config.AssetPolicyEnabled && config.RegistryRequiredButEmpty
             ? new ReadinessCheck(
                 "Registry / Asset Policy",
-                "Registry-required asset policy has no promoted registry entries.",
+                "The asset policy requires a registry, and none has promoted entries.",
                 ReadinessStatus.Warn,
                 new ReadinessFix(
                     ReadinessFixKind.Review,
@@ -351,6 +351,6 @@ public static class SetupReadiness
     private static ReadinessFix Wizard(string label, string target, params string[] argv) => new(
         ReadinessFixKind.Wizard,
         label,
-        new[] { new ReadinessFixStep(Cli, argv, "The TUI runs this wizard; here it opens as a form that ends on a review of the exact flags.") },
+        new[] { new ReadinessFixStep(Cli, argv, "Opens the wizard as a form. You review the command first.") },
         WizardTarget: target);
 }

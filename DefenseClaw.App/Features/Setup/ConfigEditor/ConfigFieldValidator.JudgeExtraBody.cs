@@ -44,7 +44,7 @@ public static partial class ConfigFieldValidator
 
         if (key.Length == 0 || key.Any(static c => !IsExtraBodyKeyCharacter(c)))
         {
-            return Error($"{ExtraBodyPath}: invalid key \"{key}\" (use ASCII letters, digits, _, - or .)");
+            return Error($"{ExtraBodyPath}: invalid key \"{key}\". Use ASCII letters, digits, _, - or .");
         }
 
         var normalized = key.ToLowerInvariant()
@@ -67,7 +67,7 @@ public static partial class ConfigFieldValidator
 
         if (keys.Count > ExtraBodyMaxFields)
         {
-            return Error($"{ExtraBodyPath}: at most {ExtraBodyMaxFields} fields are allowed (it has {keys.Count})");
+            return Error($"{ExtraBodyPath}: at most {ExtraBodyMaxFields} fields are allowed, found {keys.Count}");
         }
 
         foreach (var key in keys.OrderBy(static k => k, StringComparer.Ordinal))
@@ -121,7 +121,7 @@ public static partial class ConfigFieldValidator
 
         return HasBaseUrl(baseUrl) || HasBaseUrl(inheritedBaseUrl)
             ? FieldValidation.Ok
-            : Warning($"provider \"{name}\" requires base_url: set one in this block or in the top-level llm block, or the gateway cannot use this provider");
+            : Warning($"provider \"{name}\" requires base_url. Set one in this block or in the top-level llm block.");
     }
 
     private static bool HasBaseUrl(string? value) => (value ?? string.Empty).Trim().TrimEnd('/').Length > 0;

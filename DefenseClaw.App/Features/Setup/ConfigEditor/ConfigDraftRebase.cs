@@ -71,12 +71,12 @@ public static class ConfigDraftRebase
 
         if (ConfigYamlFlatten.TryFlatten(mineText) is not { } mine)
         {
-            return Failed("Your draft is not valid YAML yet (or is too large to compare). Fix it in the RAW tab first, or discard it.");
+            return Failed("Your draft is not valid YAML or is too large to compare. Fix it in the Raw tab, or discard it.");
         }
 
         if (ConfigYamlFlatten.TryFlatten(theirsText) is not { } theirs)
         {
-            return Failed("config.yaml on disk does not load as YAML (or is too large to compare), so there is nothing to combine your edits with. Fix the file, or discard your edits.");
+            return Failed("config.yaml on disk is not valid YAML or is too large to compare. Fix the file, or discard your edits.");
         }
 
         if (ConfigYamlFlatten.TryFlatten(baseText) is not { } baseKeys)
@@ -92,7 +92,7 @@ public static class ConfigDraftRebase
         var merged = MergeText(baseText, mineText, theirsText);
         if (merged is null || ConfigYamlFlatten.TryFlatten(merged) is not { } result)
         {
-            return Failed("Your edits and the changes on disk touch neighbouring lines and could not be combined safely. Review the difference, then redo your edits on the new file or discard them.");
+            return Failed("Your edits and the disk changes touch neighbouring lines and cannot be combined safely. Review the difference, then redo your edits on the new file or discard them.");
         }
 
         // The merge is checked by keys, not trusted.
@@ -110,7 +110,7 @@ public static class ConfigDraftRebase
                 : baseKeys;
             if (!SameValue(result, expected, path))
             {
-                return Failed("Your edits and the changes on disk could not be combined safely. Review the difference, then redo your edits on the new file or discard them.");
+                return Failed("Your edits and the disk changes cannot be combined safely. Review the difference, then redo your edits on the new file or discard them.");
             }
         }
 

@@ -53,8 +53,8 @@ public sealed class ReadinessRowViewModel
     public string FixToolTip => Check.Fix switch
     {
         null => string.Empty,
-        { Kind: ReadinessFixKind.Terminal } fix => $"Opens a console window running {fix.CommandText} (it prompts for secrets, so it cannot run in this app)",
-        { Kind: ReadinessFixKind.Wizard } fix => $"Opens the {fix.WizardTarget} setup wizard (the TUI runs {fix.CommandText})",
+        { Kind: ReadinessFixKind.Terminal } fix => $"Opens a console window running {fix.CommandText}. It prompts for secrets.",
+        { Kind: ReadinessFixKind.Wizard } fix => $"Opens the {fix.WizardTarget} setup wizard. It runs {fix.CommandText}.",
         var fix => $"Review, then run: {fix.CommandText}",
     };
 

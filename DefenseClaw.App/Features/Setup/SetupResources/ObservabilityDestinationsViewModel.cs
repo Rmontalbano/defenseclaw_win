@@ -20,7 +20,7 @@ namespace DefenseClaw.App.ViewModels.SetupResources;
 /// </summary>
 public sealed class ObservabilityDestinationsViewModel : SetupResourceViewModel
 {
-    private const string UnsafeNameReason = "This destination's name has characters that cannot be passed to the CLI safely, so the app will not act on it.";
+    private const string UnsafeNameReason = "This destination's name has characters that cannot be passed to the CLI safely.";
 
     private static readonly SetupColumn[] ColumnList =
     [
@@ -42,7 +42,7 @@ public sealed class ObservabilityDestinationsViewModel : SetupResourceViewModel
     public override string Title => "Observability destinations";
 
     public override string Subtitle =>
-        "Where DefenseClaw sends its telemetry: each row is a destination in config.yaml. Test checks that a remote one answers. Every change is shown as the exact command first, and nothing runs until you confirm it.";
+        "Where DefenseClaw sends telemetry. Each row is a destination in config.yaml. Test checks that a remote one answers.";
 
     public override string Singular => "destination";
 
@@ -55,14 +55,14 @@ public sealed class ObservabilityDestinationsViewModel : SetupResourceViewModel
     public override string EmptyTitle => "No destinations are configured";
 
     public override string EmptyDetail =>
-        "defenseclaw setup observability list answered with an empty list. Add a destination with the Add button; the setup wizard shows the exact command before anything is written.";
+        "defenseclaw setup observability list returned an empty list. Use Add to add a destination.";
 
     protected override string TipFor(SetupVerb verb) => verb switch
     {
-        SetupVerb.Add => "Open the setup wizard on add: pick a destination type and fill it in. The wizard shows the exact command before anything runs.",
+        SetupVerb.Add => "Opens the setup wizard to pick a destination type and fill it in. The command is shown first.",
         SetupVerb.Enable => "Turn this destination on. The command is shown first.",
         SetupVerb.Disable => "Turn this destination off without deleting it. The command is shown first.",
-        SetupVerb.Test => "Connect to this destination to check that it answers. The command is shown first and nothing is sent until you confirm it.",
+        SetupVerb.Test => "Connects to this destination to check that it answers. The command is shown first.",
         SetupVerb.Remove => "Delete this destination from config.yaml. The command is shown first.",
         _ => string.Empty,
     };
@@ -127,14 +127,14 @@ public sealed class ObservabilityDestinationsViewModel : SetupResourceViewModel
             {
                 var generated = d.IsMandatory
                     ? $"{ObservabilityDestination.MandatoryName} is mandatory and always on: it cannot be disabled or removed."
-                    : "DefenseClaw generates this destination; it is not a setting in config.yaml, so it cannot be enabled, disabled or removed here.";
+                    : "DefenseClaw generates this destination. It is not in config.yaml, so it cannot be enabled, disabled or removed here.";
                 blocked[SetupVerb.Enable] = generated;
                 blocked[SetupVerb.Disable] = generated;
                 blocked[SetupVerb.Remove] = generated;
             }
             else if (d.UnsupportedHere)
             {
-                blocked[SetupVerb.Enable] = "This destination belongs to a local stack this operating system cannot run, so it cannot be enabled.";
+                blocked[SetupVerb.Enable] = "This destination belongs to a local stack this operating system cannot run.";
             }
             else if (d.Enabled)
             {
@@ -147,7 +147,7 @@ public sealed class ObservabilityDestinationsViewModel : SetupResourceViewModel
 
             if (d.IsLocal)
             {
-                blocked[SetupVerb.Test] = $"A {d.Kind} destination stores or serves events on this PC. The CLI only tests destinations that deliver to a remote address, so there is nothing to connect to.";
+                blocked[SetupVerb.Test] = $"A {d.Kind} destination stores or serves events on this PC. The CLI tests only remote destinations.";
             }
         }
 
@@ -175,7 +175,7 @@ public sealed class ObservabilityDestinationsViewModel : SetupResourceViewModel
                 {
                     warnings.Add(new CommandReviewWarning(
                         "Content is not redacted",
-                        $"Its redaction is “{d.Redaction}”: once enabled it receives content as recorded, which can include prompts, tool input and output, file paths and secrets."));
+                        $"Its redaction is “{d.Redaction}”. Once enabled it receives content as recorded, including prompts, tool input and output, file paths and secrets."));
                 }
 
                 var argv = SetupResourceArgv.Enable(Resource, row.Key);
@@ -184,7 +184,7 @@ public sealed class ObservabilityDestinationsViewModel : SetupResourceViewModel
                     row,
                     argv,
                     $"Enable destination “{name}”?",
-                    $"Sets enabled: true for this {d.Kind} destination in config.yaml. From then on the events its routes select ({(d.Signals.Count == 0 ? "no signals yet" : string.Join(", ", d.Signals))}) are sent to {where}.",
+                    $"Sets enabled: true for this {d.Kind} destination in config.yaml. Events from its routes ({(d.Signals.Count == 0 ? "no signals yet" : string.Join(", ", d.Signals))}) are then sent to {where}.",
                     "Enable destination",
                     CommandTier.StateChanging,
                     ChangeTimeout,
@@ -199,7 +199,7 @@ public sealed class ObservabilityDestinationsViewModel : SetupResourceViewModel
                     row,
                     off,
                     $"Disable destination “{name}”?",
-                    $"Sets enabled: false for this destination in config.yaml. Nothing is deleted and Enable turns it back on; events stop being sent to {where}.",
+                    $"Sets enabled: false for this destination in config.yaml. Nothing is deleted. Events stop being sent to {where}.",
                     "Disable destination",
                     CommandTier.StateChanging,
                     ChangeTimeout,
@@ -210,14 +210,14 @@ public sealed class ObservabilityDestinationsViewModel : SetupResourceViewModel
             case SetupVerb.Test:
                 warnings.Add(new CommandReviewWarning(
                     "Contacts a live endpoint",
-                    $"This opens a network connection to {where} now. The app runs the CLI's default test and never passes --write-probe, which would send one marked probe."));
+                    $"This opens a network connection to {where} now. It runs the CLI's default test without --write-probe."));
                 var test = SetupResourceArgv.Test(Resource, row.Key);
                 return new SetupChangePlan(
                     verb,
                     row,
                     test,
                     $"Test destination “{name}”?",
-                    "Checks that the destination answers (a TCP and TLS handshake to each of its endpoints) and that its credentials can be found. No event is sent, so it cannot tell whether the credentials are accepted. The attempt and its result are recorded locally as compliance activity; the configuration is not changed.",
+                    "Opens a TCP and TLS connection to each endpoint and looks for its credentials. No event is sent, so the credentials are not verified. The result is recorded locally as compliance activity.",
                     "Run test",
                     CommandTier.StateChanging,
                     TestTimeout,
@@ -232,7 +232,7 @@ public sealed class ObservabilityDestinationsViewModel : SetupResourceViewModel
                     row,
                     remove,
                     $"Remove destination “{name}”?",
-                    $"Deletes this destination from config.yaml (observability.destinations). Anything stored for it in .env, such as its token, is left alone. The app cannot bring it back: add it again with Add.",
+                    $"Deletes this destination from config.yaml (observability.destinations). Values stored for it in .env, such as its token, stay. This cannot be undone here. Add it again with Add.",
                     "Remove destination",
                     CommandTier.Destructive,
                     ChangeTimeout,

@@ -67,7 +67,7 @@ public static class SetupAreas
     /// <summary>The Mac's 23 areas, in its order.</summary>
     public static IReadOnlyList<SetupAreaSpec> All { get; } = new[]
     {
-        new SetupAreaSpec("connector", "Connector Setup", "Add or re-run a connector, choose the active hook connector set (batch), or remove one.", SetupAreaRoute.ConnectorSetup, Array.Empty<string>()),
+        new SetupAreaSpec("connector", "Connector Setup", "Add, re-run or remove a connector, or set the active hook connectors in one batch.", SetupAreaRoute.ConnectorSetup, Array.Empty<string>()),
         new SetupAreaSpec("credentials", "Credentials", "List, validate, or securely set env-backed credentials.", SetupAreaRoute.Credentials, Array.Empty<string>()),
         new SetupAreaSpec("ai-defense", "Cisco AI Defense", "Configure the cloud inspection endpoint, credential and scanner mode. Check the result with `defenseclaw doctor`.", SetupAreaRoute.Wizard, new[] { "guardrail" }, Goal: "cisco"),
         new SetupAreaSpec("llm", "LLM", "Configure the unified analyzer and guardrail model.", SetupAreaRoute.Wizard, new[] { "llm" }),
@@ -94,18 +94,18 @@ public static class SetupAreas
 
     /// <summary>Why the Sandbox tile offers nothing here: the runtime's OpenShell sandboxes target Linux and macOS (<see cref="RuntimeCapability.Sandbox"/>).</summary>
     public const string SandboxReason =
-        "Sandboxes are Linux and macOS only: DefenseClaw's OpenShell sandbox does not run on Windows, so there is nothing to set up here.";
+        "Sandboxes run on Linux and macOS only.";
 
     /// <summary>What a tile on the <see cref="SetupAreaRoute.Coming"/> route says on a runtime that has its capability: this app has not built the flow yet.</summary>
-    public const string ComingReason = "Coming to this app. The installed DefenseClaw has it; until the form is here, use the CLI in a terminal.";
+    public const string ComingReason = "Not built into this app yet. Use the CLI in a terminal.";
 
     /// <summary>The ACP Guard tile's tooltip on a runtime with the guard.</summary>
     public const string AcpGuardToolTip =
-        "Opens the ACP Guard wizard: editor, agent, profile and mode, then the exact defenseclaw acp setup command to review. Opening it only reads (the CLI's help and the gateway's ACP catalog and profiles).";
+        "Opens the ACP Guard wizard: editor, agent, profile and mode, then the defenseclaw acp setup command to review. Opening it only reads the CLI help and the ACP catalog.";
 
     /// <summary>The ACP Guard tile's tooltip on a read-only installation: the wizard still opens (a managed enrollment is only ever on one), and runs nothing.</summary>
     public const string AcpGuardReadOnlyNote =
-        "This installation is read-only here: the wizard opens and its review shows the exact command, but nothing runs.";
+        "Read-only installation: the wizard opens and shows the command, but nothing runs.";
 
     /// <summary>
     /// True when an area routes to <paramref name="target"/>: its card is reached through that tile, so it is not drawn again in the Windows group. The

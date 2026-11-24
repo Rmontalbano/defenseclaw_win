@@ -147,7 +147,7 @@ public sealed class OpenClawWindowsSetupTests
     [Fact]
     public void The_Gateway_card_reason_follows_the_runtime_and_the_1_0_9_words_are_unchanged()
     {
-        const string before = "Configures the OpenClaw fleet uplink (host, port, token). OpenClaw is unsupported on Windows, and a standalone install has no fleet gateway to configure.";
+        const string before = "OpenClaw is not supported on Windows, so there is no fleet gateway to configure.";
 
         Assert.Equal(before, WizardWindowsPolicy.UnavailableReason("gateway", PlatformStatus.NotApplicable));
         Assert.Equal(before, WizardWindowsPolicy.UnavailableReason("gateway", PlatformStatus.NotApplicable, null));
@@ -156,7 +156,7 @@ public sealed class OpenClawWindowsSetupTests
 
         var now = WizardWindowsPolicy.UnavailableReason("gateway", PlatformStatus.NotApplicable, Runtime("1.0.10"));
 
-        Assert.Equal("Configures the OpenClaw uplink. On Windows, setup openclaw points it at OpenClaw's own local gateway; set up OpenClaw instead.", now);
+        Assert.Equal("On Windows, setup openclaw sets this uplink. Set up OpenClaw instead.", now);
         Assert.DoesNotContain("unsupported", now, StringComparison.OrdinalIgnoreCase);
     }
 
@@ -177,9 +177,9 @@ public sealed class OpenClawWindowsSetupTests
         var current = new WizardCardViewModel(definition, null, () => Runtime("1.0.10"));
         var none = new WizardCardViewModel(definition);
 
-        Assert.Contains("OpenClaw is unsupported on Windows", old.UnavailableReason, StringComparison.Ordinal);
-        Assert.Contains("OpenClaw is unsupported on Windows", none.UnavailableReason, StringComparison.Ordinal);
-        Assert.Contains("set up OpenClaw instead", current.UnavailableReason, StringComparison.Ordinal);
+        Assert.Contains("OpenClaw is not supported on Windows", old.UnavailableReason, StringComparison.Ordinal);
+        Assert.Contains("OpenClaw is not supported on Windows", none.UnavailableReason, StringComparison.Ordinal);
+        Assert.Contains("Set up OpenClaw instead", current.UnavailableReason, StringComparison.Ordinal);
         Assert.False(current.IsAvailable);
         Assert.False(old.IsAvailable);
     }

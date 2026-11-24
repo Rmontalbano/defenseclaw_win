@@ -31,13 +31,12 @@ internal static class NotificationSwitch
 
     /// <summary>The consequence text: what is written, the restart, whose notifications these are, and that the tray alerts are separate.</summary>
     internal static string Explanation(bool turnOn) =>
-        $"Sets notifications.enabled to {(turnOn ? "true" : "false")} in config.yaml and restarts the gateway, whose notification dispatcher reads it once when it starts. " +
-        "These are DefenseClaw's own desktop notifications for blocked tool calls and pending approvals. " +
-        "The alerts this app shows from the tray are a separate setting (Settings, Notifications) and do not change.";
+        $"Sets notifications.enabled to {(turnOn ? "true" : "false")} in config.yaml and restarts the gateway. " +
+        "Tray alerts (Settings, Notifications) do not change.";
 
     /// <summary>The step's sentence.</summary>
     internal static string Purpose(bool turnOn) =>
-        turnOn ? "Turn the runtime's desktop notifications on." : "Turn the runtime's desktop notifications off.";
+        turnOn ? "Turn desktop notifications on." : "Turn desktop notifications off.";
 
     /// <summary>The confirm button's text.</summary>
     internal static string PrimaryText(bool turnOn) => turnOn ? "Turn on" : "Turn off";

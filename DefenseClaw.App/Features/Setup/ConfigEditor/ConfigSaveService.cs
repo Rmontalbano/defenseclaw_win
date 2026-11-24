@@ -106,7 +106,7 @@ public sealed class ConfigSaveService
             return new SaveOutcome(
                 false,
                 SaveStage.WriteFailed,
-                "Nothing was saved: this data folder is a read-only copy of a container's. Change the container's configuration with its own CLI.",
+                "Nothing was saved: this data folder is a read-only copy of a container's. Change the container's configuration with its CLI.",
                 null,
                 null);
         }
@@ -126,7 +126,7 @@ public sealed class ConfigSaveService
             return new SaveOutcome(
                 false,
                 SaveStage.WriteFailed,
-                "Nothing was saved: `defenseclaw config validate` is no longer classified read-only, so the save pipeline would need a review step before running it.",
+                "Nothing was saved: `defenseclaw config validate` is no longer classified read-only, so Save cannot run it without a review step.",
                 null,
                 null);
         }
@@ -138,7 +138,7 @@ public sealed class ConfigSaveService
             return new SaveOutcome(
                 false,
                 SaveStage.DriftDetected,
-                "config.yaml changed on disk since it was loaded. Reload to pick up the new content, or view the on-disk version to compare before deciding.",
+                "config.yaml changed on disk since it was loaded. Reload it, or view the on-disk version to compare.",
                 null,
                 null);
         }
@@ -163,7 +163,7 @@ public sealed class ConfigSaveService
                     return new SaveOutcome(
                         false,
                         SaveStage.DriftDetected,
-                        "config.yaml changed on disk while the save was starting, so nothing was written. Reload to pick up the new content, or view the on-disk version to compare before deciding.",
+                        "config.yaml changed on disk as the save started, so nothing was written. Reload it, or view the on-disk version to compare.",
                         null,
                         null);
                 }
@@ -390,6 +390,6 @@ public sealed class ConfigSaveService
         var detail = stderr.Length > 0 ? stderr
             : stdout.Length > 0 ? stdout
             : $"defenseclaw config validate exited with code {invocation.ExitCode}.";
-        return "The saved file failed validation — restore the backup or fix it in the RAW tab: " + detail;
+        return "The saved file failed validation. Restore the backup or fix it in the Raw tab: " + detail;
     }
 }

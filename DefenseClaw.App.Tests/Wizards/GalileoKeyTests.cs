@@ -388,7 +388,7 @@ public class GalileoKeyTests
             Assert.Equal("Ok", key.CredentialStatusKey);
             Assert.Contains("GALILEO_API_KEY has a value", key.CredentialStatus, StringComparison.Ordinal);
             Assert.Contains("already stored", key.EntryStatus, StringComparison.Ordinal);
-            Assert.Contains("leave this blank", key.EntryStatus, StringComparison.Ordinal);
+            Assert.Contains("Leave this blank", key.EntryStatus, StringComparison.Ordinal);
             Assert.All(new[] { key.CredentialStatus, key.EntryStatus, key.CredentialReviewNote }, t => Assert.DoesNotContain("synthetic-stored", t, StringComparison.Ordinal));
 
             ToReview(vm);
@@ -425,7 +425,7 @@ public class GalileoKeyTests
             // The preview ran (and, with no CLI on PATH, stopped at "not found"); the key stayed with the box for Execute.
             Assert.True(vm.HasRun);
             Assert.True(key.HasEntry);
-            Assert.Contains("not used by a preview", vm.ResultMessage, StringComparison.Ordinal);
+            Assert.Contains("A preview does not use the value you entered", vm.ResultMessage, StringComparison.Ordinal);
             Assert.Contains("preview passes only if the key is already stored", vm.ResultMessage, StringComparison.Ordinal);
             Assert.DoesNotContain(Key, vm.ResultMessage, StringComparison.Ordinal);
         });

@@ -46,7 +46,7 @@ public sealed partial class WizardViewModel
             return;
         }
 
-        open(TrustHintDirectory, $"Setup of {Title} stopped: its program is in {TrustHintDirectory}, a folder that is not trusted. Trust it below, then run the setup again.");
+        open(TrustHintDirectory, $"Setup of {Title} stopped because its program is in {TrustHintDirectory}, which is not trusted. Trust it below, then run the setup again.");
     }
 
     /// <summary>After a run that ended with <paramref name="exitCode"/>: offers the folder it asked to have trusted, if it asked. A run that exited 0 asked for nothing.</summary>
@@ -58,7 +58,7 @@ public sealed partial class WizardViewModel
             return;
         }
 
-        TrustHintMessage = "This setup stopped because its program is in a folder DefenseClaw does not trust: " + hint.Directory + ". Trust it, then press Execute again.";
+        TrustHintMessage = "This setup stopped because its program is in " + hint.Directory + ", which DefenseClaw does not trust. Trust it, then press Execute again.";
         TrustHintDirectory = hint.Directory;
     }
 

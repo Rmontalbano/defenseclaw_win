@@ -231,7 +231,7 @@ public class GuardrailControlsViewModelTests
         var review = vm.Review!;
         Assert.Equal("defenseclaw guardrail block-message --yes -- \"Blocked by Acme Security\"", review.CommandText);
         var warning = Assert.Single(review.Warnings, w => w.Title == "Overwrites every connector's message");
-        Assert.Contains("every active connector", warning.Message, StringComparison.Ordinal);
+        Assert.Contains("replaces every connector's own message", warning.Message, StringComparison.Ordinal);
     }
 
     [Fact]

@@ -99,7 +99,7 @@ public sealed partial class WizardFieldViewModel
     {
         if (provider.Length == 0 && instance.Length == 0)
         {
-            return "Choose a provider to see the models the runtime's catalogue lists for it, or type any model id.";
+            return "Choose a provider to list its models, or type any model id.";
         }
 
         var of = instance.Length > 0 && count > 0 ? "the instance " + instance : _catalogue?.LabelFor(provider) ?? provider;
@@ -107,7 +107,7 @@ public sealed partial class WizardFieldViewModel
             ? $"The runtime's catalogue lists no models for {of}. Type the model id."
             : string.Create(
                 System.Globalization.CultureInfo.CurrentCulture,
-                $"{count} model(s) from the runtime's catalogue for {of}. Type to narrow them; any model id works.");
+                $"{count} {(count == 1 ? "model" : "models")} in the runtime's catalogue for {of}. Type to narrow the list, or enter any model id.");
     }
 
     /// <summary>Shows the suggestions (the box has focus, or the operator is typing).</summary>

@@ -267,7 +267,7 @@ public class ConfigFieldValidatorTests
 
         var result = Check("llm.api_key_env", Env, secret);
 
-        AssertWarning(result, "this looks like a secret value, not an env var name");
+        AssertWarning(result, "this looks like a secret value");
         Assert.Contains("keys set", result.Message, StringComparison.Ordinal);
         Assert.Contains(".env", result.Message, StringComparison.Ordinal);
         Assert.DoesNotContain(secret, result.Message, StringComparison.Ordinal);
@@ -614,7 +614,7 @@ public class ConfigFieldValidatorTests
     [Fact]
     public void Turning_certificate_verification_off_is_a_warning_and_leaving_it_on_is_not()
     {
-        AssertWarning(Check("gateway.tls_skip_verify", Bool, "true"), "TLS verification is disabled; dev-only");
+        AssertWarning(Check("gateway.tls_skip_verify", Bool, "true"), "TLS verification is disabled. Development only.");
         AssertOk(Check("gateway.tls_skip_verify", Bool, "false"));
         AssertWarning(Check("llm.tls_skip_verify", Bool, "true"), "TLS verification is disabled");
     }

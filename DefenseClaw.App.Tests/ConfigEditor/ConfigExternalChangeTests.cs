@@ -385,12 +385,12 @@ public sealed class ConfigExternalChangeTests
         Assert.True(problem.HasLocation);
         Assert.Matches(@"^Line \d+, column \d+$", problem.Location);
         Assert.False(string.IsNullOrWhiteSpace(problem.Reason));
-        Assert.Contains("RAW", problem.Guidance, StringComparison.Ordinal);
+        Assert.Contains("Raw", problem.Guidance, StringComparison.Ordinal);
         Assert.Equal(broken, vm.RawText);
         Assert.False(vm.ShowParseErrorBar);
         Assert.NotNull(vm.ParseError);
         Assert.True(vm.ShowFormEmptyState);
-        Assert.Equal("FORM cannot be built from invalid YAML", vm.FormEmptyTitle);
+        Assert.Equal("Form cannot be built from invalid YAML", vm.FormEmptyTitle);
     }
 
     [Fact]

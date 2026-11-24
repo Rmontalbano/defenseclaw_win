@@ -73,7 +73,7 @@ public sealed class ConfigReviewViewTests : IDisposable
 
                 texts = VisibleTexts(host).ToList();
                 Assert.DoesNotContain("Review changes", texts);
-                Assert.Contains(texts, t => t.Contains("restart the gateway to apply", StringComparison.Ordinal));
+                Assert.Contains(texts, t => t.Contains("Restart the gateway to apply", StringComparison.Ordinal));
 
                 var restart = VisualTree.Find<Wpf.Ui.Controls.Button>(host.Content, b => b.IsVisible && (b.Content as string) == "Restart gateway…");
                 Assert.NotNull(restart);

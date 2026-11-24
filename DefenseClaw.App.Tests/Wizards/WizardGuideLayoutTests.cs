@@ -124,7 +124,7 @@ public class WizardGuideLayoutTests
             scene.Host.Relayout();
 
             Assert.All(VisualTree.Descendants<Wpf.Ui.Controls.ToggleSwitch>(scene.Host.Content).Where(s => s.IsVisible), s => Assert.True(s.IsEnabled));
-            Assert.Contains(VisualTree.Descendants<Wpf.Ui.Controls.InfoBar>(scene.Host.Content), b => b.IsOpen && b.Message.Contains("starts containers", StringComparison.Ordinal));
+            Assert.Contains(VisualTree.Descendants<Wpf.Ui.Controls.InfoBar>(scene.Host.Content), b => b.IsOpen && b.Message.Contains("Splunk (Free mode) containers", StringComparison.Ordinal));
 
             RenderTo.Png(scene.Host, "splunk-guide-docker-ready");
         });

@@ -793,7 +793,7 @@ public sealed class ReviewChangeSummaryTests
     public void A_setup_wizard_says_what_it_always_said()
     {
         Assert.Equal(
-            "Nothing was changed from the current configuration. Running this re-applies it as it stands.",
+            "No change from the current configuration. Running this re-applies it as it is.",
             WizardViewModel.SummaryOfChanges(Llm, hasChanges: false, CommandTier.StateChanging));
         Assert.Equal(
             "Changed from the current configuration:",
@@ -808,7 +808,7 @@ public sealed class ReviewChangeSummaryTests
     {
         Assert.Equal("This command only reads. Running it changes nothing.", WizardViewModel.SummaryOfChanges(Llm, hasChanges: false, CommandTier.ReadOnly));
         Assert.Equal(
-            "What you chose (this command only reads; it changes nothing):",
+            "What you chose. This command only reads:",
             WizardViewModel.SummaryOfChanges(Llm, hasChanges: true, CommandTier.ReadOnly));
     }
 
@@ -823,10 +823,10 @@ public sealed class ReviewChangeSummaryTests
             WizardViewModel.StopMessage(closeAfterStop: true, onlyReads: true));
 
         Assert.Equal(
-            "This ends the command and everything it started. It may leave setup half-applied — read the output and the Activity panel afterwards before running it again.",
+            "This ends the command and everything it started. It may leave setup half-applied. Read the output and the Activity panel afterwards before running it again.",
             WizardViewModel.StopMessage(closeAfterStop: false, onlyReads: false));
         Assert.Equal(
-            "Closing this window stops the command and everything it started. It may leave setup half-applied — read the output and the Activity panel afterwards before running it again.",
+            "Closing this window stops the command and everything it started. It may leave setup half-applied. Read the output and the Activity panel afterwards before running it again.",
             WizardViewModel.StopMessage(closeAfterStop: true, onlyReads: false));
     }
 
@@ -839,7 +839,7 @@ public sealed class ReviewChangeSummaryTests
         Assert.Equal(Cancelled + ". A preview writes nothing, so there is nothing to clean up.", WizardViewModel.CancelledMessage(Cancelled, preview: true, onlyReads: true));
         Assert.Equal(Cancelled + ". A preview writes nothing, so there is nothing to clean up.", WizardViewModel.CancelledMessage(Cancelled, preview: true, onlyReads: false));
         Assert.Equal(
-            Cancelled + ". The command may have left setup half-applied — read the output above and the Activity panel before running it again.",
+            Cancelled + ". The command may have left setup half-applied. Read the output above and the Activity panel before running it again.",
             WizardViewModel.CancelledMessage(Cancelled, preview: false, onlyReads: false));
     }
 

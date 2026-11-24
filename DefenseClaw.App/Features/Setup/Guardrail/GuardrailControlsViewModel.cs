@@ -353,8 +353,8 @@ public sealed partial class GuardrailControlsViewModel : ObservableObject
             var min = effective?.MinSeverity is { Length: > 0 } m ? m : hilt.MinSeverity;
             var where = key is null ? string.Empty : $" for {SelectedScope.Label}";
             HiltSummary = on == true
-                ? $"HILT is on{where}: confirmable actions at {(min.Length > 0 ? min : "the minimum severity")} or above ask for approval. CRITICAL always blocks."
-                : $"HILT is off{where}: risky actions are allowed or blocked without asking.";
+                ? $"HILT is on{where}. Confirmable actions at {(min.Length > 0 ? min : "the minimum severity")} or above ask for approval. CRITICAL always blocks."
+                : $"HILT is off{where}. Risky actions are allowed or blocked without asking.";
             HiltKey = on == true ? "Ok" : "Neutral";
             if (Array.IndexOf(GuardrailControlArgv.Severities.ToArray(), min) >= 0)
             {
@@ -363,7 +363,7 @@ public sealed partial class GuardrailControlsViewModel : ObservableObject
         }
         else if (_hilt is not null)
         {
-            HiltSummary = "The HILT setting could not be read from the CLI's output; the verbatim text is under Show CLI output.";
+            HiltSummary = "The HILT setting could not be read. The CLI output is under Show CLI output.";
             HiltKey = "Warn";
         }
 
@@ -380,7 +380,7 @@ public sealed partial class GuardrailControlsViewModel : ObservableObject
         }
         else if (_blockMessage is not null)
         {
-            CurrentBlockMessage = "The block message could not be read from the CLI's output; the verbatim text is under Show CLI output.";
+            CurrentBlockMessage = "The block message could not be read. The CLI output is under Show CLI output.";
             HasCustomBlockMessage = false;
         }
 
@@ -394,12 +394,12 @@ public sealed partial class GuardrailControlsViewModel : ObservableObject
 
             OnPropertyChanged(nameof(HasJudgeRows));
             var gate = judge.GateAll ? "every hook connector" : judge.Gate.Count > 0 ? string.Join(", ", judge.Gate) : "no hook connector";
-            JudgeSummary = $"The judge is {(judge.JudgeEnabled == true ? "on" : "off")}; the hook lane is open to {gate}. Hook timeout {(judge.HookTimeout.Length > 0 ? judge.HookTimeout : "unknown")}.";
+            JudgeSummary = $"The judge is {(judge.JudgeEnabled == true ? "on" : "off")}. Hook lane: {gate}. Hook timeout: {(judge.HookTimeout.Length > 0 ? judge.HookTimeout : "unknown")}.";
             JudgeKey = judge.JudgeEnabled == true && (judge.GateAll || judge.Gate.Count > 0) ? "Ok" : "Neutral";
         }
         else if (_judge is not null)
         {
-            JudgeSummary = "The judge gate could not be read from the CLI's output; the verbatim text is under Show CLI output.";
+            JudgeSummary = "The judge gate could not be read. The CLI output is under Show CLI output.";
             JudgeKey = "Warn";
         }
     }
@@ -432,12 +432,12 @@ public sealed partial class GuardrailControlsViewModel : ObservableObject
         Begin(
             on ? $"Turn HILT on at {severity}{scope}?" : $"Turn HILT off{scope}?",
             on
-                ? $"Human-in-the-loop pauses a confirmable action at {severity} or above and asks you to approve it, instead of allowing or blocking it silently. CRITICAL findings still block outright."
-                : "Risky actions are no longer paused for approval: they are allowed or blocked by policy alone. The minimum severity is kept.",
+                ? $"Human-in-the-loop asks you to approve a confirmable action at {severity} or above. CRITICAL findings still block."
+                : "Risky actions are no longer paused for approval. Policy alone allows or blocks them. The minimum severity is kept.",
             restart => GuardrailControlArgv.Hilt(on, severity, ScopeKey, restart),
             restart => BareScopeWarnings(
                 "Rewrites every connector's HILT",
-                "Without a connector scope this changes the global HILT policy and writes it to every active connector (the CLI does so for each one it lists). Choose a connector in Scope to change one only."));
+                "With no connector scope, this changes the global HILT policy for every active connector. Choose a connector in Scope to change one only."));
     }
 
     [RelayCommand]
@@ -452,11 +452,11 @@ public sealed partial class GuardrailControlsViewModel : ObservableObject
         var scope = ScopeLabel();
         Begin(
             $"Set the block message{scope}?",
-            $"Shown to the agent's user when an action is blocked and the verdict carries no reason of its own. New message: \"{text}\". Audit rows and notifications keep the real reason.",
+            $"Shown when a block verdict has no reason. New message: \"{text}\". Audit rows and notifications keep the real reason.",
             restart => GuardrailControlArgv.BlockMessage(text, ScopeKey, restart),
             restart => BareScopeWarnings(
                 "Overwrites every connector's message",
-                "Without a connector scope this sets the global message and replaces the per-connector override of every active connector, so a message set for one connector is lost. Choose a connector in Scope to change one only."));
+                "With no connector scope, this sets the global message and replaces every connector's own message. Choose a connector in Scope to change one only."));
     }
 
     [RelayCommand]
@@ -465,11 +465,11 @@ public sealed partial class GuardrailControlsViewModel : ObservableObject
         var scope = ScopeLabel();
         Begin(
             $"Clear the block message{scope}?",
-            "Reverts to the global message, or the built-in default when none is set. Audit rows and notifications are unaffected.",
+            "Reverts to the global message, or the built-in default if none is set.",
             restart => GuardrailControlArgv.BlockMessage(null, ScopeKey, restart),
             restart => BareScopeWarnings(
                 "Clears every connector's message",
-                "Without a connector scope this clears the global message and the per-connector override of every active connector. Choose a connector in Scope to clear one only."));
+                "With no connector scope, this clears the global message and every connector's own message. Choose a connector in Scope to clear one only."));
     }
 
     /// <summary>Opts a hook connector (or <c>all</c>) into the judge.</summary>
@@ -487,14 +487,14 @@ public sealed partial class GuardrailControlsViewModel : ObservableObject
         var all = string.Equals(target, GuardrailControlArgv.AllConnectors, StringComparison.OrdinalIgnoreCase);
         Begin(
             all ? "Send every hook connector's content to the LLM judge?" : $"Send {target} content to the LLM judge?",
-            "Opts the connector into the hook-lane LLM judge, which adds latency (up to the hook timeout) and an LLM call to every inspected hook event.",
+            "Opts the connector into the hook-lane LLM judge. It adds latency and an LLM call to each inspected hook event.",
             restart => GuardrailControlArgv.JudgeAdd(target, enable, timeout, restart),
             restart => _judge is { JudgeEnabled: false } && !enable
                 ? new[]
                 {
                     new CommandReviewWarning(
                         "The judge is off",
-                        "The gate has no effect until the judge itself is enabled. Tick \"Also turn the judge on\" in the controls, or enable it with the guardrail setup wizard."),
+                        "The gate has no effect until the judge is enabled. Tick \"Also turn the judge on\", or use the guardrail setup wizard."),
                 }
                 : Array.Empty<CommandReviewWarning>());
     }
@@ -513,8 +513,8 @@ public sealed partial class GuardrailControlsViewModel : ObservableObject
         Begin(
             all ? "Turn the hook-lane judge off for every connector?" : $"Stop sending {target} content to the LLM judge?",
             all
-                ? "Empties the hook gate, so no hook connector's content reaches the LLM judge. Regex scanning continues."
-                : "Takes the connector out of the hook gate. Regex scanning continues; the judge setting itself is not changed.",
+                ? "Empties the hook gate. No hook connector's content reaches the LLM judge. Regex scanning continues."
+                : "Takes the connector out of the hook gate. Regex scanning continues. The judge setting does not change.",
             restart => GuardrailControlArgv.JudgeRemove(target, restart),
             restart => Array.Empty<CommandReviewWarning>());
     }
@@ -563,7 +563,7 @@ public sealed partial class GuardrailControlsViewModel : ObservableObject
                 ? CommandReviewWarning.GatewayRestart()
                 : new CommandReviewWarning(
                     "Gateway not restarted",
-                    "The gateway is not restarted, so the change is saved but not yet in effect until it next restarts."),
+                    "Saved, but not in effect until the gateway restarts."),
         };
 
         var review = new CommandReview

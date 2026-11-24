@@ -271,7 +271,7 @@ public sealed partial class SetupPanelViewModel
                     var missing = IsLoading
                         ? "Reading the setup catalog from the CLI…"
                         : HasLoadError
-                            ? "The setup catalog could not be read, so this wizard cannot be opened. Re-read catalog tries again."
+                            ? "The setup catalog could not be read. Use Re-read catalog to try again."
                             : $"The installed DefenseClaw has no '{command}' command.";
                     return new SetupAreaState(null, false, missing, true, null, command + Environment.NewLine + missing);
                 }
@@ -285,18 +285,18 @@ public sealed partial class SetupPanelViewModel
             case SetupAreaRoute.ConnectorSetup:
             {
                 var roster = RemoveConnectorCard is { HasStateLine: true } remove ? remove.StateLine : null;
-                const string What = "Set up one connector, several at once (setup --connector …), or remove one. Each ends on its review.";
+                const string What = "Set up one or several connectors (setup --connector …), or remove one. Each ends on a review.";
                 return new SetupAreaState(null, blocked is null, blocked, false, roster, blocked is null ? What : What + Environment.NewLine + blocked);
             }
 
             case SetupAreaRoute.Credentials:
-                return new SetupAreaState(null, true, null, false, null, "Shows the Credentials card below: defenseclaw keys list, check and set.");
+                return new SetupAreaState(null, true, null, false, null, "Goes to the Credentials card below: defenseclaw keys list, check and set.");
 
             case SetupAreaRoute.GuardrailActions:
-                return new SetupAreaState(null, true, null, false, null, "Shows the guardrail quick controls below: status, enable or disable, hook fail mode.");
+                return new SetupAreaState(null, true, null, false, null, "Goes to the guardrail quick controls below: status, enable or disable, hook fail mode.");
 
             case SetupAreaRoute.AiDiscovery:
-                return new SetupAreaState(null, true, null, false, null, "Opens AI Discovery's tuning: mode, cadence, scope and sources, reviewed before anything runs.");
+                return new SetupAreaState(null, true, null, false, null, "Opens AI Discovery tuning: mode, cadence, scope and sources. Changes are reviewed first.");
 
             case SetupAreaRoute.Panel:
                 return new SetupAreaState(
@@ -305,7 +305,7 @@ public sealed partial class SetupPanelViewModel
                     null,
                     false,
                     null,
-                    "Opens the Registries panel (Discover): add, sync, approve and remove registries there. defenseclaw setup registry needs a terminal on Windows.");
+                    "Opens the Registries panel in Discover. defenseclaw setup registry needs a terminal on Windows.");
 
             case SetupAreaRoute.Unsupported:
                 return new SetupAreaState(null, false, spec.Blurb, true, null, spec.Blurb);

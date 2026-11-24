@@ -351,18 +351,18 @@ public sealed partial class RedactionFormViewModel : ObservableObject
     /// <summary>A line of caution under the summary for the operations whose effect is wider than their name.</summary>
     public string Caution => Operation.Operation switch
     {
-        RedactionOperation.RemoveAll => "Raw governed content is then kept in local SQLite and sent to every destination you configured. The managed enterprise destination, if there is one, stays locked.",
-        RedactionOperation.ApplyEverywhere => "Also removes the more specific profiles: every bucket, send policy and route follows this one. The managed enterprise destination, if there is one, stays locked.",
+        RedactionOperation.RemoveAll => "Raw governed content is then kept in local SQLite and sent to every destination you configured. A managed enterprise destination stays locked.",
+        RedactionOperation.ApplyEverywhere => "Every bucket, send policy and route follows this one, and more specific profiles are removed. A managed enterprise destination stays locked.",
         RedactionOperation.ApplyDefaults => "Only the global default changes. A bucket, send policy or route that names its own profile keeps it.",
         RedactionOperation.DefaultsReset => "The default profile becomes none (no redaction) again, and every signal is collected, unless a bucket says otherwise.",
-        RedactionOperation.BucketReset => "The bucket follows the global defaults again, whatever they are.",
-        RedactionOperation.ProfileSet => "A custom profile starts from sensitive, content or strict; a control you leave alone keeps what the profile has. The CLI refuses preserve for anything but metadata and identifiers, and a credential must be removed or replaced whole.",
+        RedactionOperation.BucketReset => "The bucket follows the global defaults again.",
+        RedactionOperation.ProfileSet => "A custom profile starts from sensitive, content or strict, and an untouched control keeps its setting. The CLI refuses preserve except for metadata and identifiers; credentials must be removed or replaced whole.",
         RedactionOperation.ProfileRemove => "Fails while something still uses the profile, unless you choose another profile to take over.",
         RedactionOperation.DestinationSend => "Replaces the destination's routes and any earlier send policy with this one.",
         RedactionOperation.DestinationInherit => "Removes the destination's own send policy and routes. It then takes everything it can, with the default profile.",
-        RedactionOperation.RouteAdd => "Routes are tried in order and the first match wins. A destination with a send policy switches to routes: the send policy is removed.",
-        RedactionOperation.RouteSet => "Rewrites the whole route and keeps its place. Pick a route and its current values are filled in; whatever you clear is dropped from it.",
-        RedactionOperation.RouteMove => "Only the order changes: the first route that matches an event still wins.",
+        RedactionOperation.RouteAdd => "Routes are tried in order and the first match wins. Adding one to a destination with a send policy removes the send policy.",
+        RedactionOperation.RouteSet => "Rewrites the whole route and keeps its place. Picking a route fills in its values, and anything you clear is dropped.",
+        RedactionOperation.RouteMove => "Only the order changes. The first matching route still wins.",
         RedactionOperation.RouteRemove => "Events the route used to send or drop then fall to the next route that matches, or to the destination's default.",
         _ => string.Empty,
     };
@@ -380,8 +380,8 @@ public sealed partial class RedactionFormViewModel : ObservableObject
             }
 
             return _destinations.Any(static d => d.IsConfigurable)
-                ? "Built-in destinations (local-sqlite, the managed enterprise one) are generated and read-only here, so they are not on the list."
-                : "You have no destination of your own yet. The built-in local-sqlite destination is generated and read-only here, so there is nothing to choose. Add a destination in Setup, then refresh.";
+                ? "Built-in destinations (local-sqlite and the managed enterprise one) are read-only and not listed."
+                : "No destination of your own yet. Built-in local-sqlite is read-only, so there is nothing to choose. Add a destination in Setup, then refresh.";
         }
     }
 

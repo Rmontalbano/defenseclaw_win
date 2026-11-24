@@ -58,7 +58,7 @@ public sealed class SetupReadinessTests
         var row = Row(inputs, "Required Credentials");
 
         Assert.Equal(ReadinessStatus.Fail, row.Status);
-        Assert.Equal("2 required credential(s) missing", row.Detail);
+        Assert.Equal("2 required credentials missing", row.Detail);
         Assert.Equal(ReadinessFixKind.Terminal, row.Fix!.Kind);
         Assert.Equal("defenseclaw keys fill-missing --yes", Argv(Assert.Single(row.Fix.Steps)));
     }
@@ -67,7 +67,7 @@ public sealed class SetupReadinessTests
     public void The_doctor_cache_counts_only_while_the_key_list_shows_nothing_missing()
     {
         var doctorOnly = Healthy() with { DoctorMissingCredentials = new[] { "EXAMPLE_A" } };
-        Assert.Equal("1 required credential(s) missing", Row(doctorOnly, "Required Credentials").Detail);
+        Assert.Equal("1 required credential missing", Row(doctorOnly, "Required Credentials").Detail);
 
         var listWins = doctorOnly with
         {
@@ -77,7 +77,7 @@ public sealed class SetupReadinessTests
                 new CredentialRow("Y", "Y", "F", "required", "unset", false, string.Empty),
             },
         };
-        Assert.Equal("2 required credential(s) missing", Row(listWins, "Required Credentials").Detail);
+        Assert.Equal("2 required credentials missing", Row(listWins, "Required Credentials").Detail);
     }
 
     [Theory]

@@ -92,25 +92,24 @@ public static class ConfigFieldCatalog
     private static readonly string[] Levels = { string.Empty, "CRITICAL", "HIGH", "MEDIUM", "LOW" };
 
     private const string HookFailModeReason =
-        "Hook fail mode is not edited here: change it on the Setup panel (Guardrail) or with defenseclaw guardrail fail-mode, which update the " +
-        "installed hook registration as well as config.yaml.";
+        "Not edited here. Change it on the Setup panel (Guardrail) or with defenseclaw guardrail fail-mode, which also update the hook registration.";
 
     /// <summary>
     /// The same field on a per-user 1.0.4 runtime: a saved value is not applied at all, because the gateway-outage mode follows the policy tier, and the
     /// runtime's own pointer for failing closed is the strict rule pack (<c>cmd_guardrail.py</c>, <c>_PER_USER_OUTAGE_RULE</c>).
     /// </summary>
     private const string HookFailModeReasonFollowsTier =
-        "Hook fail mode is not edited here, and this runtime does not apply a saved per-user value: the gateway-outage mode follows the connector's policy tier " +
-        "(a strict rule pack fails closed, the default and permissive packs fail open). To fail closed during an outage, run " + HookFailModeRule.StrictPackCommand + ".";
+        "Not edited here. This runtime ignores a saved per-user value. During a gateway outage the policy tier decides: a strict rule pack fails closed, " +
+        "the default and permissive packs fail open. To fail closed, run " + HookFailModeRule.StrictPackCommand + ".";
 
     /// <summary>
     /// The same field on a per-user 1.0.5 runtime (CUST-397): a saved value wins over the policy tier, which decides only when nothing is saved
     /// (<c>_PER_USER_OUTAGE_RULE</c> at tag 1.0.5; <c>config.py</c> <c>outage_block_hint</c>).
     /// </summary>
     private const string HookFailModeReasonSavedWins =
-        "Hook fail mode is not edited here: change it on the Setup panel (Guardrail) or with defenseclaw guardrail fail-mode, which update the installed hook " +
-        "registration as well as config.yaml. On this runtime a saved value decides what a connector's hook does while the gateway is not running (the connector's " +
-        "own, else the global one); with none saved, the policy tier decides (a strict rule pack blocks, the default and permissive packs let the call run with a warning).";
+        "Not edited here. Change it on the Setup panel (Guardrail) or with defenseclaw guardrail fail-mode, which also update the hook registration. " +
+        "While the gateway is down, a saved value decides (the connector's, else the global one), and with none saved, the policy tier decides: " +
+        "a strict rule pack blocks, the default and permissive packs allow the call with a warning.";
 
     private static string? HookFailModeReasonFor(ConfigChoiceProfile profile) =>
         profile.SavedFailModeWins ? HookFailModeReasonSavedWins : profile.SavedFailModeIgnored ? HookFailModeReasonFollowsTier : HookFailModeReason;
@@ -173,15 +172,14 @@ public static class ConfigFieldCatalog
     }
 
     private const string CompatibleProviderHint =
-        "openai-compatible and custom-openai have no default address: set a base URL here or in the top-level llm block.";
+        "openai-compatible and custom-openai have no default address. Set a base URL here or in the top-level llm block.";
 
     private const string ExtraBodyHint =
-        "Extra fields added to the request body of an OpenAI-compatible LLM judge, for example chat_template_kwargs: {enable_thinking: false} to turn off a model's " +
-        "reasoning step. Used only when the judge has a base URL. Judge-owned and credential-like names are refused. At most 32 fields. " +
-        "Releases before 1.0.8 refuse it; unset it before you go back.";
+        "Extra request-body fields for an OpenAI-compatible LLM judge, such as chat_template_kwargs: {enable_thinking: false}. " +
+        "Needs a base URL, at most 32 fields. Releases before 1.0.8 refuse it, so unset it before downgrading.";
 
     private const string MiddlewareRetiredReason =
-        "Retired in 1.0.8: it had no effect. config set refuses it; remove it from config.yaml. Existing files with the key still load.";
+        "Retired in 1.0.8 and has no effect. config set refuses it. Remove it from config.yaml; files that still have it load.";
 
     /// <summary>Every connector name the profile's runtime knows, in the order its pickers show them (<c>CONNECTORS</c>).</summary>
     public static IReadOnlyList<string> AllConnectors(ConfigChoiceProfile profile)
@@ -547,10 +545,10 @@ public static class ConfigFieldCatalog
 
         // ---- Keys of 1.0.4 (config.py, schemas/config/v8): shown only for a runtime that has them (Since104). CUST-377.
         Add("openshell.trusted_ca_bundle", new Entry(
-            _ => "PEM file of CA certificates sandboxes trust besides the image's public roots (a TLS-inspecting proxy's root): an absolute path or one starting with ~/. Blank: none. Images built while it is set carry them.",
+            _ => "PEM file of extra CA certificates sandboxes trust. Absolute or ~/ path; blank for none. Applies to images built while set.",
             Since104: true));
         Add("scanners.mcp_scanner.unverified_server", new Entry(
-            _ => "What mcp set and install admission do with an MCP server they could not verify (its scan did not finish, DNS failure included): warn adds or keeps it with a warning and an audit record; block refuses it. Blank is warn on a per-user host.",
+            _ => "For an MCP server that could not be verified: warn adds it with a warning and audit record, block refuses it. Blank is warn on a per-user host.",
             _ => new[] { "warn", "block" },
             Since104: true));
         foreach (var level in new[] { "block_at", "alert_at" })
