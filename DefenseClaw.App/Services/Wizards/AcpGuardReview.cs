@@ -55,14 +55,13 @@ public static class AcpGuardReview
         {
             warnings.Add(new CommandReviewWarning(
                 ActionModeTitle,
-                "Action mode: the guard blocks any prompt, agent output, permission, file or terminal step that policy denies, and a step it cannot check is " +
-                "refused (the profile fails closed). A blocked prompt ends that turn in the editor. Run observe mode first if you have not seen what this policy " +
-                "would block." + (managed ? " The central profile must already be in action mode, or the CLI refuses." : string.Empty)));
+                "Action mode blocks any prompt, agent output, permission, file or terminal step that policy denies, and refuses a step it cannot check. " +
+                "A blocked prompt ends that turn. Try observe mode first." + (managed ? " The central profile must already be in action mode, or the CLI refuses." : string.Empty)));
         }
 
         var file = client switch
         {
-            "zed" => "%APPDATA%\\Zed\\settings.json, rewritten as plain JSON (comments after the opening block and trailing commas are dropped)",
+            "zed" => "%APPDATA%\\Zed\\settings.json, rewritten as plain JSON so comments after the opening block and trailing commas are dropped",
             "jetbrains" => "%USERPROFILE%\\.jetbrains\\acp.json",
             _ => "the editor's settings file",
         };
@@ -70,15 +69,14 @@ public static class AcpGuardReview
             EditorFileTitle,
             "Writes a DefenseClaw entry for " + (agent.Length > 0 ? agent : "the agent") + " into " + file + ", and " +
             (managed ? "a contract lock beside the administrator's token" : "a private token and a contract lock in the data directory's acp folder") +
-            "; a failed write rolls all of it back. It runs as you: no administrator rights are needed."));
+            ". A failed write rolls all of it back."));
 
         if (managed)
         {
             warnings.Add(new CommandReviewWarning(
                 ManagedTitle,
-                "Writes only your user-side files and changes no policy. Your administrator must already have enrolled this editor and agent " +
-                "(defenseclaw-gateway enterprise acp enroll, run elevated), which is what put the token file in place; the CLI reads that file itself and its " +
-                "contents never appear here. If the enrollment told you to run defenseclaw-gateway enterprise acp setup instead, run that: this app does not."));
+                "Only your user-side files change and no policy is edited. Your administrator must enroll this editor and agent first with " +
+                "defenseclaw-gateway enterprise acp enroll, run elevated. If told to run defenseclaw-gateway enterprise acp setup instead, run it yourself."));
         }
 
         return warnings;

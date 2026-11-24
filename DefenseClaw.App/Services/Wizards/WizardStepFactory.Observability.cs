@@ -29,12 +29,11 @@ public static partial class WizardStepFactory
         {
             AllowPrivateNetworksFlag => field.WithWording(
                 "Allow a private or loopback endpoint",
-                "Off by default, and the CLI refuses an endpoint on this computer or a private network without it. Turn it on only for a collector you run yourself " +
-                "(for example one on 127.0.0.1 or 10.x). Telemetry then goes to that address, so check it is yours. For the bundled local stack, use the local-otlp " +
-                "preset instead."),
+                "Off by default, and without it the CLI refuses an endpoint on this computer or a private network. Turn it on only for a collector you run yourself. " +
+                "For the bundled local stack, use the local-otlp preset instead."),
             PlaintextFlag => field.WithWording(
                 "Send without TLS",
-                "Off by default. Sends OTLP without TLS, for a collector you run yourself that has none; use it with a private or loopback endpoint. " +
+                "Off by default. Sends OTLP without TLS to a collector you run that has none, on a private or loopback endpoint. " +
                 "Anyone on the network path can read what is sent."),
             _ => field,
         };

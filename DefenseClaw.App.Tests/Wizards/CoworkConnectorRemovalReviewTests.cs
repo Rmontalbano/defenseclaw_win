@@ -67,7 +67,7 @@ public sealed class CoworkConnectorRemovalReviewTests : IDisposable
         var bar = Assert.Single(Bars(services, "setup", "remove", name, "--yes"));
 
         Assert.Equal("Cowork stops being protected", bar.Title);
-        Assert.Equal("Cowork is no longer protected after this; remove the DefenseClaw plugin in Claude (Customize > Plugins).", bar.Message);
+        Assert.Equal("Cowork is no longer protected after this. Remove the DefenseClaw plugin under Customize > Plugins in Claude.", bar.Message);
     }
 
     [Theory]

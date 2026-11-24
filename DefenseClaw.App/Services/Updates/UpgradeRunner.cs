@@ -515,9 +515,8 @@ public sealed class UpgradeRunner
                 ResolverLayoutPresent = true,
                 Detail =
                     $"The venv layout the resolver script expects is present ({venvPython}), so " +
-                    "defenseclaw-upgrade.ps1 can run here — with its cosign-verified release contract, its " +
-                    "two-phase journal and its automatic rollback. The Setup installer remains available as " +
-                    "the blunter alternative.",
+                    "defenseclaw-upgrade.ps1 can run here. It has a cosign-verified release contract, a " +
+                    "two-phase journal and automatic rollback. The Setup installer is also available.",
             };
         }
 
@@ -529,15 +528,12 @@ public sealed class UpgradeRunner
             RecommendedChannel = UpgradeChannel.SetupInstaller,
             ResolverLayoutPresent = false,
             Detail =
-                $"{venvPython} does not exist on this machine. Run live here (0.8.7 → 0.8.9), the resolver " +
-                "script stopped with exactly: \"Upgrade resolver stopped: Managed Python not found at " +
-                $"{venvPython}.\" It assumes a POSIX-style venv layout this install does not have" +
+                $"{venvPython} does not exist on this machine. The resolver script stops with " +
+                $"\"Upgrade resolver stopped: Managed Python not found at {venvPython}.\" " +
                 (runtimePresent
-                    ? $" — the managed runtime is under {runtimeDirectory}, which is where a native Setup " +
-                      "install puts it."
-                    : $"; native Setup installs put the managed runtime under {runtimeDirectory} instead.") +
-                " 0.8.10's defenseclaw-upgrade.ps1 is byte-identical to 0.8.9's, so a newer release does not " +
-                "fix it. On this layout the Setup exe, run over the top, is the channel that works.",
+                    ? $"The managed runtime is under {runtimeDirectory}, where a native Setup install puts it. "
+                    : $"A native Setup install puts the managed runtime under {runtimeDirectory}. ") +
+                "On this layout use the Setup exe.",
         };
     }
 
@@ -608,24 +604,21 @@ public sealed class UpgradeRunner
             {
                 Availability = CosignAvailability.FoundOffPath,
                 Path = offPath,
-                Detail = $"cosign exists at {offPath}, but it is not on the PATH this app would hand to " +
-                         "powershell.exe — so the resolver would still refuse to run.",
+                Detail = $"cosign exists at {offPath} but is not on the PATH this app passes to " +
+                         "powershell.exe, so the resolver would still refuse to run.",
                 InstallGuidance =
-                    "cosign was installed after this app started. Restart DefenseClaw for Windows (or the " +
-                    "whole session) so the updated PATH is inherited, then re-check.",
+                    "Restart DefenseClaw for Windows so it picks up the updated PATH, then re-check.",
             };
         }
 
         return new CosignStatus
         {
             Availability = CosignAvailability.Missing,
-            Detail = "cosign was not found. The upgrade script verifies the signed release contract with it " +
-                     "before touching anything, and refuses to run without it.",
+            Detail = "cosign was not found. The upgrade script needs it to verify the signed release contract and refuses to run without it.",
             InstallGuidance =
                 "Install it with:  winget install Sigstore.Cosign\n" +
-                "The winget package lays the binary down as cosign-windows-amd64.exe, so copy it to cosign.exe " +
-                "in the same folder — the script invokes a bare 'cosign'. Then restart this app so the new PATH " +
-                "is picked up, and re-check.",
+                "winget installs cosign-windows-amd64.exe. Copy it to cosign.exe in the same folder, because the script runs a bare 'cosign'. " +
+                "Then restart this app and re-check.",
         };
     }
 
@@ -698,10 +691,9 @@ public sealed class UpgradeRunner
                 SizeBytes = bytes.Length,
                 Summary = $"Aborted: {assetName} came back as only {bytes.Length:N0} bytes.",
                 ErrorMessage =
-                    $"{assetName} on release {version} is {bytes.Length:N0} bytes; the real script is " +
-                    $"over 100 KB. This is the placeholder-stub pattern seen on some releases — a tiny file " +
-                    "published under a real asset name, whose hash is still listed in the release's " +
-                    "checksums.txt. Nothing was written to disk. Check the release page before upgrading.",
+                    $"{assetName} on release {version} is {bytes.Length:N0} bytes, but the real script is " +
+                    "over 100 KB. This looks like a placeholder stub whose hash is still listed in checksums.txt. " +
+                    "Nothing was written to disk. Check the release page before upgrading.",
             };
         }
 
@@ -734,7 +726,7 @@ public sealed class UpgradeRunner
                 ErrorMessage =
                     $"The script downloaded ({bytes.Length:N0} bytes, SHA-256 {computed}), but {ChecksumsAssetName} " +
                     $"for release {version} could not be read: {checksumsError.ErrorMessage} Nothing was written to " +
-                    "disk — an unverified resolver is exactly what this step exists to refuse.",
+                    "disk. An unverified resolver is refused.",
             };
         }
 
@@ -772,8 +764,8 @@ public sealed class UpgradeRunner
                 Summary = "Aborted: the download's SHA-256 does not match the release's checksums.txt.",
                 ErrorMessage =
                     $"{assetName} downloaded from release {version} hashes to {computed}, but " +
-                    $"{ChecksumsAssetName} lists {expected}. Nothing was written to disk. Do not run this script; " +
-                    "re-check later, and treat a persistent mismatch as a supply-chain problem worth reporting.",
+                    $"{ChecksumsAssetName} lists {expected}. Nothing was written to disk. Do not run this script. " +
+                    "Check again later and report a persistent mismatch.",
             };
         }
 
@@ -882,8 +874,7 @@ public sealed class UpgradeRunner
                 Summary = $"Aborted before downloading: {ChecksumsAssetName} could not be read.",
                 ErrorMessage =
                     $"{ChecksumsAssetName} for release {version} could not be read: {checksumsError.ErrorMessage} " +
-                    "The installer was not downloaded — without the checksum entry there would be nothing to " +
-                    "verify the download against.",
+                    "The installer was not downloaded because there would be no checksum to verify it against.",
             };
         }
 
@@ -899,13 +890,12 @@ public sealed class UpgradeRunner
                 Summary = $"Release {version} ships no {InstallerAssetName}" +
                           (hasInstallScript ? $"; it is upgraded with {InstallScriptAssetName}." : "."),
                 ErrorMessage =
-                    $"Release {version} does not ship {InstallerAssetName} (its {ChecksumsAssetName} has no line for it), so there is " +
-                    "nothing to verify or run on the Setup installer channel. " +
+                    $"Release {version} does not ship {InstallerAssetName} ({ChecksumsAssetName} has no line for it), so there is " +
+                    "nothing to run on the Setup installer channel. " +
                     (hasInstallScript
-                        ? $"This release is upgraded with its {InstallScriptAssetName} instead: switch to the install.ps1 channel in this card " +
-                          "(it is chosen automatically for 1.0.0 and later)."
+                        ? $"Upgrade with its {InstallScriptAssetName} instead, on the install.ps1 channel in this card."
                         : "Check the release page for how it is installed.") +
-                    " This is not a verification failure and nothing was downloaded.",
+                    " This is not a verification failure. Nothing was downloaded.",
             };
         }
 
@@ -965,8 +955,7 @@ public sealed class UpgradeRunner
                         Summary = $"Aborted: {InstallerAssetName} advertises {declaredLength:N0} bytes.",
                         ErrorMessage =
                             $"{InstallerAssetName} on release {version} advertises {declaredLength:N0} bytes, past " +
-                            $"the {MaximumPlausibleInstallerBytes:N0}-byte sanity ceiling. The body was never read " +
-                            "and nothing was written to disk.",
+                            $"the {MaximumPlausibleInstallerBytes:N0}-byte limit. Nothing was read or written to disk.",
                     };
                 }
 
@@ -985,7 +974,7 @@ public sealed class UpgradeRunner
                         Summary = $"Aborted: {InstallerAssetName} exceeded the size ceiling mid-download.",
                         ErrorMessage =
                             $"{InstallerAssetName} on release {version} passed {MaximumPlausibleInstallerBytes:N0} " +
-                            "bytes while streaming, so the download was cut off. The partial file was deleted.",
+                            "bytes, so the download was stopped and the partial file deleted.",
                     };
                 }
                 catch (Exception ex) when (ex is HttpRequestException or IOException)
@@ -1020,11 +1009,9 @@ public sealed class UpgradeRunner
                     SizeBytes = totalRead,
                     Summary = $"Aborted: {InstallerAssetName} came back as only {totalRead:N0} bytes.",
                     ErrorMessage =
-                        $"{InstallerAssetName} on release {version} is {totalRead:N0} bytes; the real 0.8.10 " +
-                        "installer is 270,013,440 bytes. This is the placeholder-stub pattern seen on some " +
-                        "releases — the known-bad stubs are 133 bytes, and their hashes are still listed in " +
-                        $"the release's {ChecksumsAssetName}, so a hash check alone would wave " +
-                        "them through. The partial download was deleted. Check the release page before upgrading.",
+                        $"{InstallerAssetName} on release {version} is {totalRead:N0} bytes, but the real 0.8.10 " +
+                        "installer is 270,013,440 bytes. This looks like a placeholder stub whose hash is still listed in " +
+                        $"{ChecksumsAssetName}. The partial download was deleted. Check the release page before upgrading.",
                 };
             }
 
@@ -1041,8 +1028,7 @@ public sealed class UpgradeRunner
                     ErrorMessage =
                         $"{InstallerAssetName} downloaded from release {version} hashes to {computed}, but " +
                         $"{ChecksumsAssetName} lists {expected}. The partial download was deleted. Do not run this " +
-                        "installer; re-check later, and treat a persistent mismatch as a supply-chain problem " +
-                        "worth reporting.",
+                        "installer. Check again later and report a persistent mismatch.",
                 };
             }
 
@@ -1512,8 +1498,8 @@ public sealed class UpgradeRunner
             response.Dispose();
             return (null, Failure(UpgradeStagingOutcome.RateLimited,
                 "GitHub rate-limited the download.",
-                $"GitHub returned HTTP {(int)response.StatusCode} for {url}. This is the same " +
-                "unauthenticated rate limit the version check hits (60 requests/hour/IP); try again later."));
+                $"GitHub returned HTTP {(int)response.StatusCode} for {url}. This is GitHub's " +
+                "rate limit (60 requests per hour per IP). Try again later."));
         }
 
         if (response.StatusCode == HttpStatusCode.NotFound)
@@ -1521,8 +1507,8 @@ public sealed class UpgradeRunner
             response.Dispose();
             return (null, Failure(UpgradeStagingOutcome.DownloadFailed,
                 "That release does not publish this asset.",
-                $"GitHub returned HTTP 404 for {url}. The release exists but does not carry that asset, " +
-                "or the tag is not what this app thinks it is."));
+                $"GitHub returned HTTP 404 for {url}. The release does not carry that asset, " +
+                "or the tag is wrong."));
         }
 
         if (!response.IsSuccessStatusCode)

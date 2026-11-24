@@ -42,26 +42,25 @@ public static class WizardCautions
         {
             warnings.Add(new CommandReviewWarning(
                 PingTitle,
-                "After saving, the CLI sends one request - the message \"ping\", asking for one token - to the provider's endpoint, with the key that " +
-                "the environment variable you named holds. It is a real call: the provider can bill, rate-limit or log it. The settings are saved " +
-                "whether or not the provider answers, and the result is printed in the output."));
+                "After saving, the CLI sends one \"ping\" request for one token to the provider, with the key from the variable you named. " +
+                "The provider can bill, rate-limit or log it, and the settings are saved either way."));
         }
 
         if (InsecureFlags.Any(flag => HasFlag(options, flag)))
         {
             warnings.Add(new CommandReviewWarning(
                 InsecureTlsTitle,
-                "The CLI will not check this endpoint's certificate, so anyone on the network path can read what is sent to it, the API key " +
-                "included. The CLI describes this option as for lab use only; give it the endpoint's CA bundle instead if you can."));
+                "The CLI will not check this endpoint's certificate, so anyone on the network path can read what is sent, including the API key. " +
+                "The CLI marks this option lab use only. Give it the endpoint's CA bundle instead if you can."));
         }
 
         if (IsObservabilityAdd(options) && HasFlag(options, "--allow-private-networks"))
         {
             warnings.Add(new CommandReviewWarning(
                 PrivateNetworkTitle,
-                "The destination may be an address on this computer or a private network, which the CLI otherwise refuses. Telemetry (traces, metrics or logs, as chosen) " +
-                "will be sent there" + (HasFlag(options, "--plaintext") ? ", without TLS, so anyone on the path can read it" : string.Empty) +
-                ". Do this only for a collector you run yourself."));
+                "Telemetry goes to an address on this computer or a private network, which the CLI normally refuses" +
+                (HasFlag(options, "--plaintext") ? ", without TLS, so anyone on the path can read it" : string.Empty) +
+                ". Use this only for a collector you run."));
         }
 
         if (GuardrailScope.IsDisableCommand(argv))
@@ -90,11 +89,10 @@ public static class WizardCautions
     {
         var index = options.ToList().FindIndex(a => string.Equals(a, "--connector", StringComparison.Ordinal));
         var scope = index >= 0 && index + 1 < options.Count
-            ? $"Only {options[index + 1]} is affected: its peers keep running, and its policy is kept for a later enable."
-            : "No connector is named, so this is the global switch: the guardrail goes off for every active connector.";
+            ? $"Only {options[index + 1]} is affected and its policy is kept for a later enable."
+            : "No connector is named, so this is the global switch and it applies to every active connector.";
 
-        return "Disabling tears down the connector hooks (for example the live Claude Code hooks), so agents on this machine run without " +
-               "DefenseClaw protection until the guardrail is enabled again. " + scope;
+        return "Disabling removes the connector hooks, so agents on this machine run unprotected until you enable the guardrail again. " + scope;
     }
 
     private static bool IsObservabilityAdd(IReadOnlyList<string> options) =>

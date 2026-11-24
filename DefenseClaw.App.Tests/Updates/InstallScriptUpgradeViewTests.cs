@@ -598,7 +598,7 @@ public sealed partial class InstallScriptUpgradeViewTests : IDisposable
             Assert.Equal("Ok", rig.Vm.LastInstallToneKey);
             Assert.True(rig.Vm.HasLastInstallLog);
             Assert.Equal("Read at 14:05", rig.Vm.ReadAtText);
-            Assert.Equal("Download and verify install.ps1 first (Download and verify, above); the rollback runs that verified script.", rig.Vm.RollbackBlockedReason);
+            Assert.Equal("Download and verify install.ps1 first. The rollback runs that verified script.", rig.Vm.RollbackBlockedReason);
         });
     }
 
@@ -1080,7 +1080,7 @@ public sealed partial class InstallScriptUpgradeViewTests : IDisposable
         {
             Assert.Equal("Roll back to 1.0.4…", rig.Vm.RollbackLabel);
             Assert.StartsWith("The installer will swap back to the previous install. Codex was updated after DefenseClaw 1.0.4 set up Codex 0.46.0.", rig.Vm.RollbackNote, StringComparison.Ordinal);
-            Assert.Contains("if it cannot, it refuses the rollback and nothing is changed", rig.Vm.RollbackNote, StringComparison.Ordinal);
+            Assert.Contains("If it cannot, it refuses the rollback and changes nothing", rig.Vm.RollbackNote, StringComparison.Ordinal);
         });
     }
 

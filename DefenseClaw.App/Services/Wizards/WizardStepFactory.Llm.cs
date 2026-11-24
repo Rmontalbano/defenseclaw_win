@@ -169,7 +169,7 @@ public static partial class WizardStepFactory
                 PageOf(
                     BedrockPage,
                     Title + "AWS Bedrock",
-                    "Region and sign-in for Bedrock. Credentials are referenced by the NAME of an environment variable, never typed here.",
+                    "Region and sign-in for Bedrock. Credentials are given as environment variable NAMES and are not typed here.",
                     GateOf(Conditions.Append(Provider("bedrock")).ToArray()),
                     F("bedrock-region"),
                     F("bedrock-auth-mode"),
@@ -235,7 +235,7 @@ public static partial class WizardStepFactory
             PageOf(
                 WizardPages.LlmKey,
                 "Key and endpoint",
-                "The key is referenced by the NAME of an environment variable, which is what config.yaml stores. Type the key itself in the box below (the review stores it with defenseclaw keys set, then applies this), or store it once yourself with defenseclaw keys set.",
+                "Give the NAME of the environment variable that holds the key, as config.yaml stores it. Type the key in the box below and the review stores it with defenseclaw keys set, or store it yourself first.",
                 NoGate,
                 F("--api-key-env"),
                 F("--api-key"),
@@ -261,12 +261,12 @@ public static partial class WizardStepFactory
         steps.Add(PageOf(
             WizardPages.LlmApply,
             "Apply",
-            "Copy a sibling component's settings in first if you want to start from them, and check afterwards that the provider answers.",
+            "Copy a sibling component's settings first to start from them, then check that the provider answers.",
             NoGate,
             F("--inherit-from"),
             F("--ping", f => f.WithWording(
                 "Ping after saving",
-                f.Help + " That is a real request to the provider's endpoint, made by the CLI with the key your variable holds, so it can be billed or rate-limited; it is one message of one word asking for one token.")),
+                f.Help + " This is a real request to the provider's endpoint with your key, so it can be billed or rate-limited. It asks for one token.")),
             F("--non-interactive")));
 
         return Compact(steps.ToArray());

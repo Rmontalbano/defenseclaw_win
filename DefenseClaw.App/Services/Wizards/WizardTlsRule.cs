@@ -38,8 +38,8 @@ internal static class WizardTlsRule
                 values[bundle.Id].Trim().Length > 0 &&
                 string.Equals(values[skip.Id].Trim(), ToggleValues.On, StringComparison.OrdinalIgnoreCase))
             {
-                return $"Use either a CA bundle ({bundleFlag}) or skip verification ({skipFlag}), not both: the CLI refuses the pair. " +
-                       "A bundle keeps the endpoint verified; skipping is for a lab.";
+                return $"Use a CA bundle ({bundleFlag}) or skip verification ({skipFlag}), but not both, because the CLI refuses the pair. " +
+                       "A bundle keeps the endpoint verified and skipping is for a lab.";
             }
         }
 

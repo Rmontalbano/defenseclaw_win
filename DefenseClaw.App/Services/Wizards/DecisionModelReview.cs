@@ -53,7 +53,7 @@ public static class DecisionModelReview
         {
             warnings.Add(new CommandReviewWarning(
                 RollbackTitle,
-                "This writes decision_model.hook_connectors. Releases before 1.0.7 refuse this key (config.yaml no longer loads), so clear it before you go back: " +
+                "This writes decision_model.hook_connectors, which releases before 1.0.7 refuse, so config.yaml no longer loads. Before going back, clear it with " +
                 "defenseclaw setup decision-model --connectors \"\" --non-interactive."));
         }
 
@@ -66,16 +66,16 @@ public static class DecisionModelReview
         {
             warnings.Add(new CommandReviewWarning(
                 RollbackTitle,
-                "Releases before 1.0.10 refuse the decision_model keys added in 1.0.10 (protocol, block_risk_score, escalate_rule_flagged, history_turns, " +
-                "history_tool_results, flow_guard): rolling back to 1.0.9 or earlier needs decision_model.protocol removed first."));
+                "Releases before 1.0.10 refuse the new decision_model keys protocol, block_risk_score, escalate_rule_flagged, history_turns, " +
+                "history_tool_results and flow_guard. Rolling back to 1.0.9 or earlier needs decision_model.protocol removed first."));
 
             // What the command leaves out is what config.yaml already holds (the CLI sets only the fields it is given).
             if (!HasSetting(argv, "--base-url", config?.Text("decision_model", "base_url")) || !HasSetting(argv, "--model", config?.Text("decision_model", "model")))
             {
                 warnings.Add(new CommandReviewWarning(
                     GeminiNeedsEndpointTitle,
-                    "Gemini Decision 1 needs --base-url (https://generativelanguage.googleapis.com/v1beta/decisions) and --model (gemini-decision-1) when the decision " +
-                    "model is turned on; setup fills in nothing in non-interactive mode."));
+                    "Gemini Decision 1 needs --base-url https://generativelanguage.googleapis.com/v1beta/decisions and --model gemini-decision-1 when the decision " +
+                    "model is on, and setup fills in nothing in non-interactive mode."));
             }
         }
 
@@ -83,7 +83,7 @@ public static class DecisionModelReview
         {
             warnings.Add(new CommandReviewWarning(
                 PingTitle,
-                "After saving, the CLI sends one benign request to the decision model endpoint. The settings are saved whether or not it answers."));
+                "After saving, the CLI sends one request to the decision model endpoint. Settings are saved whether or not it answers."));
         }
 
         return warnings;

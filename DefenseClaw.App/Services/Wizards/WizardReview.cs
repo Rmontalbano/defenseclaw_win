@@ -39,7 +39,6 @@ public static class WizardReview
     public static CommandReviewWarning? SecretValueWarning(IReadOnlyList<string> argv) =>
         SecretFieldWarnings.ForArgv(
             argv,
-            "This command has no option to read it from an environment variable, so it has to go on the command line. If that " +
-            "matters, enter a placeholder here and set the real value in config.yaml afterwards (Config editor), where it " +
-            "stays off the command line.");
+            "This command cannot read it from an environment variable, so it goes on the command line. To keep it off, " +
+            "enter a placeholder here and set the real value in config.yaml afterwards in the Config editor.");
 }

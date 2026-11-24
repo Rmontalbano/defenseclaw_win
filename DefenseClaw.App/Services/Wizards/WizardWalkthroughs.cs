@@ -186,12 +186,12 @@ public static partial class WizardWalkthroughs
             {
                 FieldId = o11y.Id,
                 Title = "Splunk Observability Cloud",
-                Summary = "Sends DefenseClaw's traces and metrics (and, if you choose, logs) to Splunk Observability Cloud over OTLP HTTP. Nothing runs on this machine.",
+                Summary = "Sends DefenseClaw's traces, metrics and optionally logs to Splunk Observability Cloud over OTLP HTTP. Nothing runs on this machine.",
                 CliSays = Says("--o11y"),
                 Needs = new[]
                 {
-                    "A Splunk Observability Cloud access token with ingest permission. You type it on the next page; it never goes on the command line.",
-                    "Your realm — the short region code in your Observability Cloud URL, such as us0, us1 or eu0.",
+                    "A Splunk Observability Cloud access token with ingest permission. You type it on the next page and it never goes on the command line.",
+                    "Your realm, the region code in your Observability Cloud URL, such as us0, us1 or eu0.",
                 },
                 Links = new[]
                 {
@@ -208,20 +208,20 @@ public static partial class WizardWalkthroughs
             {
                 FieldId = logs.Id,
                 Title = "Local Splunk (Docker)",
-                Summary = "Runs a Splunk instance on this machine in Docker (Splunk Free mode) and sends DefenseClaw's logs to it over HEC, with dashboards you open at http://127.0.0.1:8000.",
+                Summary = "Runs Splunk in Docker on this machine in Free mode and sends DefenseClaw's logs to it over HEC. Dashboards open at http://127.0.0.1:8000.",
                 CliSays = Says("--logs"),
                 Needs = new[]
                 {
-                    "Docker Desktop running with Linux containers. The CLI's Windows path certifies Pro, Enterprise or Education with the Hyper-V backend, and refuses the WSL 2 backend.",
-                    "Your acceptance of the Splunk General Terms (a switch on the page after this one).",
+                    "Docker Desktop running Linux containers. On Windows the CLI accepts Pro, Enterprise or Education with the Hyper-V backend and refuses the WSL 2 backend.",
+                    "Your acceptance of the Splunk General Terms, a switch on the next page.",
                 },
                 Links = new[]
                 {
                     new WizardGuideLink("Install Docker Desktop", DockerInstallUrl),
                     new WizardGuideLink("Splunk General Terms", SplunkTermsUrl),
                 },
-                WillDo = "Pulls and starts Splunk containers (and their volumes) on this machine, then saves the destination and reloads the gateway, which restarts it if it is running (the review says so). " +
-                         "It is the one pipeline that starts something here, and it can take a few minutes the first time.",
+                WillDo = "Pulls and starts Splunk containers and their volumes on this machine, saves the destination and reloads the gateway, which restarts it if it is running. " +
+                         "The first run can take a few minutes.",
                 Requires = WizardGuideRequirement.Docker,
             });
         }
@@ -232,28 +232,28 @@ public static partial class WizardWalkthroughs
             {
                 FieldId = enterprise.Id,
                 Title = "Splunk Enterprise (HEC)",
-                Summary = "Sends DefenseClaw's logs to a Splunk Enterprise or Splunk Cloud Platform HTTP Event Collector you already run. No Docker and nothing local.",
+                Summary = "Sends DefenseClaw's logs to a Splunk Enterprise or Splunk Cloud Platform HTTP Event Collector you already run. Nothing runs locally.",
                 CliSays = Says("--enterprise"),
                 Needs = new[]
                 {
                     "The HEC endpoint URL, for example https://splunk.example.com:8088/services/collector/event.",
-                    "A HEC token with access to your index. You type it on the next page; it never goes on the command line.",
+                    "A HEC token with access to your index. You type it on the next page and it never goes on the command line.",
                 },
                 Links = new[]
                 {
                     new WizardGuideLink("Set up the HTTP Event Collector", "https://help.splunk.com/en/splunk-enterprise/get-started/get-data-in/10.6/get-data-with-http-event-collector/set-up-and-use-http-event-collector-in-splunk-web"),
                 },
                 WillDo = ProbesBeforeSaving(Says("--enterprise"))
-                    ? "Sends one live HEC probe to your endpoint first, and only if it succeeds writes a Splunk Enterprise destination and stores the token in ~/.defenseclaw/.env. " +
-                      "A failed probe saves nothing and the command exits 1 — turn on \"Skip test\" on that pipeline's page to save without the probe."
-                    : "Writes a Splunk Enterprise destination and stores the token in ~/.defenseclaw/.env, then sends one best-effort HEC probe to your endpoint — " +
-                      "turn on \"Skip test\" on that pipeline's page to skip the probe.",
+                    ? "Sends one live HEC probe to your endpoint first. Only if it succeeds does it write a Splunk Enterprise destination and store the token in ~/.defenseclaw/.env. " +
+                      "A failed probe saves nothing and the command exits 1. Turn on \"Skip test\" on that pipeline's page to save without the probe."
+                    : "Writes a Splunk Enterprise destination and stores the token in ~/.defenseclaw/.env, then sends one best-effort HEC probe to your endpoint. " +
+                      "Turn on \"Skip test\" on that pipeline's page to skip the probe.",
             });
         }
 
         var guide = new WizardGuide
         {
-            Intro = "Pick one or more pipelines. They are independent and can run together. Each one you pick adds its own page of fields, " +
+            Intro = "Pick one or more independent pipelines. Each adds a page of fields, " +
                     "and the last page shows the exact command before anything runs.",
             Cards = cards,
         };
@@ -275,7 +275,7 @@ public static partial class WizardWalkthroughs
         {
             Id = GuideStepId,
             Title = "Choose what to send",
-            Subtitle = "Splunk has three independent pipelines. Choose the ones you want.",
+            Subtitle = "Choose one or more of the three independent pipelines.",
             Fields = pipelineFields,
             VisibleWhenFieldId = gateField,
             VisibleWhenValues = gateValues,
@@ -312,7 +312,7 @@ public static partial class WizardWalkthroughs
         Page(
             "o11y",
             "Splunk Observability Cloud",
-            "Where to send traces and metrics. The access token is typed in this app and never reaches the command line.",
+            "Where to send traces and metrics. You type the access token in this app and it never reaches the command line.",
             o11y is null ? null : o11y.Id,
             ToggleValues.On,
             "--realm",
@@ -334,7 +334,7 @@ public static partial class WizardWalkthroughs
         Page(
             "enterprise",
             "Splunk Enterprise (HEC)",
-            "Your remote HTTP Event Collector. The token is typed in this app and never reaches the command line.",
+            "Your remote HTTP Event Collector. You type the token in this app and it never reaches the command line.",
             enterprise is null ? null : enterprise.Id,
             ToggleValues.On,
             "--hec-endpoint",
@@ -347,7 +347,7 @@ public static partial class WizardWalkthroughs
             Page(
                 "hec-destination",
                 "HEC index, source and sourcetype",
-                "Where the events land in Splunk. The defaults differ for local and enterprise; leave a field alone to use the CLI's default.",
+                "Where the events land in Splunk. Leave a field unchanged to use the CLI's default, which differs for local and enterprise.",
                 logs.Id + "|" + enterprise.Id,
                 ToggleValues.On,
                 "--index",
@@ -359,7 +359,7 @@ public static partial class WizardWalkthroughs
             Page(
                 "hec-destination",
                 "HEC index, source and sourcetype",
-                "Where the events land in Splunk. Leave a field alone to use the CLI's default.",
+                "Where the events land in Splunk. Leave a field unchanged to use the CLI's default.",
                 (logs ?? enterprise)!.Id,
                 ToggleValues.On,
                 "--index",
@@ -375,7 +375,7 @@ public static partial class WizardWalkthroughs
             {
                 Id = "more-options",
                 Title = "More options",
-                Subtitle = "Everything else this command accepts, straight from its help screen.",
+                Subtitle = "Everything else this command accepts, from its help.",
                 Fields = rest,
                 VisibleWhenFieldId = gateField,
                 VisibleWhenValues = gateValues,
@@ -407,13 +407,13 @@ public static partial class WizardWalkthroughs
         // it the guide must not promise a place to type one.
         var hasKeyPage = steps.SelectMany(s => s.Fields).Any(f => f.Id == WizardSyntheticSecrets.GalileoKeyFieldId);
         var keyNeed = hasKeyPage
-            ? "A Galileo API key. You type it on the API key page of this wizard (or store it once with defenseclaw keys set GALILEO_API_KEY); it is never a command-line flag."
+            ? "A Galileo API key. Type it on the API key page, or store it once with defenseclaw keys set GALILEO_API_KEY. It is never a command-line flag."
             : "A Galileo API key, supplied the way the CLI's own help (below) describes. It is never a command-line flag.";
 
         var guide = new WizardGuide
         {
-            Intro = "Galileo is an AI evaluation and observability service. This setup sends DefenseClaw's OpenTelemetry traces to a Galileo project, " +
-                    "so you can see each agent run there. Galileo receives traces only.",
+            Intro = "Galileo is an AI evaluation and observability service. This setup sends DefenseClaw's OpenTelemetry traces to a Galileo project. " +
+                    "Galileo receives traces only.",
             Cards = new[]
             {
                 new WizardGuideCard
@@ -425,14 +425,14 @@ public static partial class WizardWalkthroughs
                     {
                         keyNeed,
                         "The project name or ID, and the Log stream name or ID, the traces should land in. The CLI offers \"default\" for the Log stream when you run it by hand.",
-                        "For a self-hosted Galileo: your console URL (the API address is worked out from it), or the exact OTLP traces endpoint if it cannot be.",
+                        "For self-hosted Galileo, your console URL, or the OTLP traces endpoint if the API address cannot be derived from it.",
                     },
                     Links = new[]
                     {
                         new WizardGuideLink("Galileo documentation (API keys, projects, Log streams)", "https://docs.galileo.ai/"),
                     },
-                    WillDo = "Writes a Galileo destination (traces only) to DefenseClaw's configuration. Keeping the key in ~/.defenseclaw/.env is the \"Save the key\" choice on the API key page; " +
-                             "Preview (on the last page) shows what would be written without writing it. Setup itself only writes configuration; the test command, picked on the Command page, sends a content-free trace to confirm Galileo accepts it.",
+                    WillDo = "Writes a Galileo destination, traces only, to DefenseClaw's configuration. \"Save the key\" on the API key page keeps the key in ~/.defenseclaw/.env. " +
+                             "Preview on the last page shows what would be written. The test command on the Command page sends a content-free trace to check that Galileo accepts it.",
                 },
             },
         };
@@ -449,11 +449,11 @@ public static partial class WizardWalkthroughs
         // installed CLI no longer has is simply not touched.
         var reworded = new Dictionary<string, (string Label, string Help)>(StringComparer.Ordinal)
         {
-            ["deployment"] = ("Deployment", "Cloud sends to Galileo's hosted service. Self-hosted sends to your own Galileo installation, which needs the console URL (or the exact trace endpoint) below."),
-            ["project"] = ("Project", "The Galileo project the traces are filed under — its name or its ID, as the Galileo console shows it. Required."),
-            ["logstream"] = ("Log stream", "The Log stream inside that project. A name or an ID. Required; \"default\" is the stream a new project starts with."),
-            ["console-url"] = ("Console URL (self-hosted only)", "Your self-hosted Galileo console address, https:// only. The API endpoint is derived from it (console. becomes api.). Leave blank for Galileo Cloud."),
-            ["trace-endpoint"] = ("Trace endpoint (self-hosted only)", "The exact OTLP HTTP traces endpoint, https:// without a query. Only needed when it cannot be derived from the console URL. Overrides the console URL."),
+            ["deployment"] = ("Deployment", "Cloud sends to Galileo's hosted service. Self-hosted sends to your own Galileo installation, which needs the console URL or the trace endpoint below."),
+            ["project"] = ("Project", "The Galileo project the traces are filed under, by name or ID as the console shows it. Required."),
+            ["logstream"] = ("Log stream", "The Log stream inside that project, by name or ID. Required. \"default\" is the stream a new project starts with."),
+            ["console-url"] = ("Console URL (self-hosted only)", "Your self-hosted Galileo console address, https:// only. The API endpoint is derived from it by changing console. to api. Leave blank for Galileo Cloud."),
+            ["trace-endpoint"] = ("Trace endpoint (self-hosted only)", "The OTLP HTTP traces endpoint, https:// without a query. Needed only when it cannot be derived from the console URL. Overrides the console URL."),
         };
 
         var result = new List<WizardStep> { guideStep };

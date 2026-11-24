@@ -110,7 +110,7 @@
                            Appearance="Primary"
                            Content="Install and restart"
                            Command="{Binding InstallCommand}"
-                           AutomationProperties.HelpText="Downloads the update, checks its SHA-256, replaces the program files and restarts the app. The previous version is kept until the new one has started." />
+                           AutomationProperties.HelpText="Downloads the update, checks its SHA-256, replaces the program files and restarts the app. The old version is kept until the new one starts." />
                 <ui:Button Margin="8,0,0,0"
                            Content="Cancel"
                            Command="{Binding CancelCommand}"

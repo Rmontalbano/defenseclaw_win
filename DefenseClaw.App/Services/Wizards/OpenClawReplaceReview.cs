@@ -93,8 +93,8 @@ internal static class OpenClawReplaceReview
         {
             yield return new CommandReviewWarning(
                 Title,
-                "OpenClaw runs alone in this release. With --replace, setup removes every configured hook connector (Codex, Claude Code and the others) " +
-                "before it sets up OpenClaw, so DefenseClaw stops checking those agents. To keep them, leave --replace off: setup then refuses and changes nothing.");
+                "OpenClaw runs alone in this release. --replace removes every configured hook connector first, so DefenseClaw stops checking those agents. " +
+                "Without --replace, setup refuses and changes nothing.");
         }
     }
 }

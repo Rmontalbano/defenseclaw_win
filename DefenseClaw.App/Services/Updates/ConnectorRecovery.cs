@@ -79,7 +79,7 @@ internal static class ConnectorRecovery
 
     /// <summary>Added to today's hint when the refusal line names the 1.0.9 command and the installed DefenseClaw does not have it.</summary>
     public const string OlderRuntimeNote =
-        "The command the installer prints (" + CommandName + ") needs DefenseClaw 1.0.9, and the DefenseClaw installed now is older and does not have it.";
+        "The command the installer prints (" + CommandName + ") needs DefenseClaw 1.0.9. The installed version is older and does not have it.";
 
     /// <summary>True when the installer's refusal line is the 1.0.9 one: it names the command, or the sentence that comes before it.</summary>
     public static bool LineNamesCommand(string reason) =>
@@ -94,6 +94,6 @@ internal static class ConnectorRecovery
     public static string ReceiptsOnlyStep(string dataDirectory) =>
         "Run " + CommandText(dataDirectory) + " in PowerShell or a Command Prompt, then check again. It finishes what it can prove and names what it cannot. Do not remove or move the files yourself." +
         (PathReadSpecially(dataDirectory)
-            ? " The folder name has a character ($, a backtick or %) that PowerShell or Command Prompt can read as its own; check that the command prints this folder."
+            ? " The folder name has a $, backtick or % that PowerShell or Command Prompt may read specially, so check that the command prints this folder."
             : string.Empty);
 }

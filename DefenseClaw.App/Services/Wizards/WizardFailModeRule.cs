@@ -17,8 +17,8 @@ public static class WizardFailModeRule
 {
     /// <summary>The sentence a page that lost its fail-mode field says instead.</summary>
     public const string Note =
-        "Hook failure mode is not asked on this runtime: during a gateway outage a hook follows the policy tier of its rule pack (strict blocks, default and permissive " +
-        "let the call run with a warning), and a saved fail mode is not applied. To block calls during an outage, run " + HookFailModeRule.StrictPackCommand + ".";
+        "Hook failure mode is not asked on this runtime. During a gateway outage a hook follows the policy tier of its rule pack, where strict blocks and default and permissive " +
+        "let the call run with a warning. A saved fail mode is not applied. To block calls during an outage, run " + HookFailModeRule.StrictPackCommand + ".";
 
     private const string FailModeFlag = "--fail-mode";
 

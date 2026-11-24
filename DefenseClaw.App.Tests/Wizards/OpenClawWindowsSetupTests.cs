@@ -156,7 +156,7 @@ public sealed class OpenClawWindowsSetupTests
 
         var now = WizardWindowsPolicy.UnavailableReason("gateway", PlatformStatus.NotApplicable, Runtime("1.0.10"));
 
-        Assert.Equal("On Windows, setup openclaw sets this uplink. Set up OpenClaw instead.", now);
+        Assert.Equal("Configures the OpenClaw uplink. On Windows, setup openclaw points it at OpenClaw's own local gateway, so set up OpenClaw instead.", now);
         Assert.DoesNotContain("unsupported", now, StringComparison.OrdinalIgnoreCase);
     }
 
@@ -279,9 +279,9 @@ public sealed class OpenClawWindowsSetupTests
         Assert.Contains("runs alone", needs, StringComparison.Ordinal);
         Assert.Contains(OpenClawSetupIntro.PreflightCommand, needs, StringComparison.Ordinal);
         Assert.Contains("openclaw preflight: ok", needs, StringComparison.Ordinal);
-        Assert.Contains("does not run it", needs, StringComparison.Ordinal);
+        Assert.Contains("to run yourself in a terminal", needs, StringComparison.Ordinal);
         Assert.Contains("restarts it", card.WillDo, StringComparison.Ordinal);
-        Assert.Contains("loads the plugin", card.WillDo, StringComparison.Ordinal);
+        Assert.Contains("to load the plugin", card.WillDo, StringComparison.Ordinal);
         Assert.Equal(PlatformStatus.Certified, definition.PlatformStatus);
 
         // The preflight command is text on the page and never a step of the wizard: nothing in the pages' fields runs it.

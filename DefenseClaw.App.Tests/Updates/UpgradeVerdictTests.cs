@@ -227,7 +227,7 @@ public sealed class UpgradeVerdictTests
         var facts = TelemetryFacts.From(Health("{\"state\":\"running\",\"details\":{\"optional_destination_state\":\"degraded\",\"optional_destination_failure_count\":2}}"));
 
         Assert.Equal(TelemetryCondition.OptionalDegraded, facts.Condition);
-        Assert.Contains("2 optional destination(s)", facts.Text, StringComparison.Ordinal);
+        Assert.Contains("2 optional destinations", facts.Text, StringComparison.Ordinal);
     }
 
     [Fact]

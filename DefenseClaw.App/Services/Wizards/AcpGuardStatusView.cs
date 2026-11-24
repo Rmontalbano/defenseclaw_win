@@ -14,10 +14,10 @@ public static class AcpGuardStatusView
     public const string Title = "Guard status";
 
     /// <summary>The caption while every pair is healthy.</summary>
-    public const string HealthyNote = "Read just now with defenseclaw acp status --json; nothing was changed. Healthy means the editor entry starts the guard with this pair's contract lock and agent.";
+    public const string HealthyNote = "Read with defenseclaw acp status --json, which changes nothing. Healthy means the editor entry starts the guard with this pair's contract lock and agent.";
 
     /// <summary>The caption while a pair needs attention: the way back, in the app's own terms.</summary>
-    public const string AttentionNote = "Setting the pair up again below rewrites its editor entry and lock, after a review of the command. defenseclaw acp verify in a terminal reports the same findings.";
+    public const string AttentionNote = "Setting the pair up again below rewrites its editor entry and lock after you review the command. defenseclaw acp verify in a terminal reports the same findings.";
 
     /// <summary>The card for <paramref name="read"/>; null while there is nothing to say (the runtime has no such command, or the read was never made).</summary>
     public static WizardInfoBlock? Block(AcpRead<AcpGuardStatus>? read)

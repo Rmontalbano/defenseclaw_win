@@ -82,7 +82,7 @@ public static partial class WizardBaseline
                 string.Empty,
                 "config.yaml could not be read, so this wizard cannot see the connector's current mode or fail-mode. " +
                 "The CLI resets --mode to observe when it is not given, which would downgrade a connector in action mode. " +
-                "Fix the config first (Setup → Config editor), or set every field deliberately.");
+                "Fix the config first in Setup → Config editor, or set every field deliberately.");
         }
 
         var key = Normalize(definition.Target);
@@ -128,8 +128,8 @@ public static partial class WizardBaseline
         }
 
         var source = "config.yaml → guardrail.connectors." + match.Name;
-        var note = "Pre-filled from " + source + ". Only fields you change are sent. --mode is sent whenever it is not the CLI's " +
-                   "default (observe), because leaving it off would reset the connector to observe.";
+        var note = "Pre-filled from " + source + ". Only fields you change are sent. --mode is sent unless it is observe, " +
+                   "because leaving it off would reset the connector to observe.";
 
         return Replace(definition, facts, source, note);
     }

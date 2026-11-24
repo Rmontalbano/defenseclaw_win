@@ -121,7 +121,7 @@ public sealed class ProvenanceInspector : IDisposable
         var provenanceAsset = FindAsset(assets, ProvenanceAssetName);
 
         var authenticode = AuthenticodeStatus.Unknown;
-        var authenticodeDetail = $"No {ProvenanceAssetName} asset on this release; " +
+        var authenticodeDetail = $"No {ProvenanceAssetName} asset on this release, so " +
                                   "Authenticode status could not be determined.";
         var provenanceFound = false;
         int? checksumsEntryCount = null;
@@ -212,9 +212,8 @@ public sealed class ProvenanceInspector : IDisposable
             warnings.Add(new StubAssetWarning(
                 asset.Name,
                 asset.Size,
-                $"{asset.Name} is only {asset.Size} bytes but its name implies a real build artifact. " +
-                "This matches the placeholder-stub pattern seen on some releases: a tiny ASCII file " +
-                "whose hash is still listed in the release's checksums.txt, so a hash comparison alone would pass it."));
+                $"{asset.Name} is only {asset.Size} bytes, too small for a real build artifact. " +
+                "It looks like a placeholder stub whose hash is still listed in checksums.txt."));
         }
 
         return warnings;

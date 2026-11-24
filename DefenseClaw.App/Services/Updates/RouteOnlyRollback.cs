@@ -41,8 +41,8 @@ public static class RouteOnlyRollback
             return null;
         }
 
-        return "Route-only is on for " + string.Join(" and ", names) + ". DefenseClaw " + normalized + " has no route-only, so before it swaps the install the installer has " +
-               "DefenseClaw put back the model settings route-only changed in those agents' settings. Restart those agents after the rollback. If that step fails, the installer " +
-               "warns that a route-only agent gets 401 on its model calls until the DefenseClaw base URL and route header are removed from its settings.";
+        return "Route-only is on for " + string.Join(" and ", names) + ". DefenseClaw " + normalized + " has no route-only, so the installer first puts back " +
+               "the model settings route-only changed in those agents. Restart those agents after the rollback. If that step fails, " +
+               "a route-only agent gets 401 on its model calls until you remove the DefenseClaw base URL and route header from its settings.";
     }
 }

@@ -153,7 +153,7 @@ public static class WizardFieldBuilder
             Kind = positional.Choices.Count > 0 ? WizardFieldKind.Choice : WizardFieldKind.Text,
             Help = positional.IsRequired
                 ? "Required positional argument."
-                : "Optional positional argument; leave blank to use the command's own default.",
+                : "Optional positional argument. Leave blank to use the command's default.",
             Choices = choices,
             IsPositional = true,
             PositionalOrder = order,

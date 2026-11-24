@@ -31,7 +31,7 @@ public static class RollbackConfigKeys
         }
 
         var note = "DefenseClaw " + normalized + " does not accept " + Listed(keys) + ", so those settings are not in the config.yaml it gets back. " +
-                   "Today's config.yaml is kept in previous\\data: 'defenseclaw rollback' again brings it back.";
+                   "Today's config.yaml is kept in previous\\data. Run 'defenseclaw rollback' again to bring it back.";
         return new Result(keys, note, "Rollback puts back the config.yaml saved when you upgraded. " + note);
     }
 

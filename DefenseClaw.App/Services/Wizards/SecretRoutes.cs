@@ -203,7 +203,7 @@ public static class SecretRoutes
         PersistFlag = WizardSyntheticSecrets.PersistFlag,
         InAppStorage = "the CLI writes it to ~/.defenseclaw/.env only when \"" + WizardSyntheticSecrets.PersistLabel +
                        "\" is on; otherwise it uses the key for this run and keeps nothing.",
-        PreviewNote = "The CLI looks for the key even in a preview, and a preview is not given the value typed here, " +
+        PreviewNote = "The CLI looks for the key even in a preview and does not receive the value typed here, " +
                       "so a preview passes only if the key is already stored.",
         IfMissing = "The CLI stops with \"GALILEO_API_KEY is not set; export it or omit --non-interactive for a hidden prompt\" " +
                     "and changes nothing. It checks before it previews, so a --dry-run preview stops the same way.",
@@ -235,8 +235,8 @@ public static class SecretRoutes
                         var typed = nameFieldId is null ? string.Empty : values[nameFieldId].Trim();
                         return typed.Length > 0 ? typed : "DEFENSECLAW_LLM_KEY";
                     },
-                    IfMissing = "The llm: block will point at this variable, and every component that calls the model " +
-                                "(guardrail judge, scanners) fails to authenticate until the key is stored.",
+                    IfMissing = "The llm: block points at this variable, and the guardrail judge and scanners " +
+                                "fail to authenticate until the key is stored.",
                 };
             }
 
@@ -318,7 +318,7 @@ public static class SecretRoutes
                     Purpose = "Splunk Observability Cloud API token (the user API access token, not the ingest token)",
                     EnvName = _ => SplunkDashboards.TokenVariable,
                     InAppEnvName = advertised ? _ => SplunkDashboards.TokenVariable : null,
-                    InAppStorage = "the CLI does not store it: it hands it to Terraform for that run and nothing keeps it afterwards.",
+                    InAppStorage = "the CLI does not store it. It hands it to Terraform for that run only.",
                     IfMissing = "The CLI stops with \"Splunk O11y token not found\" before it copies or runs anything, and changes nothing.",
                 };
             }

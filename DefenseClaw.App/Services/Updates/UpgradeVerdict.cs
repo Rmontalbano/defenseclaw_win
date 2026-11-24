@@ -32,7 +32,7 @@ public enum TelemetryCondition
 /// <summary>The telemetry verdict and its sentence. Built from closed tokens only: a free-text <c>last_error</c> is never shown.</summary>
 public sealed partial record TelemetryFacts(TelemetryCondition Condition, string Text)
 {
-    public static TelemetryFacts NotReported { get; } = new(TelemetryCondition.NotReported, "Not reported (the gateway is not answering, or this runtime's /health has no telemetry block).");
+    public static TelemetryFacts NotReported { get; } = new(TelemetryCondition.NotReported, "Not reported. The gateway is not answering, or this runtime's /health has no telemetry block.");
 
     /// <summary>True for an exporter failing or a local history failing: the result card's audit/telemetry-degraded state.</summary>
     public bool IsDegraded => Condition is TelemetryCondition.OptionalDegraded or TelemetryCondition.LocalHistoryFailing;
@@ -66,8 +66,8 @@ public sealed partial record TelemetryFacts(TelemetryCondition Condition, string
                     var count = Count(details, "optional_destination_failure_count");
                     return new TelemetryFacts(
                         TelemetryCondition.OptionalDegraded,
-                        "Running, but " + (count is { } n ? n.ToString(CultureInfo.InvariantCulture) + " optional destination(s) are" : "an optional destination is") +
-                        " failing (an exporter, not the local audit history). The Overview's Observability card names them.");
+                        "Running, but " + (count is { } n ? n.ToString(CultureInfo.InvariantCulture) + (n == 1 ? " optional destination is" : " optional destinations are") : "an optional destination is") +
+                        " failing. These are exporters and do not hold the local audit history. The Overview's Observability card names them.");
                 }
 
                 return new TelemetryFacts(TelemetryCondition.Healthy, "Running; no destination is failing.");
@@ -98,7 +98,7 @@ public sealed partial record TelemetryFacts(TelemetryCondition Condition, string
                     TelemetryCondition.LocalHistoryFailing,
                     "Error: the gateway reports that its local event history is not being kept as it should" +
                     (reasons.Count > 0 ? " (" + string.Join("; ", reasons) + ")" : string.Empty) +
-                    ". That is the gateway's own report about writing, not a finding about the database file.");
+                    ".");
 
             case "disabled":
             case "stopped":
@@ -165,7 +165,7 @@ public sealed record ReleaseIdentity(ReleaseIdentityKind Kind, string Text)
         {
             return new ReleaseIdentity(
                 ReleaseIdentityKind.DeveloperBuild,
-                $"Developer or locally modified build: the runtime reports {odd}, which is not a release number. Not an official release, whatever the install log says.");
+                $"Developer or locally modified build. The runtime reports {odd}, which is not a release number. Not an official release.");
         }
 
         var shown = versions.Length switch
@@ -179,14 +179,14 @@ public sealed record ReleaseIdentity(ReleaseIdentityKind Kind, string Text)
         {
             return new ReleaseIdentity(
                 ReleaseIdentityKind.LocalAssets,
-                $"{shown} was installed from local release assets (-Local), not downloaded from the release page. The installer checked them against the " +
-                "checksums.txt beside them, which proves they match that list, not that they are the official release.");
+                $"{shown} was installed from local release assets (-Local). The installer checked them against the " +
+                "checksums.txt beside them. That shows they match that list and does not prove they are the official release.");
         }
 
         var script = staged switch
         {
             PreflightVerification.Verified => " This app verified install.ps1 the same way before running it.",
-            PreflightVerification.HashOnly => " This app checked install.ps1 against checksums.txt (signature not verified) before running it.",
+            PreflightVerification.HashOnly => " This app checked install.ps1 against checksums.txt before running it. The signature was not verified.",
             _ => string.Empty,
         };
 
@@ -197,10 +197,10 @@ public sealed record ReleaseIdentity(ReleaseIdentityKind Kind, string Text)
                 $"Official release {shown}: the installer verified the sigstore signature on the release's checksums.txt and every asset against it." + script),
             TranscriptAssetCheck.ChecksumsOnly => new ReleaseIdentity(
                 ReleaseIdentityKind.OfficialChecksums,
-                $"Release {shown}: every asset matched the release's checksums.txt, but its signature was not verified (cosign is not installed), so the signer is not proven." + script),
+                $"Release {shown}: every asset matched the release's checksums.txt. Its signature was not verified because cosign is not installed, so the signer is not proven." + script),
             _ => new ReleaseIdentity(
                 ReleaseIdentityKind.NotVerified,
-                $"Reports {shown}; the install log has no record of how the release bytes were checked, and a version number alone does not make a build official." + script),
+                $"Reports {shown}. The install log does not show how the release was checked, and a version number alone does not make a build official." + script),
         };
     }
 }
@@ -251,7 +251,7 @@ public static class UpgradeVerdicts
             if (run.Exit.Outcome == InstallOutcome.Refused)
             {
                 return new UpgradeVerdict(UpgradeResultState.InstallerFailed, "Rollback refused; nothing changed", "Warn",
-                    "install.ps1 -Rollback refused before it changed anything: nothing on this machine was changed, and the current install is still the live one. " +
+                    "install.ps1 -Rollback refused before it changed anything, so nothing on this machine was changed. The current install is still the live one. " +
                     "The installer's reason and next step are above.");
             }
 
@@ -278,11 +278,11 @@ public static class UpgradeVerdicts
             case InstallOutcome.UsageError:
             case InstallOutcome.CouldNotStart:
                 return new UpgradeVerdict(UpgradeResultState.InstallerFailed, run.Exit.Label, run.Exit.ToneKey,
-                    "The installer refused before it changed anything; nothing on this machine was changed.");
+                    "The installer refused before it changed anything, so nothing on this machine was changed.");
 
             case InstallOutcome.Refused:
                 return new UpgradeVerdict(UpgradeResultState.InstallerFailed, "Refused; nothing changed", "Warn",
-                    "The installer refused before it changed anything; nothing on this machine was changed. The installer's reason and next step are above.");
+                    "The installer refused before it changed anything, so nothing on this machine was changed. The installer's reason and next step are above.");
 
             case InstallOutcome.FailedRestored:
             case InstallOutcome.Failed:
@@ -296,12 +296,12 @@ public static class UpgradeVerdicts
                 if (transcript.PreviousRestored && !transcript.RestoreIncomplete)
                 {
                     return new UpgradeVerdict(UpgradeResultState.RolledBack, "Failed; previous install restored", "Warn",
-                        "The upgrade failed and the installer put the previous install back: the earlier version is live again.");
+                        "The upgrade failed and the installer put the previous install back. The earlier version is live again.");
                 }
 
                 return new UpgradeVerdict(UpgradeResultState.InstallerFailed, transcript.RestoreIncomplete ? "Failed; restore incomplete" : "Failed", "Bad",
                     transcript.RestoreIncomplete
-                        ? "The upgrade failed and the installer says the previous install is not fully back; run the installer again to finish restoring it."
+                        ? "The upgrade failed and the installer says the previous install is not fully back. Run the installer again to finish restoring it."
                         : run.LogPath is null && run.ExitCode == 1
                             ? "The installer failed. " + InstallScriptPlan.NoLogNote
                             : "The installer failed, and its log does not say that it put the previous install back. Read the install log before doing anything else.");
@@ -311,7 +311,7 @@ public static class UpgradeVerdicts
         if (facts is null)
         {
             return new UpgradeVerdict(UpgradeResultState.NeedsAttention, "Installed; not checked yet", "Warn",
-                "The installer reports success; the checks below have not read the machine yet.");
+                "The installer reports success. The checks below have not read the machine yet.");
         }
 
         if (facts.GatewayRunning != true)
@@ -321,7 +321,7 @@ public static class UpgradeVerdicts
             {
                 return new UpgradeVerdict(UpgradeResultState.NeedsAttention, "Installed; protection is off", "Warn",
                     "Installed. Protection is off in the kept config (guardrail.enabled = false), so the installer did not start the gateway and agent hooks " +
-                    "are not guarded. Turn it back on with: defenseclaw setup guardrail");
+                    "are not guarded. To turn it on, run defenseclaw setup guardrail");
             }
 
             return transcript.GatewayLeftStopped
@@ -334,8 +334,7 @@ public static class UpgradeVerdicts
         if (facts.GatewayOwnerVerified != true)
         {
             return new UpgradeVerdict(UpgradeResultState.GatewayStartFailed, "Installed; gateway not verified", "Bad",
-                "Something answers on the gateway's port, but its owner did not verify as this install's gateway, so its health and version are not trusted. " +
-                "A 200 from /health alone is not proof the new gateway is the one running.");
+                "Something answers on the gateway's port, but its owner did not verify as this install's gateway, so its health and version are not trusted.");
         }
 
         var mismatches = new List<string>();
@@ -380,7 +379,7 @@ public static class UpgradeVerdicts
     }
 
     private static string RestoreSentence(InstallTranscriptFacts transcript) =>
-        transcript.RestoreIncomplete ? "The installer says the previous install is not fully back; run the installer again to finish restoring it. "
+        transcript.RestoreIncomplete ? "The installer says the previous install is not fully back. Run the installer again to finish restoring it. "
         : transcript.PreviousRestored ? "The installer put the previous install back. "
         : string.Empty;
 

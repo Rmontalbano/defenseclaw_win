@@ -64,7 +64,7 @@ public static partial class WizardGoals
         {
             Id = StepId,
             Title = Question,
-            Subtitle = "Choose one. The pages after this show only what it needs; Advanced shows everything.",
+            Subtitle = "Choose one. The next pages show only what it needs, and Advanced shows everything.",
             Fields = new[]
             {
                 new WizardField
@@ -73,7 +73,7 @@ public static partial class WizardGoals
                     Label = Question,
                     Kind = WizardFieldKind.Choice,
                     Choices = goals.Select(g => new WizardChoice(g.Id, g.Label)).ToArray(),
-                    Help = "What you pick here only decides which settings you are asked about; the review at the end still shows the exact command.",
+                    Help = "This choice decides which settings you are asked about. The review at the end shows the exact command.",
                     IsSynthetic = true,
                 },
             },

@@ -18,7 +18,7 @@ public static class CoworkUninstallReview
     public const string ConnectorTitle = "Cowork stops being protected";
 
     /// <summary>The message of that bar on 1.0.9, from the CLI's own sentence (cmd_setup.py@1.0.9:14786-14792, printed only after the removal).</summary>
-    public const string ConnectorMessage = "Cowork is no longer protected after this; remove the DefenseClaw plugin in Claude (Customize > Plugins).";
+    public const string ConnectorMessage = "Cowork is no longer protected after this. Remove the DefenseClaw plugin under Customize > Plugins in Claude.";
 
     /// <summary>
     /// The message on 1.0.8, which prints no such line. What 1.0.8 does show: with the Claude Code connector off, <c>cowork status</c> reports "not protected" with
@@ -26,8 +26,8 @@ public static class CoworkUninstallReview
     /// It does not repeat the uninstall sentence's "tool calls are blocked", which 1.0.8 states for uninstall and reset only.
     /// </summary>
     public const string ConnectorMessage108 =
-        "If the removal succeeds, Cowork is no longer protected: its plugin runs the Claude Code connector's hooks, and Cowork status then reports it as not protected. " +
-        "The plugin stays in your Claude account until you remove it there (" + CoworkProtectionFacts.RemovePath + ").";
+        "If the removal succeeds, Cowork is no longer protected and Cowork status reports it as not protected. " +
+        "The plugin stays in your Claude account until you remove it under " + CoworkProtectionFacts.RemovePath + ".";
 
     /// <summary>The connector bar's message for <paramref name="capabilities"/>: the CLI's own line from 1.0.9, the 1.0.8 wording before.</summary>
     public static string ConnectorMessageFor(RuntimeCapabilities capabilities)

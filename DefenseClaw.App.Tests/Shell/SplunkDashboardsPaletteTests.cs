@@ -359,7 +359,7 @@ public sealed class SplunkDashboardsPaletteTests : IDisposable
 
         // The review is the question the CLI would have asked, and says so; it also says what goes.
         var deletes = Assert.Single(shown.Warnings, w => w.Title == SplunkDashboardsReview.DeletesTitle);
-        Assert.Contains("which is why --yes is on the command", deletes.Message, StringComparison.Ordinal);
+        Assert.Contains("--yes stands in for the CLI's own confirmation", deletes.Message, StringComparison.Ordinal);
         Assert.False(shown.RestartsGateway);
         Assert.Empty(scene.Toasts);
         Assert.Empty(scene.Services.Cli.Activity);

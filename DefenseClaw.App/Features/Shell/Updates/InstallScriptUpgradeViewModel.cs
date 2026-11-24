@@ -35,7 +35,7 @@ public sealed record PostFlightFacts(
     public TelemetryFacts Telemetry { get; init; } = TelemetryFacts.NotReported;
 
     public DefenseClaw.Core.Audit.AuditPersistence Audit { get; init; } =
-        DefenseClaw.Core.Audit.AuditPersistence.NotChecked("Not checked: the gateway is not answering as the verified gateway, so there is no start to look after.");
+        DefenseClaw.Core.Audit.AuditPersistence.NotChecked("Not checked: the verified gateway is not answering.");
 }
 
 /// <summary>Reads <see cref="PostFlightFacts"/>. A seam: tests answer from memory, the app asks the machine.</summary>
@@ -112,7 +112,7 @@ internal sealed class AppPostFlightProbe : IPostFlightProbe
             Telemetry = verified ? TelemetryFacts.From(gateway.Health) : TelemetryFacts.NotReported,
             Audit = audit ?? (verified
                 ? DefenseClaw.Core.Audit.AuditPersistence.NotChecked("Not checked: the gateway did not say when it started.")
-                : DefenseClaw.Core.Audit.AuditPersistence.NotChecked("Not checked: the gateway is not answering as the verified gateway, so there is no start to look after.")),
+                : DefenseClaw.Core.Audit.AuditPersistence.NotChecked("Not checked: the verified gateway is not answering.")),
         };
     }
 }
@@ -357,9 +357,8 @@ public sealed partial class InstallScriptUpgradeViewModel : ObservableObject, ID
 
     /// <summary>Why the section exists, in one paragraph: this release is installed by install.ps1 and has no Setup exe.</summary>
     public string ChannelNote =>
-        $"DefenseClaw {TargetVersion} is installed by the release's install.ps1; it publishes no DefenseClawSetup-x64.exe. This app downloads it, " +
-        "checks its SHA-256 against the release's checksums.txt (and that file's sigstore signature when cosign is installed), shows you the exact " +
-        "command, and only then runs it in a console window of its own, where the installer asks its questions. Nothing runs until you confirm.";
+        $"DefenseClaw {TargetVersion} installs with the release's install.ps1, which publishes no DefenseClawSetup-x64.exe. " +
+        "Nothing runs until you confirm the command.";
 
     /// <summary>The installation guard's reason this upgrade cannot run, or null.</summary>
     public string? BlockedReason => _services.Installation.UpgradeBlockedReason;
@@ -397,7 +396,7 @@ public sealed partial class InstallScriptUpgradeViewModel : ObservableObject, ID
         BlockedReason is { } blocked ? blocked
         : IsRunning ? "The installer is still running."
         : !RollbackAvailable ? RollbackNote
-        : _staged is null ? "Download and verify install.ps1 first (Download and verify, above); the rollback runs that verified script."
+        : _staged is null ? "Download and verify install.ps1 first. The rollback runs that verified script."
         : null;
 
     public bool CanRollback => (HasResult || IsPostUpgradeMode) && !IsRunning && RollbackAvailable && _staged is not null && BlockedReason is null;
@@ -658,12 +657,12 @@ public sealed partial class InstallScriptUpgradeViewModel : ObservableObject, ID
         var warnings = new List<CommandReviewWarning>
         {
             CommandReviewWarning.GatewayRestart(
-                "The installer stops the DefenseClaw gateway, replaces the install and starts the gateway again. Agents that use DefenseClaw hooks lose the " +
-                "gateway for the length of the upgrade."),
+                "The installer stops the gateway, replaces the install and starts the gateway again. Agents that use DefenseClaw hooks lose the " +
+                "gateway during the upgrade."),
             new CommandReviewWarning("Runs in its own window",
-                "install.ps1 opens a console window of its own and keeps running if you close this app. " + (UseYes
-                    ? "With -Yes it answers its own confirmation prompts."
-                    : "It will ask you to confirm in that window (and may ask which agent to guard); answer there.")),
+                "install.ps1 opens its own console window and keeps running if you close this app. " + (UseYes
+                    ? "With -Yes it does not ask for confirmation."
+                    : "Confirm there. It may also ask which agent to guard.")),
         };
 
         foreach (var row in PreflightRows.Where(r => r.Status == PreflightStatus.Warn))
@@ -691,7 +690,7 @@ public sealed partial class InstallScriptUpgradeViewModel : ObservableObject, ID
         var warnings = new List<CommandReviewWarning>
         {
             CommandReviewWarning.GatewayRestart(),
-            new("Runs in its own window", "install.ps1 -Rollback opens a console window of its own and may ask you to confirm there."),
+            new("Runs in its own window", "install.ps1 -Rollback opens its own console window and may ask you to confirm there."),
         };
         if (_rollbackConfig is { } config)
         {
@@ -707,7 +706,7 @@ public sealed partial class InstallScriptUpgradeViewModel : ObservableObject, ID
         {
             Title = "Roll DefenseClaw back with install.ps1 -Rollback?",
             Steps = [new CommandReviewStep(argv, "Swaps back to the install the last upgrade replaced.", CommandTier.StateChanging, ShownExecutable)],
-            Summary = "The installer exchanges the live install and previous\\ by renaming, restarts the gateway, and writes its own log.",
+            Summary = "The installer swaps the live install and previous\\ by renaming, restarts the gateway and writes its log.",
             RestartsGateway = true,
             Warnings = warnings,
             ConfirmLabel = "Run rollback",
@@ -802,8 +801,8 @@ public sealed partial class InstallScriptUpgradeViewModel : ObservableObject, ID
         {
             var invocation = await _services.Cli.RunGatewayAsync(GatewayControl.Argv(GatewayAction.Start)).ConfigureAwait(true);
             GatewayText = invocation.Succeeded
-                ? "Gateway start requested; checking its health…"
-                : "The gateway did not start (see the Activity panel).";
+                ? "Gateway start requested. Checking its health…"
+                : "The gateway did not start. See the Activity panel.";
         }
         catch (CliNotFoundException ex)
         {
@@ -831,7 +830,7 @@ public sealed partial class InstallScriptUpgradeViewModel : ObservableObject, ID
         IsRunning = true;
         RunStatus = rollback
             ? "install.ps1 -Rollback is running in its own console window. Answer its questions there."
-            : $"install.ps1 is upgrading to {InstallVersion} in its own console window. Answer its questions there; this app has paused monitoring and released its database handles.";
+            : $"install.ps1 is upgrading to {InstallVersion} in its own console window. Answer its questions there. Monitoring is paused until it finishes.";
 
         InstallScriptRunResult result;
         try
@@ -926,7 +925,7 @@ public sealed partial class InstallScriptUpgradeViewModel : ObservableObject, ID
             }
 
             CliPathText = facts.CliPath is null
-                ? "defenseclaw was not found. Open a new terminal or restart this app so the updated PATH is read."
+                ? "defenseclaw was not found. Open a new terminal or restart this app to pick up the updated PATH."
                 : facts.CliInExpectedDirectory
                     ? facts.CliPath
                     : facts.CliPath + "  (expected under " + AppPostFlightProbe.ExpectedBinDirectory() + ")";

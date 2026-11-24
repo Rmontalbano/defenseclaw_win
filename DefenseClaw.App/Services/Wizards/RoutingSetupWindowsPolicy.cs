@@ -35,8 +35,8 @@ public static class RoutingSetupWindowsPolicy
 
     /// <summary>The 1.0.10 card's sentence: what this command refuses, and where route-only routing is reported.</summary>
     public const string RuntimeSentenceWithRouteOnly =
-        "This command cannot turn semantic routing on here: the CLI refuses it on native Windows, because that routing is for OpenClaw and ZeptoClaw proxy traffic and " +
-        "DefenseClaw runs no guardrail proxy on Windows. Route-only routing of hook connectors is a separate path; the Overview's Model routing row reports it.";
+        "This command cannot turn semantic routing on here. The CLI refuses it on native Windows because that routing is for OpenClaw and ZeptoClaw proxy traffic and " +
+        "DefenseClaw runs no guardrail proxy on Windows. Route-only routing of hook connectors is a separate path, reported in the Overview's Model routing row.";
 
     /// <summary>
     /// True when the runtime refuses <c>--enable</c> on Windows (1.0.5 or later), or when <paramref name="capabilities"/> is not known (null, or a runtime that has

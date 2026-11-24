@@ -59,7 +59,7 @@ public sealed class RollbackConfigKeyPatternTests
         Assert.NotNull(result);
         Assert.Equal(
             "DefenseClaw 1.0.7 does not accept guardrail.judge.extra_body, so those settings are not in the config.yaml it gets back. " +
-            "Today's config.yaml is kept in previous\\data: 'defenseclaw rollback' again brings it back.",
+            "Today's config.yaml is kept in previous\\data. Run 'defenseclaw rollback' again to bring it back.",
             result.Note);
     }
 

@@ -129,7 +129,7 @@ public static class AcpGuardWizard
             PairField(ClientField, "Client", AcpGuardArgv.ClientFlag, context.Clients,
                 "The editor that runs the agent. Setup writes a DefenseClaw entry into its settings: Zed's %APPDATA%\\Zed\\settings.json, or JetBrains' %USERPROFILE%\\.jetbrains\\acp.json."),
             PairField(AgentField, "Agent", AcpGuardArgv.AgentFlag, context.Agents,
-                "The ACP agent to guard. Setup looks for its executable on PATH, so the agent must be installed (and signed in once from a terminal) first."),
+                "The ACP agent to guard. Setup looks for its executable on PATH, so the agent must be installed and signed in once from a terminal first."),
             ProfileFieldFor(context),
             new()
             {
@@ -151,7 +151,7 @@ public static class AcpGuardWizard
                 Flag = AcpGuardArgv.ActivateFlag,
                 DefaultValue = ToggleValues.Off,
                 BaselineValue = ToggleValues.Off,
-                Help = "Off is observe mode: the guard records findings and blocks nothing. On, it blocks a prompt, output, permission, file or terminal step that policy " +
+                Help = "Off is observe mode, where the guard records findings and blocks nothing. On, it blocks any prompt, output, permission, file or terminal step that policy " +
                        "denies, and the profile fails closed.",
             },
             new()
@@ -163,7 +163,7 @@ public static class AcpGuardWizard
                 DefaultValue = managedAllowed ? ToggleValues.On : ToggleValues.Off,
                 BaselineValue = ToggleValues.Off,
                 DisabledReason = managedDisabled,
-                Help = "Enroll the user-side files only, with the policy and the credential your administrator provisioned. Nothing secret is typed here: the token is named by its file.",
+                Help = "Enroll the user-side files only, with the policy and the credential your administrator provisioned. Nothing secret is typed here because the token is named by its file.",
             },
             new()
             {
@@ -258,7 +258,7 @@ public static class AcpGuardWizard
 
     private static WizardField ProfileFieldFor(AcpGuardContext context)
     {
-        const string Rule = "Setup refuses to change the mode of a profile another pair already uses; give this pair a profile of its own for that.";
+        const string Rule = "Setup refuses to change the mode of a profile another pair already uses. Give this pair its own profile for that.";
         if (!context.HasProfileChoices)
         {
             return new WizardField

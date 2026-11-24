@@ -291,7 +291,7 @@ public sealed partial class SelfUpdateViewModel : ObservableObject, IDisposable
         if (failure is null)
         {
             Phase = SelfUpdatePhase.Restarting;
-            ProgressText = "The new version is installed. The app restarts now; if it cannot restart right away, use Restart app in the tray menu.";
+            ProgressText = "The new version is installed. The app restarts now. If it does not, use Restart app in the tray menu.";
             ReviewClosed?.Invoke(this, EventArgs.Empty);
             return;
         }

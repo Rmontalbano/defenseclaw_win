@@ -80,7 +80,7 @@ public sealed class UpdatesTrustPanelTests : IDisposable
 
         var warning = Assert.Single(report.StubWarnings);
         Assert.DoesNotContain("signed", warning.Reason, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("a hash comparison alone would pass it", warning.Reason, StringComparison.Ordinal);
+        Assert.Contains("placeholder stub whose hash is still listed in checksums.txt", warning.Reason, StringComparison.Ordinal);
     }
 
     // ------------------------------------------------------------------ the row before anything is verified
@@ -99,9 +99,9 @@ public sealed class UpdatesTrustPanelTests : IDisposable
         Assert.Equal("signature files published, not verified yet", label);
         Assert.Equal("Neutral", badge);
         Assert.Contains("checksums.txt.bundle", detail, StringComparison.Ordinal);
-        Assert.Contains("Nothing here has checked that signature", detail, StringComparison.Ordinal);
+        Assert.Contains("but not yet verified", detail, StringComparison.Ordinal);
         Assert.Contains("verifies it with cosign when cosign is installed", detail, StringComparison.Ordinal);
-        Assert.Contains("not that the project signed it", detail, StringComparison.Ordinal);
+        Assert.Contains("does not prove the project signed it", detail, StringComparison.Ordinal);
         Assert.DoesNotContain("signed with sigstore", label + detail, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("verified (cosign)", label, StringComparison.Ordinal);
     }

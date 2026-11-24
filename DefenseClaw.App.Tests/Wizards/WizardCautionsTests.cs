@@ -21,10 +21,10 @@ public class WizardCautionsTests
         var warning = Assert.Single(WizardCautions.For(new[] { "setup", "llm", "--ping", "--non-interactive" }));
 
         Assert.Equal(WizardCautions.PingTitle, warning.Title);
-        Assert.Contains("one request", warning.Message, StringComparison.Ordinal);
+        Assert.Contains("one \"ping\" request", warning.Message, StringComparison.Ordinal);
         Assert.Contains("\"ping\"", warning.Message, StringComparison.Ordinal);
         Assert.Contains("one token", warning.Message, StringComparison.Ordinal);
-        Assert.Contains("saved whether or not", warning.Message, StringComparison.Ordinal);
+        Assert.Contains("saved either way", warning.Message, StringComparison.Ordinal);
     }
 
     [Theory]

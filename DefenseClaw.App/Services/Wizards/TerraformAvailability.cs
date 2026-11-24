@@ -57,8 +57,9 @@ internal sealed class TerraformAvailability : IDisposable
     public const string CheckingReason = "Checking for Terraform…";
 
     private static readonly string HowToFix =
-        $"Needs Terraform {TerraformProbe.MinimumVersion} or later. Install it from hashicorp.com/terraform or set " +
-        $"{TerraformProbe.BinaryVariable} to its path, then check again with Refresh or by reopening the command palette.";
+        $"The Splunk dashboards are created by Terraform {TerraformProbe.MinimumVersion} or later. Install or update it " +
+        $"(hashicorp.com/terraform), or set {TerraformProbe.BinaryVariable} to its full path, then check again " +
+        "with the Setup page's Refresh or by reopening the command palette.";
 
     private readonly ITerraformProbe _probe;
     private readonly TimeProvider _time;

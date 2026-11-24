@@ -126,8 +126,8 @@ public static class AcpGuardDiscovery
         var loaded = profiles.IsOk ? profiles.Value : null;
         var profileNote = loaded switch
         {
-            { Profiles.Count: > 0 } => "Profiles: the ones the running gateway has loaded; choose Another profile to give this pair one of its own.",
-            { } => "Profiles: the running gateway has none yet, so setup creates the one you name.",
+            { Profiles.Count: > 0 } => "Profiles are the ones the running gateway has loaded. Choose Another profile to give this pair its own.",
+            { } => "The running gateway has no profiles yet, so setup creates the one you name.",
             _ when profiles.Status == AcpReadStatus.Unsupported => "Profiles: this gateway does not list them, so type the name (the CLI's default is \"default\").",
             _ => "Profiles: not read from the gateway (" + profiles.Message.TrimEnd('.') + "), so type the name (the CLI's default is \"default\").",
         };
@@ -203,7 +203,7 @@ public static class AcpGuardDiscovery
         ChoiceSource.HelpAndCatalog => "what this CLI's acp setup accepts, named and rated (tested or cataloged) by the gateway's catalog.",
         ChoiceSource.Help => "what this CLI's acp setup accepts.",
         ChoiceSource.Catalog => "the gateway's catalog (the CLI's help could not be read).",
-        _ => "type the id (defenseclaw acp catalog lists them); acp setup checks it.",
+        _ => "type the id, which defenseclaw acp catalog lists, and acp setup checks it.",
     };
 
     private static string Refused(string what, IReadOnlyList<string> ids) => ids.Count == 0

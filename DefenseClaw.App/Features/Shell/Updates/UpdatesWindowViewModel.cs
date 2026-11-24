@@ -199,15 +199,10 @@ public sealed partial class UpdatesWindowViewModel : ObservableObject, IDisposab
     /// first, then the failure that matters on this machine's layout today.
     /// </summary>
     public string UpgradeCaveat =>
-        "History: the 0.8.6 -> 0.8.7 in-place upgrade path was broken upstream (a migration-cursor catch-22). " +
-        "Current: on Setup-based installs the defenseclaw-upgrade.ps1 resolver fails outright — run here it " +
-        "stopped with \"Upgrade resolver stopped: Managed Python not found at " +
-        "%USERPROFILE%\\.defenseclaw\\.venv\\Scripts\\python.exe\", because it assumes a venv layout these " +
-        "installs do not have, and 0.8.10's copy of the script is byte-identical to 0.8.9's. The channel that " +
-        "works is the Setup exe installed over the top with /quiet /norestart INSTALLSCOPE=user: it stops the " +
-        "gateway, installs in user scope, restarts the gateway, and preserves %USERPROFILE%\\.defenseclaw " +
-        "(config, audit, inventory, token) — verified live on a 0.8.7 -> 0.8.10 upgrade. Backing that directory " +
-        "up first is still cheap insurance; the installer keeps no journal and rolls nothing back.";
+        "On Setup-based installs the defenseclaw-upgrade.ps1 resolver fails with \"Upgrade resolver stopped: Managed " +
+        "Python not found at %USERPROFILE%\\.defenseclaw\\.venv\\Scripts\\python.exe\". " +
+        "Use the Setup exe with /quiet /norestart INSTALLSCOPE=user instead. It keeps %USERPROFILE%\\.defenseclaw " +
+        "but has no automatic rollback, so back that folder up first.";
 
     private bool CanOpenReleasePage => UpdateChecker.TrustedRepoUrl(HtmlUrl) is not null;
 
@@ -432,7 +427,7 @@ public sealed partial class UpdatesWindowViewModel : ObservableObject, IDisposab
             ? $"Invoke-WebRequest -Uri {UpdateChecker.PowerShellSingleQuoted(url)} -OutFile {UpgradeRunner.ScriptAssetName}\n" +
               ChecksumVerificationLines(url, UpgradeRunner.ScriptAssetName) +
               $".\\{UpgradeRunner.ScriptAssetName}\n" +
-              "# (known broken on Setup-based installs — see the upgrade section)"
+              "# Does not work on Setup-based installs. See the upgrade section."
             : "No defenseclaw-upgrade.ps1 asset was found on this release.";
 
     /// <summary>
@@ -477,9 +472,9 @@ public sealed partial class UpdatesWindowViewModel : ObservableObject, IDisposab
             SigstoreLabel = "signature files published, not verified yet";
             SigstoreBadgeKey = "Neutral";
             SigstoreDetail =
-                "checksums.txt and its sigstore signature files " + PublishedSignatureFiles(report) + " are on this release. Nothing here has checked that signature. " +
-                "Download & verify below verifies it with cosign when cosign is installed (and says so here); without cosign it only compares the download's SHA-256 " +
-                "with checksums.txt from the same release, which shows the download matches that file, not that the project signed it.";
+                "checksums.txt and its sigstore signature files " + PublishedSignatureFiles(report) + " are on this release but not yet verified. " +
+                "Download & verify below verifies it with cosign when cosign is installed. Without cosign it only compares the SHA-256, " +
+                "which does not prove the project signed it.";
         }
         else if (report.ChecksumsAssetPresent)
         {
@@ -497,14 +492,14 @@ public sealed partial class UpdatesWindowViewModel : ObservableObject, IDisposab
             }
 
             SigstoreDetail =
-                $"checksums.txt is present, but the release lists no checksums.txt.bundle and is missing its {string.Join(" and ", missing)}, so there is no sigstore signature to verify. " +
-                "A SHA-256 comparison against it is an integrity check only.";
+                $"The release lists no checksums.txt.bundle and is missing its {string.Join(" and ", missing)}, so there is no sigstore signature to verify. " +
+                "A SHA-256 comparison against checksums.txt is an integrity check only.";
         }
         else
         {
             SigstoreLabel = "No checksums.txt on this release";
             SigstoreBadgeKey = "Bad";
-            SigstoreDetail = "Without checksums.txt there is nothing to verify a downloaded artifact against.";
+            SigstoreDetail = "Without checksums.txt there is nothing to verify a download against.";
         }
 
         HasChecksumsEntryCount = report.ChecksumsEntryCount is not null;
@@ -521,7 +516,7 @@ public sealed partial class UpdatesWindowViewModel : ObservableObject, IDisposab
         HasStubWarnings = report.HasStubWarnings;
         StubBadgeKey = report.HasStubWarnings ? "Bad" : "Ok";
         StubSummary = report.HasStubWarnings
-            ? $"{report.StubWarnings.Count} asset(s) look like placeholder stubs — see below."
+            ? $"{report.StubWarnings.Count} {(report.StubWarnings.Count == 1 ? "asset looks" : "assets look")} like placeholder stubs. See below."
             : "No stub assets detected among this release's assets.";
 
         if (report.ErrorMessage is { Length: > 0 } provenanceError)

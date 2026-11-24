@@ -260,7 +260,7 @@ public sealed class ChecksumsSignatureVerifierTests : IDisposable
         Assert.Contains("did not finish", result.Detail, StringComparison.Ordinal);
         Assert.Contains("timed out after 120 s", result.Detail, StringComparison.Ordinal);
         Assert.Contains("the upgrade is stopped", result.Detail, StringComparison.Ordinal);
-        Assert.Contains("check the network", result.Detail, StringComparison.Ordinal);
+        Assert.Contains("Check the network", result.Detail, StringComparison.Ordinal);
         Assert.Contains("no such host", result.CosignOutput, StringComparison.Ordinal);
     }
 
@@ -293,7 +293,7 @@ public sealed class ChecksumsSignatureVerifierTests : IDisposable
         Assert.Equal("signature present, not verified (cosign not installed)", result.Label);
         Assert.Equal("Warn", result.BadgeKey);
         Assert.Contains("winget install Sigstore.Cosign", result.Detail, StringComparison.Ordinal);
-        Assert.Contains("not that the file is the one the project signed", result.Detail, StringComparison.Ordinal);
+        Assert.Contains("does not prove the project signed that file", result.Detail, StringComparison.Ordinal);
         Assert.Empty(_cosign.Calls);
     }
 

@@ -32,10 +32,10 @@ public static partial class WizardStepFactory
                 "decision-model",
                 "Decision model",
                 protocol
-                    ? "A small, fast model behind a protocol of its own (System One, or Gemini Decision 1). It is off until you turn it on; naming an endpoint or a model turns it on too. " +
-                      "When it is down, the rules verdict (and the LLM judge, where it runs) stands."
-                    : "A small, fast model that speaks the System One protocol. It is off until you turn it on; naming an endpoint or a model turns it on too. " +
-                      "When it is down, the rules verdict (and the LLM judge, where it runs) stands.",
+                    ? "A small, fast model behind the System One or Gemini Decision 1 protocol. It stays off until you turn it on or name an endpoint or a model. " +
+                      "If it is down, the rules verdict and the LLM judge, where it runs, stand."
+                    : "A small, fast model that speaks the System One protocol. It stays off until you turn it on or name an endpoint or a model. " +
+                      "If it is down, the rules verdict and the LLM judge, where it runs, stand.",
                 NoGate,
                 protocol ? ProtocolField(help) : null,
                 F(
@@ -46,10 +46,10 @@ public static partial class WizardStepFactory
                     "--base-url",
                     "Endpoint URL",
                     protocol
-                        ? "The full endpoint URL. https is accepted anywhere; http only to a loopback address. The URL must not carry the key (?key= is refused). " +
-                          "Examples: http://127.0.0.1:8791/v1/systemone (System One), https://generativelanguage.googleapis.com/v1beta/decisions (Gemini Decision 1). " +
-                          "Nothing is filled in for you: the decision model needs a URL and a model when it is turned on."
-                        : "The full endpoint URL. https is accepted anywhere; http only to a loopback address.",
+                        ? "The full endpoint URL. https is accepted anywhere, http only to a loopback address, and ?key= is refused. " +
+                          "Examples: http://127.0.0.1:8791/v1/systemone, https://generativelanguage.googleapis.com/v1beta/decisions. " +
+                          "A URL and a model are needed when the decision model is on."
+                        : "The full endpoint URL. https is accepted anywhere, http only to a loopback address.",
                     protocol
                         ? "http://127.0.0.1:8791/v1/systemone or https://generativelanguage.googleapis.com/v1beta/decisions"
                         : "http://127.0.0.1:8791/v1/systemone"),
@@ -57,24 +57,21 @@ public static partial class WizardStepFactory
                     "--model",
                     "Model",
                     protocol
-                        ? "The model name the endpoint serves (gemini-decision-1 for Gemini Decision 1). It is sent in each request."
+                        ? "The model name the endpoint serves, such as gemini-decision-1 for Gemini Decision 1. It is sent in each request."
                         : "The model name the endpoint serves. It is sent in each request."),
                 F(
                     "--api-key-env",
                     "Token variable name",
                     protocol
-                        ? "The NAME of the environment variable that holds the token (DEFENSECLAW_DECISION_MODEL_KEY when left blank). A local server needs none. " +
-                          "For Gemini Decision 1 the token is a Google AI Studio key, sent as x-goog-api-key; System One gets it as a bearer token. " +
-                          "The token itself is never typed here: store it in a terminal with `defenseclaw keys set DEFENSECLAW_DECISION_MODEL_KEY` " +
-                          "(it goes to ~/.defenseclaw/.env), and restart the gateway after storing a new one."
-                        : "The NAME of the environment variable that holds the bearer token (DEFENSECLAW_DECISION_MODEL_KEY when left blank). A local server needs none. " +
-                          "The token itself is never typed here: store it in a terminal with `defenseclaw keys set DEFENSECLAW_DECISION_MODEL_KEY` " +
-                          "(it goes to ~/.defenseclaw/.env), and restart the gateway after storing a new one.",
+                        ? "The NAME of the variable that holds the token, DEFENSECLAW_DECISION_MODEL_KEY if blank. A local server needs none, and Gemini Decision 1 takes a Google AI Studio key sent as x-goog-api-key. " +
+                          "Never type the token here. Store it with `defenseclaw keys set DEFENSECLAW_DECISION_MODEL_KEY` in a terminal, which writes ~/.defenseclaw/.env, then restart the gateway."
+                        : "The NAME of the variable that holds the bearer token, DEFENSECLAW_DECISION_MODEL_KEY if blank. A local server needs none. " +
+                          "Never type the token here. Store it with `defenseclaw keys set DEFENSECLAW_DECISION_MODEL_KEY` in a terminal, which writes ~/.defenseclaw/.env, then restart the gateway.",
                     "DEFENSECLAW_DECISION_MODEL_KEY"),
                 F(
                     "--show",
                     "Only show the current settings",
-                    "Print the saved decision model settings and exit; nothing is changed, and the answers on the other pages are ignored.")),
+                    "Print the saved decision model settings and exit. Nothing is changed and the other pages' answers are ignored.")),
         };
 
         if (help.Option("--connectors") is not null)
@@ -85,12 +82,12 @@ public static partial class WizardStepFactory
         steps.Add(PageOf(
             "decision-model-thresholds",
             "Thresholds",
-            "How much the model decides on its own. Leave a field blank to keep the saved value; the CLI's own defaults are in each description.",
+            "How much the model decides on its own. Leave a field blank to keep the saved value. The CLI's defaults are in each description.",
             NoGate,
             F(
                 "--timeout",
                 "Timeout (seconds)",
-                "How long one call may take. The CLI's default is 1; it is never more than a quarter of the judge's time.",
+                "How long one call may take. The CLI's default is 1, and it is capped at a quarter of the judge's time.",
                 "1"),
             F(
                 "--allow-threshold",
@@ -101,7 +98,7 @@ public static partial class WizardStepFactory
                 "--block-threshold",
                 "Block threshold",
                 protocol
-                    ? "A risk at or above this (with a risk score at or above decision_model.block_risk_score) is a confident block. The CLI's default is 0.75."
+                    ? "A risk at or above this, with a risk score at or above decision_model.block_risk_score, is a confident block. The CLI's default is 0.75."
                     : "A risk at or above this is a confident block. The CLI's default is 0.75.",
                 "0.75"),
             // Retired at 1.0.10 (the CLI still accepts it and ignores it): not offered, never sent, and kept off the "More options" page.
@@ -110,7 +107,7 @@ public static partial class WizardStepFactory
                 : F(
                     "--on-confident-block",
                     "On a confident block",
-                    "escalate (the default): the judge still checks a confident block. decide: the block stands without the judge.")));
+                    "escalate is the default and the judge still checks a confident block. decide lets the block stand without the judge.")));
 
         steps.Add(PageOf(
             "decision-model-apply",
@@ -120,7 +117,7 @@ public static partial class WizardStepFactory
             F(
                 "--ping",
                 "Check the endpoint after saving",
-                "After saving, send one benign request to the decision model endpoint. The settings are saved whether or not it answers. Off unless you turn it on."),
+                "After saving, send one request to the decision model endpoint. Settings are saved whether or not it answers. Off unless you turn it on."),
             NonInteractiveField(help)));
 
         return Compact(steps.ToArray());
@@ -150,16 +147,15 @@ public static partial class WizardStepFactory
             BaselineValue = DecisionModelCard.KeepConnectors,
             IsSynthetic = true,
             Help = protocol
-                ? "The decision model answers on its own for the connectors in this list, where the LLM judge does not run: a confident block (a risk at or above the block threshold " +
-                  "and a risk score at or above decision_model.block_risk_score, on a call the rules did not flag) is denied, a confident allow is allowed, " +
+                ? "The decision model answers on its own for the connectors in this list, where the LLM judge does not run. A confident block is denied when its risk score is at or above decision_model.block_risk_score. A confident allow is allowed, " +
                   "and anything else asks (Claude Code, Copilot, Amp, Antigravity) or raises a HIGH alert (strict mode blocks). " +
-                  "Where the judge does run, every confident block goes to the judge and stands if the judge gives no verdict; the model allows the clear benign calls, " +
-                  "and flow_guard can withdraw a confident allow. The last 25 turns (decision_model.history_turns) are sent. " +
-                  "Each connector is on one of three paths: rules only; rules then decision model; rules then decision model then judge."
-                : "The decision model answers on its own for the connectors in this list, where the LLM judge does not run: a confident allow is allowed, " +
+                  "Where the judge runs, every confident block goes to it and stands if it gives no verdict, and flow_guard can withdraw a confident allow. " +
+                  "The last 25 turns (decision_model.history_turns) are sent. " +
+                  "Each connector is on one of three paths: rules only, rules then decision model, or rules then decision model then judge."
+                : "The decision model answers on its own for the connectors in this list, where the LLM judge does not run. A confident allow is allowed, " +
                   "a confident block is denied, and anything else asks (Claude Code, Copilot, Amp, Antigravity) or raises a HIGH alert (strict mode blocks). " +
-                  "Where the judge does run, the model sits in front of it: it allows the clear benign calls and sends the rest to the judge. " +
-                  "Each connector is on one of three paths: rules only; rules then decision model; rules then decision model then judge.",
+                  "Where the judge runs, the model allows clear benign calls and sends the rest to it. " +
+                  "Each connector is on one of three paths: rules only, rules then decision model, or rules then decision model then judge.",
         };
 
         var only = new WizardField
@@ -200,7 +196,7 @@ public static partial class WizardStepFactory
             DefaultValue = string.Empty,
             BaselineValue = DecisionModelCard.ClearBaseline,
             AllowEmptyWhenChanged = true,
-            DisabledReason = "Sent as an empty value, which empties the list: the model then answers for no connector on its own.",
+            DisabledReason = "Sent as an empty value, so the model answers for no connector on its own.",
             Help = "Empties decision_model.hook_connectors. Do this before going back to a release older than 1.0.7, which refuses the key.",
             VisibleWhenFieldId = ModeId,
             VisibleWhenValues = new[] { DecisionModelCard.ClearConnectors },
@@ -229,7 +225,7 @@ public static partial class WizardStepFactory
             Flag = "--non-interactive",
             DefaultValue = ToggleValues.On,
             BaselineValue = ToggleValues.Off,
-            DisabledReason = "Always sent: the app has no terminal to answer the CLI's prompts with.",
+            DisabledReason = "Always sent because the app cannot answer the CLI's prompts.",
             Help = "Use the flags given instead of asking questions.",
         };
 
@@ -266,6 +262,6 @@ public static partial class WizardStepFactory
 
             return f.AsChoice(choices).WithWording(
                 "Protocol",
-                "The wire protocol of the endpoint: System One (the default) or Gemini Decision 1 (a Google AI Studio key). Leave it unchanged to keep what config.yaml has.");
+                "The protocol of the endpoint, System One (default) or Gemini Decision 1. Leave it unchanged to keep what config.yaml has.");
         });
 }

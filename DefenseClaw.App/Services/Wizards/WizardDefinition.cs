@@ -699,7 +699,7 @@ public static class PlatformStatusText
             PlatformStatus.NotCertified =>
                 string.Format(
                     CultureInfo.CurrentCulture,
-                    "The CLI reports this integration as not_certified on Windows.{0} Setup will run, but the connector has not completed native Windows x64 certification.",
+                    "The CLI reports this integration as not_certified on Windows.{0} Setup will run, but the connector is not certified on Windows.",
                     detail),
             PlatformStatus.Unsupported =>
                 string.Format(
@@ -711,10 +711,10 @@ public static class PlatformStatusText
             PlatformStatus.Preview =>
                 string.Format(
                     CultureInfo.CurrentCulture,
-                    "The CLI reports this integration as preview on Windows.{0} Setup is available, but a preview integration has not completed Windows certification.",
+                    "The CLI reports this integration as preview on Windows.{0} Setup is available, but a preview integration is not certified on Windows.",
                     detail),
             PlatformStatus.Unknown =>
-                "The per-target help could not be read, so certification could not be confirmed. Treat the result as unverified.",
+                "The per-target help could not be read, so certification is unconfirmed.",
             _ => string.Empty,
         };
     }

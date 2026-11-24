@@ -19,7 +19,7 @@ public static class UpgradeSourceRange
     private static readonly Version FirstTargetWithSessionAdvice = new(1, 0, 8);
 
     private const string AgentSessionAdvice =
-        "End every agent session before you upgrade and start new ones afterwards: the 0.8.x Claude Code hook can let tool calls run without a check while the upgrade runs.";
+        "End every agent session before you upgrade and start new ones afterwards. The 0.8.x Claude Code hook can let tool calls run unchecked during the upgrade.";
 
     /// <summary>A warning row, or null: no entry for the target, an installed version that is unknown or inside the range, or a reinstall of the target.</summary>
     public static PreflightRow? Row(string? targetVersion, string? installedVersion)
@@ -46,7 +46,7 @@ public static class UpgradeSourceRange
         }
 
         var text = string.Create(CultureInfo.InvariantCulture,
-            $"The DefenseClaw {target} release notes support upgrades from {range.From} to {range.To}, not from {installed}. The upgrade still runs, but this path is no longer tested.");
+            $"The DefenseClaw {target} release notes cover upgrades from {range.From} to {range.To}. You have {installed}, so the upgrade still runs but this path is no longer tested.");
         if (from.Major == 0)
         {
             text += " " + AgentSessionAdvice;

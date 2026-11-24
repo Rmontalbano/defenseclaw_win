@@ -235,7 +235,7 @@ public static class GuardrailScope
         var prefix = connectorScope ? GuardrailFields.ConnectorPrefix : string.Empty;
         if (values[prefix + "rule-pack"].Trim().Length > 0 && values[prefix + "rule-pack-dir"].Trim().Length > 0)
         {
-            return "Use either a rule pack or a rule pack directory, not both: the CLI treats them as mutually exclusive.";
+            return "Use a rule pack or a rule pack directory, not both. The CLI treats them as mutually exclusive.";
         }
 
         return null;

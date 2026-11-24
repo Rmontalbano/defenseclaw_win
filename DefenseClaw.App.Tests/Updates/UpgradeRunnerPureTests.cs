@@ -212,7 +212,7 @@ public class UpgradeRunnerPureTests
         Assert.Equal(UpgradeChannel.SetupInstaller, layout.RecommendedChannel);
         Assert.False(layout.ResolverLayoutPresent);
         Assert.Contains("Managed Python not found", layout.Detail, StringComparison.Ordinal);
-        Assert.Contains("the managed runtime is under " + UpgradeRunner.SetupRuntimeDirectory(), layout.Detail, StringComparison.Ordinal);
+        Assert.Contains("The managed runtime is under " + UpgradeRunner.SetupRuntimeDirectory(), layout.Detail, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -221,7 +221,7 @@ public class UpgradeRunnerPureTests
         var layout = UpgradeRunner.DetectResolverLayout(fileExists: _ => false, directoryExists: _ => false);
 
         Assert.Equal(UpgradeChannel.SetupInstaller, layout.RecommendedChannel);
-        Assert.Contains("native Setup installs put the managed runtime under " + UpgradeRunner.SetupRuntimeDirectory(), layout.Detail, StringComparison.Ordinal);
+        Assert.Contains("A native Setup install puts the managed runtime under " + UpgradeRunner.SetupRuntimeDirectory(), layout.Detail, StringComparison.Ordinal);
     }
 
     [Fact]

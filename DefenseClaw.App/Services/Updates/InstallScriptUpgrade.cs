@@ -28,8 +28,8 @@ public static class InstallScriptPlan
         "Config moves to version 9. The old file is kept as config.yaml.v8.bak and the migration is written to migration-v9.json.",
         "The Setup install is removed; its files are kept in %USERPROFILE%\\.defenseclaw\\previous\\legacy-setup.",
         "The CLI moves to %USERPROFILE%\\.local\\bin (added to your user PATH).",
-        "The gateway is stopped, replaced and started again; the installer restores the previous install by itself if the upgrade, the migration or the health check fails.",
-        "Rollback is available afterwards, with one limit: the installer cannot restore a DefenseClaw Setup install automatically (see the Roll back note).",
+        "The gateway is stopped, replaced and started again. The installer restores the previous install itself if the upgrade, the migration or the health check fails.",
+        "Rollback is available afterwards, except that the installer cannot restore a DefenseClaw Setup install automatically. See the Roll back note.",
     ];
 
     /// <summary>
@@ -154,8 +154,8 @@ public static class InstallScriptPlan
     /// (scripts/install.ps1:5536 in 1.0.5), so the refusals before that, such as another install or doctor run taking over the lock, are only in its console.
     /// </summary>
     public const string NoLogNote =
-        "No install log was found for this run. install.ps1 starts its log only after it takes the install lock, so a run that ends without one usually " +
-        "stopped before it changed anything (for example, another install or doctor run was taking over the install lock). Its console window says why.";
+        "No install log was found for this run. install.ps1 starts its log only after it takes the install lock, so a run without one usually " +
+        "stopped before it changed anything, for example because another install or doctor run was taking over the install lock. Its console window says why.";
 
     /// <summary><c>%USERPROFILE%\.defenseclaw\logs</c> under <paramref name="dataDirectory"/>.</summary>
     public static string LogDirectory(string dataDirectory) => Path.Combine(dataDirectory, "logs");
@@ -232,8 +232,8 @@ public static class InstallScriptPlan
     public const string AcceptCurrentInstallFlag = "-AcceptCurrentInstall";
 
     public const string AcceptCurrentInstallHint =
-        "The installer finished nothing and says to run it again with -AcceptCurrentInstall, which keeps the config and connectors as they are now instead of " +
-        "restoring the earlier install's. Use it only if you changed them on purpose; run the command it printed in a console, because this app does not add the switch.";
+        "The installer finished nothing and says to run it again with -AcceptCurrentInstall. That keeps the config and connectors as they are now instead of " +
+        "restoring the earlier install's. Use it only if you changed them on purpose, and run the command it printed in a console. This app does not add the switch.";
 
     /// <summary>
     /// The one-line hint for a reason that names an unresolved connector recovery, or that tells the operator to run the installer again with
@@ -586,9 +586,8 @@ public static class PostUpgradeLeftovers
                 AutostartId,
                 "Gateway autostart",
                 PreflightStatus.Warn,
-                $"The Windows sign-in entry \"{RunValueName}\" still points to {target}, which the upgrade removed, and DefenseClaw 1.0 adds no replacement. " +
-                "The gateway will not start when you sign in. Turn on this app's auto-start setting (Settings, Startup) to start it instead. " +
-                "This app does not change that registry value."));
+                $"The Windows sign-in entry \"{RunValueName}\" still points to {target}, which the upgrade removed. DefenseClaw 1.0 adds no replacement, " +
+                "so the gateway will not start when you sign in. Turn on this app's auto-start setting (Settings, Startup) to start it instead. This app does not change that registry value."));
         }
 
         if (probes.FindUninstallEntry(UninstallKeyName) is { } entry)
@@ -601,13 +600,13 @@ public static class PostUpgradeLeftovers
                 "Add/Remove Programs entry",
                 PreflightStatus.Warn,
                 besideSetup
-                    ? $"Windows Settings still lists \"{name}\", and its uninstaller points to {cached}. DefenseClaw Setup 0.8.x is still installed beside 1.0. " +
-                      "'defenseclaw uninstall' removes it (its data folder is kept), but it also stops this release's gateway and removes the hooks of the connectors it has configured, " +
-                      "so run setup again afterwards. 'defenseclaw init' will not set up hooks while Setup's hooks remain in the agent's settings. " +
-                      (coworkPluginLeft ? CoworkUninstall.SentenceFor(coworkPluginRunsAfterRemoval) + " " : string.Empty) + "This app does not change that entry."
-                    : $"Windows Settings still lists \"{name}\", and its uninstaller points to {cached}. Do not uninstall it from Windows Settings on a 1.0 machine: " +
-                      "it is the old Setup's entry, not the 1.0 install's. To remove DefenseClaw 1.0 use 'defenseclaw uninstall'. " +
-                      (coworkPluginLeft ? CoworkUninstall.SentenceFor(coworkPluginRunsAfterRemoval) + " " : string.Empty) + "This app does not change that entry."));
+                    ? $"Windows Settings still lists \"{name}\" and its uninstaller points to {cached}. DefenseClaw Setup 0.8.x is still installed beside 1.0. " +
+                      "'defenseclaw uninstall' removes it and keeps its data folder. It also stops this release's gateway and removes the hooks of the configured connectors, " +
+                      "so run setup again afterwards. 'defenseclaw init' will not set up hooks while Setup's hooks remain in the agent's settings." +
+                      (coworkPluginLeft ? " " + CoworkUninstall.SentenceFor(coworkPluginRunsAfterRemoval) : string.Empty)
+                    : $"Windows Settings still lists \"{name}\" and its uninstaller points to {cached}. Do not uninstall it from Windows Settings on a 1.0 machine. " +
+                      "It is the old Setup's entry. To remove DefenseClaw 1.0, use 'defenseclaw uninstall'." +
+                      (coworkPluginLeft ? " " + CoworkUninstall.SentenceFor(coworkPluginRunsAfterRemoval) : string.Empty)));
         }
 
         return rows;
@@ -907,8 +906,8 @@ public static class InstallScriptPreflight
             .ToArray();
         rows.Add(others.Length > 0
             ? new PreflightRow(ProcessesId, "DefenseClaw processes", PreflightStatus.Pass,
-                $"Running: {string.Join(", ", others)}. That is fine: the installer stops the gateway itself and starts it again. " +
-                "If a file is held open it reports which program, and this app releases its own database handles before it starts.")
+                $"Running: {string.Join(", ", others)}. The installer stops the gateway itself and starts it again. " +
+                "If a file is held open it reports which program.")
             : new PreflightRow(ProcessesId, "DefenseClaw processes", PreflightStatus.Pass, "No other DefenseClaw program is running."));
 
         rows.Add(PendingWritesRow(probes, dataDirectory, recoverConfigInstalled));
@@ -982,8 +981,8 @@ public static class InstallScriptPreflight
 
         var who = openCode && amp ? "OpenCode and Amp are running" : openCode ? "OpenCode is running" : "Amp is running";
         return new PreflightRow(PluginAgentsId, title, PreflightStatus.Warn,
-            who + (openCode && amp ? ". Close them" : ". Close it") + " completely first: the installer stops, before it changes anything, while OpenCode or Amp still holds DefenseClaw's plugin." +
-            (openCode ? " OpenCode V2 keeps a background server after its window closes: stop it with 'opencode service stop'." : string.Empty));
+            who + (openCode && amp ? ". Close them" : ". Close it") + " completely first. While OpenCode or Amp holds DefenseClaw's plugin, the installer stops before it changes anything." +
+            (openCode ? " OpenCode V2 keeps a background server after its window closes. Stop it with 'opencode service stop'." : string.Empty));
     }
 
     /// <summary>

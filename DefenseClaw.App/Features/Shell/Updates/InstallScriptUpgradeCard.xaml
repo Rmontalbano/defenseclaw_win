@@ -89,7 +89,7 @@
                                 <ui:Button Margin="0,6,0,0"
                                            HorizontalAlignment="Left"
                                            Appearance="Secondary"
-                                           AutomationProperties.HelpText="Shows the Overview panel. Nothing is changed by opening it."
+                                           AutomationProperties.HelpText="Shows the Overview panel."
                                            Command="{Binding DataContext.RunPreflightActionCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
                                            CommandParameter="{Binding ActionId}"
                                            Content="{Binding ActionLabel}"
@@ -105,7 +105,7 @@
             <!-- Download (also how a rollback gets a verified script on a machine already on 1.0) -->
             <ctl:DcCardHeader Margin="0,0,0,2" Symbol="ArrowDownload24" Section="Updates" Content="Download and verify" />
             <TextBlock Margin="0,0,0,8" Style="{StaticResource DcCaption}"
-                       Text="Fetches install.ps1 and checksums.txt (with the signature files, when the release publishes them) into this app's staging folder, compares install.ps1's SHA-256 with checksums.txt, and verifies that file's sigstore signature when cosign is installed. Nothing on this machine changes." />
+                       Text="Downloads install.ps1 and checksums.txt, compares the SHA-256, and verifies the sigstore signature when cosign is installed. Nothing on this machine changes." />
             <StackPanel Margin="0,0,0,8" Orientation="Horizontal">
                 <ui:Button Appearance="Primary"
                            Command="{Binding DownloadAndVerifyCommand}"
@@ -113,7 +113,7 @@
                            Icon="{ctl:DcSymbolIcon ArrowDownload24}" />
                 <TextBlock Margin="12,0,0,0" MaxWidth="470" VerticalAlignment="Center" Style="{StaticResource DcCaption}" Text="{Binding StagingSummary}" />
             </StackPanel>
-            <ui:InfoBar Title="Verification failed - nothing was staged"
+            <ui:InfoBar Title="Verification failed. Nothing was staged."
                         Margin="0,0,0,12"
                         IsClosable="False"
                         IsOpen="{Binding HasStagingError, Mode=OneWay}"
@@ -155,10 +155,10 @@
             <StackPanel Visibility="{Binding ShowUpgradeSteps, Converter={StaticResource BoolToVisibility}}">
             <ctl:DcCardHeader Margin="0,0,0,2" Symbol="Play24" Section="Updates" Content="Review and run" />
             <TextBlock Margin="0,0,0,8" Style="{StaticResource DcCaption}"
-                       Text="Opens a review of the exact command. install.ps1 then runs in a console window of its own, where it asks its own questions. It keeps running if you close this app." />
+                       Text="Opens a review of the exact command. install.ps1 then runs in its own console window and keeps running if you close this app." />
             <CheckBox Margin="0,0,0,8"
-                      AutomationProperties.HelpText="Adds -Yes: the installer answers its own confirmation prompts instead of asking you in its console."
-                      Content="Add -Yes (the installer will not ask its confirmation questions)"
+                      AutomationProperties.HelpText="Adds -Yes. The installer answers its confirmation prompts itself instead of asking in its console."
+                      Content="Add -Yes so the installer does not ask for confirmation"
                       IsChecked="{Binding UseYes, Mode=TwoWay}" />
             <StackPanel Margin="0,0,0,8" Orientation="Horizontal">
                 <ui:Button x:Name="RunButton"
@@ -380,7 +380,7 @@
                             Margin="0,8,0,0"
                             IsClosable="False"
                             IsOpen="True"
-                            Message="This app keeps its old-version assumptions (panel layouts, CLI flags, health fields) until you restart it. Restart DefenseClaw for Windows after the upgrade."
+                            Message="Restart DefenseClaw for Windows after the upgrade. Until then it still assumes the old version's panels and CLI flags."
                             Severity="Warning">
                     <StackPanel Margin="0,8,0,0">
                         <ui:Button Appearance="Primary"

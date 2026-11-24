@@ -58,17 +58,17 @@
             where the operator learns why. Collapsed (zero height) the rest of the time.
         -->
         <StackPanel Grid.Row="1">
-            <ui:InfoBar Title="Upgrade in progress — this window stays open until it finishes"
+            <ui:InfoBar Title="Upgrade in progress. This window stays open until it finishes."
                         Margin="24,4,24,0"
                         IsClosable="False"
                         IsOpen="{Binding Upgrade.IsCloseBlocked, Mode=OneWay}"
                         Message="{Binding Upgrade.CloseBlockedNotice, Mode=OneWay}"
                         Severity="Warning" />
-            <ui:InfoBar Title="install.ps1 is running — this window stays open until it finishes"
+            <ui:InfoBar Title="install.ps1 is running. This window stays open until it finishes."
                         Margin="24,4,24,0"
                         IsClosable="False"
                         IsOpen="{Binding InstallScript.IsRunning, Mode=OneWay}"
-                        Message="The installer is in a console window of its own and carries on whether or not this window is open. Closing here would only lose the result panel, so it waits."
+                        Message="The installer runs in its own console window. Closing this window would lose the result panel."
                         Severity="Warning" />
         </StackPanel>
 
@@ -88,11 +88,11 @@
                             Message="{Binding Upgrade.UpgradeBlockedReason, Mode=OneWay}"
                             Severity="Warning" />
 
-                <ui:InfoBar Title="Check, verify, then upgrade — one click at a time"
+                <ui:InfoBar Title="Check, verify, then upgrade"
                             Margin="{StaticResource DcCardGap}"
                             IsClosable="False"
                             IsOpen="True"
-                            Message="Checking and the trust panel are read-only. The upgrade card can also download the target release's Setup installer (or its upgrade script, on installs where that works), compare its SHA-256 with that release's checksums.txt (and, when cosign is installed, verify that file's sigstore signature first), and run it — as three separate clicks, with the exact command shown in a confirm step first. The run is recorded in the Activity panel like every other command this app issues. Prefer to do it yourself? The copyable commands further down still work."
+                            Message="Checking is read-only. The upgrade card downloads the release installer and compares its SHA-256 with checksums.txt, whose sigstore signature is verified when cosign is installed. It runs only after you confirm the command. Copyable commands are further down."
                             Severity="Informational" />
 
                 <!-- Version comparison -->
@@ -179,7 +179,7 @@
                                     Margin="0,12,0,0"
                                     IsClosable="False"
                                     IsOpen="{Binding IsRateLimited, Mode=OneWay}"
-                                    Message="GitHub's unauthenticated API rate limit (60 requests/hour/IP) was hit. Try again later."
+                                    Message="GitHub's API rate limit (60 requests per hour per IP) was reached. Try again later."
                                     Severity="Warning" />
 
                         <ui:InfoBar Title="Cached result"
@@ -314,7 +314,7 @@
                 <!-- The 1.0.0+ channel: the release's install.ps1 (CUST-346). Visible only when it is the channel for the target release. -->
                 <local:InstallScriptUpgradeCard Margin="{StaticResource DcCardGap}" DataContext="{Binding InstallScript}" />
                 <CheckBox Margin="0,-4,0,12"
-                          Content="Show the Setup-exe / resolver upgrade card anyway"
+                          Content="Show the Setup installer and resolver upgrade card anyway"
                           IsChecked="{Binding ShowLegacyChannels, Mode=TwoWay}"
                           Visibility="{Binding InstallScript.IsVisible, Converter={StaticResource BoolToVisibility}}" />
 
@@ -404,7 +404,7 @@
                                     Severity="Warning" />
 
                         <!-- Step 1 -->
-                        <ctl:DcCardHeader Margin="0,0,0,2" Symbol="ArrowDownload24" Section="Updates" Content="Step 1 — download and verify" />
+                        <ctl:DcCardHeader Margin="0,0,0,2" Symbol="ArrowDownload24" Section="Updates" Content="Step 1: download and verify" />
                         <TextBlock Margin="0,0,0,8" Style="{StaticResource DcCaption}" Text="{Binding StagingStepNote}" />
 
                         <StackPanel Margin="0,0,0,8" Orientation="Horizontal">
@@ -490,7 +490,7 @@
                             </Grid>
                         </Border>
 
-                        <ui:InfoBar Title="Verification failed — nothing was staged"
+                        <ui:InfoBar Title="Verification failed. Nothing was staged."
                                     Margin="0,0,0,12"
                                     IsClosable="False"
                                     IsOpen="{Binding HasStagingError, Mode=OneWay}"
@@ -498,7 +498,7 @@
                                     Severity="Error" />
 
                         <!-- Step 2 -->
-                        <ctl:DcCardHeader Margin="0,0,0,2" Symbol="Play24" Section="Updates" Content="Step 2 — run the upgrade" />
+                        <ctl:DcCardHeader Margin="0,0,0,2" Symbol="Play24" Section="Updates" Content="Step 2: run the upgrade" />
                         <TextBlock Margin="0,0,0,8" Style="{StaticResource DcCaption}" Text="{Binding RunStepNote}" />
 
                         <ui:Button x:Name="RunUpgradeButton"
@@ -561,7 +561,7 @@
                                                HorizontalAlignment="Center"
                                                VerticalAlignment="Center"
                                                Style="{StaticResource DcEmptyDetail}"
-                                               Text="No output yet. Anything printed streams here as it arrives, and the same invocation is in the Activity panel — a quiet installer run may print almost nothing."
+                                               Text="No output yet. Output appears here as it arrives. The command is also in the Activity panel."
                                                IsHitTestVisible="False"
                                                Visibility="{Binding HasOutput, Converter={StaticResource InverseBoolToVisibility}}" />
                                 </Grid>
@@ -686,7 +686,7 @@
                                    Text="This restarts the DefenseClaw gateway." />
                         <TextBlock Margin="0,0,0,12"
                                    Style="{StaticResource DcCaption}"
-                                   Text="Nothing has run yet. This is the exact command that will execute — the same argument list the CLI runner receives, with no shell in between." />
+                                   Text="Nothing has run yet. This is the exact command that will run." />
 
                         <Border Style="{StaticResource DcCodeBlock}">
                             <StackPanel>

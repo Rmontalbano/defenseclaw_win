@@ -275,8 +275,8 @@ public sealed class UpdateChecker : IDisposable
             return result with
             {
                 Detail = isRateLimited
-                    ? $"GitHub's API rate limit was hit; showing cached data from {cachedAtText}."
-                    : $"The live check failed ({fetchError}); showing cached data from {cachedAtText}.",
+                    ? $"GitHub's API rate limit was reached. Showing cached data from {cachedAtText}."
+                    : $"The live check failed: {fetchError} Showing cached data from {cachedAtText}.",
             };
         }
 
@@ -287,7 +287,7 @@ public sealed class UpdateChecker : IDisposable
             IsRateLimited = isRateLimited,
             ErrorMessage = fetchError ?? "The release check failed for an unknown reason.",
             Detail = isRateLimited
-                ? "GitHub's unauthenticated API rate limit (60 requests/hour/IP) was hit. Try again later."
+                ? "GitHub's API rate limit (60 requests per hour per IP) was reached. Try again later."
                 : fetchError ?? "The release check failed for an unknown reason.",
             CheckedAt = DateTimeOffset.UtcNow,
             FromCache = false,
@@ -642,7 +642,7 @@ public sealed class UpdateChecker : IDisposable
 
         var message = SummarizeErrorBody(body);
         return remaining == "0"
-            ? $"GitHub's unauthenticated API rate limit (60/hour/IP) was hit. {message}".Trim()
+            ? $"GitHub's API rate limit (60 requests per hour per IP) was reached. {message}".Trim()
             : $"GitHub rejected the request (HTTP {(int)response.StatusCode}). {message}".Trim();
     }
 

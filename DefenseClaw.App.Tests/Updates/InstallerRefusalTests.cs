@@ -276,8 +276,8 @@ public sealed class InstallerRefusalTests : IDisposable
         var note = RollbackAgentPreflight.Note("1.0.5", "1.0.5", "1.0.4", [Updated]);
 
         Assert.Equal(
-            "Codex was updated after DefenseClaw 1.0.4 set up Codex 0.46.0. Before it changes anything, the installer selects the updated Codex for DefenseClaw 1.0.4, " +
-            "as 'defenseclaw setup codex' would; if it cannot, it refuses the rollback and nothing is changed.",
+            "Codex was updated after DefenseClaw 1.0.4 set up Codex 0.46.0. The installer selects the updated Codex for DefenseClaw 1.0.4 first, " +
+            "as 'defenseclaw setup codex' would. If it cannot, it refuses the rollback and changes nothing.",
             note);
     }
 

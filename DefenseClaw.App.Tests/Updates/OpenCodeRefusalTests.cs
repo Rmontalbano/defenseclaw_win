@@ -562,8 +562,8 @@ public sealed class OpenCodeRefusalTests : IDisposable
         var note = RollbackAgentPreflight.OpenCodeNote("1.0.6", "1.0.6", "1.0.5", V2);
 
         Assert.Equal(
-            "OpenCode V2 (2.2.4) is set up here, and releases before 1.0.6 cannot guard it: DefenseClaw 1.0.5 guards OpenCode V1 only. The installer refuses this rollback and nothing is changed. " +
-            "To roll back, put OpenCode V1 back first (npm uninstall -g @opencode/cli && npm install -g opencode-ai@1.18), then run 'defenseclaw agent discover --refresh' so DefenseClaw sees it, or stay on this release.",
+            "OpenCode V2 (2.2.4) is set up here and releases before 1.0.6 cannot guard it. DefenseClaw 1.0.5 guards OpenCode V1 only, so the installer refuses this rollback and changes nothing. " +
+            "To roll back, put OpenCode V1 back first with npm uninstall -g @opencode/cli && npm install -g opencode-ai@1.18, then run 'defenseclaw agent discover --refresh'. Or stay on this release.",
             note);
     }
 

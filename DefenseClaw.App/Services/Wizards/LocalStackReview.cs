@@ -125,11 +125,10 @@ public static class LocalStackReview
                     var overwrites = !Has(argv, "--no-refresh-config");
                     warnings.Add(new CommandReviewWarning(
                         RefreshesFilesTitle,
-                        "First refreshes ~/.defenseclaw/observability-stack/ from the copy bundled with DefenseClaw. " +
+                        "First refreshes ~/.defenseclaw/observability-stack/ from the bundled copy and restarts the stack if it is running. " +
                         (overwrites
-                            ? "That overwrites any edits you made to its Grafana dashboards, Prometheus rules and Loki, Tempo and collector configs (--no-refresh-config keeps them). "
-                            : "Your edits to its dashboards, rules and configs are kept (--no-refresh-config). ") +
-                        "A stack that is already running is stopped, refreshed and started again."));
+                            ? "This overwrites any edits to its dashboards, rules and configs unless you add --no-refresh-config."
+                            : "Your edits to its dashboards, rules and configs are kept because of --no-refresh-config.")));
                 }
 
                 break;
@@ -137,7 +136,7 @@ public static class LocalStackReview
             case "down":
                 if (!Has(argv, "--disable-config"))
                 {
-                    warnings.Add(StillExporting(" (--disable-config does that)."));
+                    warnings.Add(StillExporting(" with --disable-config."));
                 }
 
                 break;
@@ -145,10 +144,10 @@ public static class LocalStackReview
             case "reset":
                 warnings.Add(new CommandReviewWarning(
                     DeletesDataTitle,
-                    "Stops the stack and drops its Prometheus, Loki, Tempo and Grafana data volumes: every stored metric, log and trace, and " +
-                    "Grafana's own data. This cannot be undone." +
+                    "Stops the stack and deletes its Prometheus, Loki, Tempo and Grafana data volumes, including every stored metric, log and trace. " +
+                    "This cannot be undone." +
                     (Has(argv, "--yes")
-                        ? " This review stands in for the CLI's own \"Continue?\" question, which is why --yes is on the command."
+                        ? " --yes stands in for the CLI's own \"Continue?\" question."
                         : string.Empty)));
                 warnings.Add(StillExporting("."));
                 break;
@@ -158,7 +157,7 @@ public static class LocalStackReview
         {
             warnings.Add(new CommandReviewWarning(
                 DockerMayRefuseTitle,
-                "The CLI checks Docker itself before it changes anything, and from here it looks like it would refuse: " +
+                "The CLI checks Docker before it changes anything and would likely refuse. " +
                 string.Join(" ", docker.Warnings)));
         }
 
@@ -172,8 +171,8 @@ public static class LocalStackReview
     private static CommandReviewWarning StillExporting(string ending) =>
         new(
             ExportingContinuesTitle,
-            "The local-observability destination stays enabled in config.yaml, so the gateway keeps trying to export to the stack " +
-            "until it is started again or the destination is disabled" + ending);
+            "The local-observability destination stays enabled in config.yaml, so the gateway keeps trying to export " +
+            "until the stack is started again or the destination is disabled" + ending);
 
     /// <summary>
     /// True when <paramref name="flag"/> is on the command as an option. Only what comes before a <c>--</c> can be one, and a token that is the

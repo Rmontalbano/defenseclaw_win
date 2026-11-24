@@ -59,15 +59,16 @@ public sealed record CommandReviewWarning(string Title, string Message)
             .ToArray();
         return new CommandReviewWarning(
             ArgumentExpansionTitle,
-            "The CLI expands %VARIABLES%, $VARIABLES, ~ and wildcards in every argument on Windows, even after --. " +
-            "What runs differs from the command above: " + string.Join(' ', lines));
+            "The DefenseClaw CLI expands %VARIABLES%, $VARIABLES, ~ and wildcards in every argument on Windows, even after --. " +
+            "The command that runs differs from the one above. " + string.Join(' ', lines));
     }
 
     /// <summary>The bar a command carries when it asks the CLI to print values it normally masks.</summary>
     public static CommandReviewWarning SecretOutput() =>
         new(
             SecretOutputTitle,
-            "This command prints secret values the CLI normally masks. They appear in Activity, in exported logs and on the clipboard if you copy them.");
+            "This command prints secret values the CLI normally masks. They appear in the Activity panel, in any log you " +
+            "export and on the clipboard if you copy them.");
 
     /// <summary>
     /// The bar a review carries when a name it acts on - a skill, plugin, MCP server, registry entry or tool, which came from outside - has
@@ -95,7 +96,7 @@ public sealed record CommandReviewWarning(string Title, string Message)
             : $"{described.Length} names contain unusual characters ({string.Join("; ", described)}).";
         return new CommandReviewWarning(
             UnusualCharactersTitle,
-            lead + " Compare it with the command above, where such characters are spelled out.");
+            lead + " It can look like another name, so compare it with the command above, where such characters are spelled out.");
     }
 }
 
@@ -224,7 +225,8 @@ public sealed record CommandReview
     /// alone cannot say which, so the review keeps the restart badge and this paragraph says "may".
     /// </summary>
     public const string CoworkRestartNotice =
-        "This may restart the DefenseClaw gateway. If the Claude Code connector is missing, setup cowork sets it up first, which restarts the gateway. Otherwise nothing restarts. " +
+        "This may restart the DefenseClaw gateway. If the Claude Code connector is not set up yet, setup cowork sets it up first and that " +
+        "restarts the gateway. If it is already set up, nothing restarts. " +
         "Agents that use DefenseClaw hooks may lose the gateway for a few seconds.";
 
     /// <summary>
@@ -406,7 +408,7 @@ public sealed record CommandReview
     public bool HasMultipleSteps => Steps.Count > 1;
 
     /// <summary>The sentence every review of more than one command opens its summary with (CUST-379).</summary>
-    public const string SequenceSentence = "These commands run in order and stop on the first failure.";
+    public const string SequenceSentence = "These commands run in order and stop at the first failure.";
 
     /// <summary>
     /// What the summary line shows: <see cref="Summary"/>, led by <see cref="SequenceSentence"/> when the review runs more than one command. A summary

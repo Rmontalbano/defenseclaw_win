@@ -128,7 +128,7 @@ public sealed class UpgradeAdvisoryTests : IDisposable
         var row = report.Rows.Single(r => r.Id == "upgrade-source");
         Assert.Equal(PreflightStatus.Warn, row.Status);
         Assert.Equal("Upgrade path", row.Title);
-        Assert.Contains("support upgrades from 1.0.2 to 1.0.7, not from " + installed + ". The upgrade still runs, but this path is no longer tested.", row.Reason, StringComparison.Ordinal);
+        Assert.Contains("cover upgrades from 1.0.2 to 1.0.7. You have " + installed + ", so the upgrade still runs but this path is no longer tested.", row.Reason, StringComparison.Ordinal);
         Assert.Equal(sessionsAdvice, row.Reason.Contains("End every agent session", StringComparison.Ordinal));
         Assert.False(report.HasBlock);
     }

@@ -63,16 +63,14 @@ public static class SplunkDashboardsReview
         return verb switch
         {
             SplunkDashboards.Plan =>
-                "Shows what Terraform would change in Splunk Observability Cloud, and changes nothing there. On this machine it writes " +
-                "Terraform's working files and state (under ~/.defenseclaw/splunk-o11y-dashboards unless you point it elsewhere) and " +
-                "fetches Terraform's Splunk provider the first time.",
+                "Shows what Terraform would change in Splunk Observability Cloud, and changes nothing there. Locally it writes Terraform files " +
+                "and state under ~/.defenseclaw/splunk-o11y-dashboards and fetches the Splunk provider on first use.",
             SplunkDashboards.Apply =>
-                "Creates or updates the DefenseClaw dashboards in Splunk Observability Cloud through Terraform, adopting ones with the " +
-                "same names that already exist. It does everything plan does on this machine first.",
+                "Creates or updates the DefenseClaw dashboards in Splunk Observability Cloud through Terraform, and adopts existing dashboards " +
+                "with the same names. It does what plan does locally first.",
             SplunkDashboards.Destroy =>
-                "Deletes from Splunk Observability Cloud everything the Terraform state manages: the DefenseClaw dashboard group, its " +
-                "dashboards and charts and, if it created them, its detectors. That includes same-named dashboards an earlier plan or " +
-                "apply adopted, even ones that were there before DefenseClaw.",
+                "Deletes from Splunk Observability Cloud everything the Terraform state manages, including the DefenseClaw dashboard group, its " +
+                "dashboards, charts and detectors, and same-named dashboards an earlier plan or apply adopted, even ones that predate DefenseClaw.",
             _ => string.Empty,
         };
     }
@@ -110,15 +108,14 @@ public static class SplunkDashboardsReview
             case SplunkDashboards.Apply:
                 warnings.Add(new CommandReviewWarning(
                     AppliesNowTitle,
-                    "Terraform prints its plan as the command runs but does not wait for you to read it: --yes stands in for the CLI's own " +
-                    "\"Apply these Splunk Observability Cloud changes?\" question, and this review is that question. To read the plan " +
-                    "first, run plan, which shows the same changes."));
+                    "Terraform prints the plan as it applies and does not wait for you to read it. --yes stands in for the CLI's own " +
+                    "confirmation. To see the changes first, run plan."));
                 if (!Has(argv, "--with-detectors"))
                 {
                     warnings.Add(new CommandReviewWarning(
                         RemovesDetectorsTitle,
-                        "Without --with-detectors Terraform plans for no detectors, so if an earlier run created them from this state, " +
-                        "applying removes them from Splunk. Add --with-detectors to keep them; run plan to see what would go."));
+                        "Without --with-detectors, applying removes any detectors an earlier run created from this state. " +
+                        "Add --with-detectors to keep them, or run plan to see what would go."));
                 }
 
                 break;
@@ -128,7 +125,7 @@ public static class SplunkDashboardsReview
                     DeletesTitle,
                     "Terraform deletes every Splunk Observability Cloud object its state records. This cannot be undone." +
                     (Has(argv, "--yes")
-                        ? " This review stands in for the CLI's own \"Destroy these Splunk Observability Cloud objects?\" question, which is why --yes is on the command."
+                        ? " --yes stands in for the CLI's own confirmation."
                         : string.Empty)));
                 break;
         }
@@ -137,9 +134,9 @@ public static class SplunkDashboardsReview
         {
             warnings.Add(new CommandReviewWarning(
                 NoTokenTitle,
-                $"The command reads the Splunk Observability Cloud API token from {SplunkDashboards.TokenVariable}, which is not set in this " +
-                "app's environment or in ~/.defenseclaw/.env, so it will stop at once with \"Splunk O11y token not found\" and change " +
-                "nothing. The palette cannot ask for the token: the Splunk dashboards card on the Setup page takes it for one run."));
+                $"The API token variable {SplunkDashboards.TokenVariable} is not set in this app's environment or in ~/.defenseclaw/.env, " +
+                "so the command stops with \"Splunk O11y token not found\" and changes nothing. " +
+                "The Splunk dashboards card on the Setup page takes the token for one run."));
         }
 
         return warnings;

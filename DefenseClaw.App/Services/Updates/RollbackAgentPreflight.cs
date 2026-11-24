@@ -46,8 +46,8 @@ public static class RollbackAgentPreflight
 
         return StartsWithoutCodex.IsMatch(target)
             ? $"{what}. The rollback finishes, but DefenseClaw {target} starts without Codex hooks until you run 'defenseclaw setup codex' after it."
-            : $"{what}. Before it changes anything, the installer selects the updated Codex for DefenseClaw {target}, as 'defenseclaw setup codex' would; " +
-              "if it cannot, it refuses the rollback and nothing is changed.";
+            : $"{what}. The installer selects the updated Codex for DefenseClaw {target} first, as 'defenseclaw setup codex' would. " +
+              "If it cannot, it refuses the rollback and changes nothing.";
     }
 
     /// <summary>
@@ -74,9 +74,10 @@ public static class RollbackAgentPreflight
             return null;
         }
 
-        return $"OpenCode V2 ({v2.Version}) is set up here, and releases before {OpenCodeInstallEvidence.FirstV2Release.ToString(3)} cannot guard it: DefenseClaw {target} guards OpenCode V1 only. " +
-               "The installer refuses this rollback and nothing is changed. To roll back, put OpenCode V1 back first (" + OpenCodeInstallEvidence.PutV1BackCommand + "), " +
-               "then run 'defenseclaw agent discover --refresh' so DefenseClaw sees it, or stay on this release.";
+        return $"OpenCode V2 ({v2.Version}) is set up here and releases before {OpenCodeInstallEvidence.FirstV2Release.ToString(3)} cannot guard it. " +
+               $"DefenseClaw {target} guards OpenCode V1 only, so the installer refuses this rollback and changes nothing. " +
+               "To roll back, put OpenCode V1 back first with " + OpenCodeInstallEvidence.PutV1BackCommand + ", " +
+               "then run 'defenseclaw agent discover --refresh'. Or stay on this release.";
     }
 
     /// <summary>

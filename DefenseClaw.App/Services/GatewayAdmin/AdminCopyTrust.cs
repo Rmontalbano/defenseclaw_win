@@ -90,7 +90,7 @@ internal sealed class AdminCopyTrust : IAdminCopyTrust
         {
             null => null,
             { Length: > 0 } sid when AdminLayout.IsValidSid(sid) && !string.Equals(sid, layout.UserSid, StringComparison.OrdinalIgnoreCase) =>
-                "runs from another account's administrator copy, not this account's, so it is not sent this account's token",
+                "runs from another account's administrator copy, so it is not sent this account's token",
             _ => "runs from this app's administrator folder, but not from this account's administrator copy",
         };
     }

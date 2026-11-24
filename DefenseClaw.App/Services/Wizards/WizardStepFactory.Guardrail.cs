@@ -50,18 +50,18 @@ public static partial class WizardStepFactory
         steps.Add(PageOf(
             WizardPages.GuardrailScope,
             "Scope",
-            "Change one connector's own policy, or the settings every active connector shares. Turning the guardrail off is chosen here too.",
+            "Change one connector's policy or the settings every active connector shares. You can also turn the guardrail off here.",
             NoGate,
             ScopeField(),
             F(
                 "--connector",
-                f => f.WithHelp(f.Help + " Required when the scope is one connector; a command scoped to a connector never changes its peers.")),
+                f => f.WithHelp(f.Help + " Required when the scope is one connector, and the command then changes only that connector.")),
             F(
                 "--disable",
                 f => f.WithWording(
                     "Turn the guardrail off",
-                    "Instead of configuring it, disable the guardrail - for the selected connector, or for every connector when the scope is global - " +
-                    "and let the gateway tear the connector's hooks down. The connector's policy is kept for a later enable."))));
+                    "Disable the guardrail for the selected connector, or for every connector when the scope is global, and tear the connector's hooks down. " +
+                    "The connector's policy is kept for a later enable."))));
 
         // ---- Mode, rules, approval: in both scopes
         var mode = Both("--mode", out var modeC);
@@ -71,7 +71,7 @@ public static partial class WizardStepFactory
         steps.Add(PageOf(
             WizardPages.GuardrailMode,
             "Mode and rules",
-            "Observe records what would be blocked; action blocks it. For one connector, a field left unchanged keeps what that connector has now.",
+            "Observe records what would be blocked and action blocks it. For one connector, a field left unchanged keeps its current value.",
             Gate(),
             mode,
             modeC,
@@ -98,7 +98,7 @@ public static partial class WizardStepFactory
         steps.Add(PageOf(
             WizardPages.GuardrailDetection,
             "Scanner and detection",
-            "Scanner lane, proxy port and detection strategy. These are process-wide: they apply to every active connector. Per-direction strategies are opt-in.",
+            "Scanner lane, proxy port and detection strategy. These apply to every active connector. Per-direction strategies are opt-in.",
             Gate(GuardrailGates.GlobalScope),
             F("--scanner-mode"),
             F("--port"),
@@ -118,7 +118,7 @@ public static partial class WizardStepFactory
         steps.Add(PageOf(
             WizardPages.GuardrailJudge,
             "LLM judge",
-            "The judge model and how it authenticates; it is used because the detection strategy includes the judge. Key material is referenced by environment-variable NAME, which is what config.yaml stores.",
+            "The judge model and how it authenticates, shown because the detection strategy includes the judge. Keys are given as environment variable NAMES, as config.yaml stores them.",
             Gate(judgeConditions.ToArray()),
             F("--judge-provider", AsProviderChoice),
             F("--judge-model", f => f.WithPicker(WizardFieldPickers.Model, judgeProvider, judgeInstance)),
@@ -190,8 +190,8 @@ public static partial class WizardStepFactory
         },
         DefaultValue = GuardrailScopes.Global,
         BaselineValue = GuardrailScopes.Global,
-        Help = "Selected connector changes only that connector's policy, and no process-wide setting can ride along. Every active connector " +
-               "exposes the settings that apply to all of them, and changes the shared policy for all of them.",
+        Help = "Selected connector changes only that connector's policy and no shared setting. Every active connector " +
+               "shows the shared settings and changes the policy for all of them.",
         IsSynthetic = true,
     };
 }

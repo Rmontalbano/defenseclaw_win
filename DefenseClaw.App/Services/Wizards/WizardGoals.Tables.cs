@@ -40,7 +40,7 @@ public static partial class WizardGoals
         {
             Id = "judge",
             Label = "Add or change the judge LLM",
-            Summary = "Give the guardrail judge a model of its own. Anything you leave blank is inherited from the main model.",
+            Summary = "Give the guardrail judge its own model. Anything you leave blank is inherited from the main model.",
 
             // Blank starts: the judge block inherits whatever it does not set, so the main model's values are not its own.
             Presets = Set(
@@ -164,7 +164,7 @@ public static partial class WizardGoals
         {
             Id = "disable",
             Label = "Turn the guardrail off",
-            Summary = "Disable it for one connector, or for every connector, and let the gateway tear the hooks down.",
+            Summary = "Disable it for one connector or for every connector, which removes the hooks.",
             Presets = Set(("--disable", ToggleValues.On)),
             Flags = new[] { "--restart" },
             Pages = new[] { WizardPages.GuardrailScope },

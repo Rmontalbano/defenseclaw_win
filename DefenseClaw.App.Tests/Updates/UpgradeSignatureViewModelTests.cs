@@ -106,8 +106,8 @@ public sealed class UpgradeSignatureViewModelTests : IDisposable
             UiThread.Run(() =>
             {
                 Assert.Contains("compared with its entry in checksums.txt from the same release", section.ResolverPlan, StringComparison.Ordinal);
-                Assert.Contains("When cosign is installed", section.ResolverPlan, StringComparison.Ordinal);
-                Assert.Contains("without cosign the signature is not verified", section.ResolverPlan, StringComparison.Ordinal);
+                Assert.Contains("With cosign installed", section.ResolverPlan, StringComparison.Ordinal);
+                Assert.Contains("Without cosign it is not verified", section.ResolverPlan, StringComparison.Ordinal);
                 Assert.DoesNotContain("sigstore-signed", section.ResolverPlan, StringComparison.Ordinal);
                 Assert.DoesNotContain("signed checksums", section.ResolverPlan, StringComparison.Ordinal);
 
@@ -268,10 +268,10 @@ public sealed class UpgradeSignatureViewModelTests : IDisposable
             UiThread.Run(() =>
             {
                 Assert.True(section.IsStaged);
-                Assert.Contains("NOT verified (cosign is not installed)", section.ChecksumsSourceNote, StringComparison.Ordinal);
-                Assert.Contains("not that the project signed it", section.ChecksumsSourceNote, StringComparison.Ordinal);
+                Assert.Contains("NOT verified because cosign is not installed", section.ChecksumsSourceNote, StringComparison.Ordinal);
+                Assert.Contains("does not prove the project signed it", section.ChecksumsSourceNote, StringComparison.Ordinal);
                 Assert.Contains("not verified (cosign not installed)", section.StagingSummary, StringComparison.Ordinal);
-                Assert.Contains("NOT verified (cosign is not installed)", section.ResolverPlan, StringComparison.Ordinal);
+                Assert.Contains("NOT verified because cosign is not installed", section.ResolverPlan, StringComparison.Ordinal);
                 Assert.DoesNotContain("cosign verified", section.ChecksumsSourceNote, StringComparison.Ordinal);
                 Assert.DoesNotContain("cosign verified", section.StagingSummary, StringComparison.Ordinal);
             });

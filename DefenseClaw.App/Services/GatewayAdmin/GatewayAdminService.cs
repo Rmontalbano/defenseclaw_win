@@ -253,7 +253,7 @@ internal sealed class GatewayAdminService : IGatewayAdministrator, IGatewayEleva
         var (eligibility, reason) = (layout, account) switch
         {
             (null, _) => (AdminEligibility.LayoutUnavailable, "The signed-in user's profile or the Program Files folder could not be determined."),
-            (_, AdminAccountKind.StandardUser) => (AdminEligibility.NeedsLocalAdministrator, "Needs a local administrator account (with User Account Control on). This account is a standard user: Windows would ask for another account's password, and the gateway would then run as that account."),
+            (_, AdminAccountKind.StandardUser) => (AdminEligibility.NeedsLocalAdministrator, "Needs a local administrator account with User Account Control on. On a standard account, Windows asks for another account's password and the gateway runs as that account."),
             (_, AdminAccountKind.Unknown) => (AdminEligibility.NeedsLocalAdministrator, "Could not tell whether this account is a local administrator."),
             _ => (AdminEligibility.Eligible, string.Empty),
         };
@@ -349,7 +349,7 @@ internal sealed class GatewayAdminService : IGatewayAdministrator, IGatewayEleva
                     null,
                     null,
                     status)
-                : AdminPlan.Refused("There is no trusted administrator copy of the gateway, so there is nothing to stop as administrator. If an elevated gateway was started some other way, stop it from an elevated terminal.");
+                : AdminPlan.Refused("There is no trusted administrator copy of the gateway to stop. Stop an elevated gateway started some other way from an elevated terminal.");
         }
 
         if (status.OwnershipProblem)
@@ -411,7 +411,7 @@ internal sealed class GatewayAdminService : IGatewayAdministrator, IGatewayEleva
         var title = action == GatewayAction.Start ? "Start gateway as administrator?" : "Restart gateway as administrator?";
         var summary = action == GatewayAction.Start
             ? "This starts the DefenseClaw gateway with administrator rights."
-            : "This restarts the DefenseClaw gateway with administrator rights. Hooks that call it follow the configured fail mode for the moment it is down.";
+            : "This restarts the DefenseClaw gateway with administrator rights. Hooks that call it follow the configured fail mode while it is down.";
         return Build(layout, title, summary, steps, release, stagedSha, status);
     }
 
@@ -479,7 +479,7 @@ internal sealed class GatewayAdminService : IGatewayAdministrator, IGatewayEleva
                 return AdminPlan.Refused(stageProblem ?? "The administrator helper (DefenseClaw.GatewayAdmin.exe) is not next to the app.");
             }
 
-            return AdminPlan.Refused("The administrator helper is not installed yet. Choose Prepare administrator copy first; it installs the helper.");
+            return AdminPlan.Refused("The administrator helper is not installed yet. Choose Prepare administrator copy first. It installs the helper.");
         }
 
         var layout = _d.Layout.Get()!;
@@ -509,7 +509,7 @@ internal sealed class GatewayAdminService : IGatewayAdministrator, IGatewayEleva
 
         var dangerous = GatewayEnvironment.DangerousVariables(_d.EnvironmentNames());
         return dangerous.Count > 0
-            ? "This app was started with " + string.Join(", ", dangerous) + " set. Those load code of your choosing into a .NET program, so the administrator helper refuses to run with them. Start DefenseClaw without them."
+            ? "This app was started with " + string.Join(", ", dangerous) + " set. They load code into a .NET program, so the administrator helper refuses to run. Start DefenseClaw without them."
             : null;
     }
 
@@ -550,8 +550,8 @@ internal sealed class GatewayAdminService : IGatewayAdministrator, IGatewayEleva
 
         return string.Equals(release.GatewaySha256, installedSha, StringComparison.OrdinalIgnoreCase)
             ? (release, null)
-            : (null, $"The installed gateway (SHA-256 {Hex.Short(installedSha)}) is not the defenseclaw-gateway.exe in the {release.Version} release (SHA-256 {Hex.Short(release.GatewaySha256)}), " +
-                     "for example a build from source or a modified file. It is not copied to a place that runs with administrator rights.");
+            : (null, $"The installed gateway (SHA-256 {Hex.Short(installedSha)}) is not the defenseclaw-gateway.exe in the {release.Version} release (SHA-256 {Hex.Short(release.GatewaySha256)}). " +
+                     "It may be a build from source or a modified file, and it is not copied to a place that runs with administrator rights.");
     }
 
     private AdminPlan Build(
@@ -575,7 +575,7 @@ internal sealed class GatewayAdminService : IGatewayAdministrator, IGatewayEleva
 
         if (steps.Any(static s => s.BootstrapsHelper))
         {
-            running.Add($"The helper itself is installed first, from the file next to this app (SHA-256 {Hex.Short(stagedSha, 24)}); it asks once more in its own window.");
+            running.Add($"The helper itself is installed first, from the file next to this app (SHA-256 {Hex.Short(stagedSha, 24)}). It asks once more in its own window.");
         }
 
         if (release is not null)
@@ -587,7 +587,7 @@ internal sealed class GatewayAdminService : IGatewayAdministrator, IGatewayEleva
         {
             new(
                 "Runs with administrator rights",
-                "The gateway then has a full administrator token, like running with sudo: a gateway bug or a scanner it runs has more reach. " +
+                "The gateway then has a full administrator token, so a gateway bug or a scanner it runs has more reach. " +
                 "It matters only for runtime monitoring's agent-actions plane."),
         };
 
@@ -698,7 +698,7 @@ internal sealed class GatewayAdminService : IGatewayAdministrator, IGatewayEleva
             AdminExit.Ok => new AdminStepOutcome(true, false, words ?? DoneSentence(step.Verb)),
             AdminExit.Declined => new AdminStepOutcome(false, true, "Declined in the helper's own confirmation window. Nothing was changed."),
             AdminExit.Refused => new AdminStepOutcome(false, false, "The helper refused: " + (words ?? "see the Windows prompt text; no details were left.")),
-            AdminExit.Usage => new AdminStepOutcome(false, false, "The helper did not accept the command (a different version?)."),
+            AdminExit.Usage => new AdminStepOutcome(false, false, "The helper did not accept the command. It may be a different version."),
             { } code => new AdminStepOutcome(false, false, $"The helper failed (exit code {code}): " + (words ?? "no details were left.")),
             null => new AdminStepOutcome(false, false, "The helper did not report an exit code."),
         };

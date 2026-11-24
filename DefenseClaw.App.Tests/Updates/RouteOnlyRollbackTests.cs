@@ -25,7 +25,7 @@ public sealed class RouteOnlyRollbackTests
         Assert.NotNull(text);
         Assert.StartsWith("Route-only is on for claudecode and codex. DefenseClaw 1.0.9 has no route-only, ", text, StringComparison.Ordinal);
         Assert.Contains("Restart those agents after the rollback.", text, StringComparison.Ordinal);
-        Assert.Contains("gets 401 on its model calls until the DefenseClaw base URL and route header are removed from its settings.", text, StringComparison.Ordinal);
+        Assert.Contains("gets 401 on its model calls until you remove the DefenseClaw base URL and route header from its settings.", text, StringComparison.Ordinal);
         Assert.DoesNotContain("routing disable", text, StringComparison.Ordinal);
         Assert.Equal("Route-only agents", RouteOnlyRollback.WarningTitle);
     }

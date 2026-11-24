@@ -370,65 +370,46 @@ public sealed partial class UpgradeSectionViewModel : ObservableObject, IDisposa
     /// you know the other one does not work here.
     /// </summary>
     public string ChannelNote => IsInstallerChannel
-        ? "On a Setup-based install the Setup exe is the channel that actually works: " +
-          $"{UpgradeRunner.InstallerAssetName} run over the top of the current install with " +
-          "/quiet /norestart INSTALLSCOPE=user. The release's defenseclaw-upgrade.ps1 resolver assumes a venv " +
-          $"layout this install does not have — run here it stopped with \"Upgrade resolver stopped: Managed " +
-          $"Python not found at {UpgradeRunner.ResolverVenvPythonPath()}.\" — and 0.8.10's copy of that script " +
-          "is byte-identical to 0.8.9's, so a newer release does not fix it."
-        : "The resolver channel is the target release's own defenseclaw-upgrade.ps1 — a manifest-aware script " +
-          "that cosign-verifies the signed release contract before touching anything, and journals the upgrade " +
-          "with automatic rollback. It is the right channel only where the venv layout it assumes exists; see " +
-          "the note under the picker. The installed CLI's own 'defenseclaw upgrade' verb is not used either " +
-          "way: on 0.8.7 it fails with \"no canonical release-managed gateway\".";
+        ? $"Runs {UpgradeRunner.InstallerAssetName} over this install with /quiet /norestart INSTALLSCOPE=user. " +
+          "The resolver script needs a venv layout this install does not have."
+        : "Runs the release's defenseclaw-upgrade.ps1. It verifies the signed release contract with cosign " +
+          "and rolls back automatically, but needs a venv layout that Setup installs do not have.";
 
     /// <summary>What the selected channel will actually do, step by step.</summary>
     public string ResolverPlan => IsInstallerChannel
-        ? "1. The download's SHA-256 is compared with its entry in checksums.txt from the same release, with a " +
-          "50 MB floor underneath it — the known-bad 133-byte placeholder stubs have their hashes listed in that " +
-          "same file, so a hash match alone is not enough. " + SignatureStepSentence + "\n" +
-          "2. Runs the Setup exe with /quiet /norestart INSTALLSCOPE=user: it stops the DefenseClaw gateway, " +
-          "installs over the top in user scope, and restarts the gateway. The exe is not Authenticode-signed.\n" +
-          "3. %USERPROFILE%\\.defenseclaw — config.yaml, the environment file, audit.db and inventory.db — is " +
-          "preserved. Verified live on this machine's 0.8.7 → 0.8.10 upgrade."
+        ? "1. The download's SHA-256 is compared with its entry in checksums.txt from the same release. It must also be at least " +
+          "50 MB, because the placeholder stubs have their hashes listed there. " + SignatureStepSentence + "\n" +
+          "2. Runs the Setup exe with /quiet /norestart INSTALLSCOPE=user. It stops the gateway, installs in user scope " +
+          "and restarts the gateway. The exe is not Authenticode-signed.\n" +
+          "3. %USERPROFILE%\\.defenseclaw is kept: config.yaml, the environment file, audit.db and inventory.db."
         : "1. The script's SHA-256 is compared with its entry in checksums.txt from the same release. " + SignatureStepSentence + " " +
-          "The script then verifies the release's own signed contract with cosign — before changing anything on disk.\n" +
-          "2. Stops the DefenseClaw gateway and opens a two-phase upgrade journal.\n" +
-          "3. Replaces the CLI, gateway and scanner binaries, and the Claude Code hook runtime that " +
-          "every Claude Code session loads its hooks from.\n" +
+          "The script then verifies the signed release contract with cosign before changing anything.\n" +
+          "2. Stops the gateway and opens a two-phase upgrade journal.\n" +
+          "3. Replaces the CLI, gateway and scanner binaries and the Claude Code hook runtime.\n" +
           "4. Restarts the gateway and closes the journal.";
 
     /// <summary>What recovery looks like if the selected channel does not finish cleanly.</summary>
     public string RollbackStory => IsInstallerChannel
-        ? "The installer has no journal. Unlike the resolver there is no automatic rollback: recovery is " +
-          "re-running the previous release's Setup exe, which makes backing up %USERPROFILE%\\.defenseclaw " +
-          "beforehand cheap insurance. Expect the tray shield to go gray and a \"Gateway lost\" toast partway " +
-          "through — that is the installer stopping the gateway before it installs over the top, not a failure."
-        : "The upgrade is journaled in two phases. If a phase fails, the resolver rolls back to the version " +
-          "installed right now, on its own. If the machine dies mid-upgrade, re-running the same script " +
-          "resumes from the journal rather than starting over. Nothing here is a background task: this app " +
-          "runs the script in the foreground and shows you every line it prints.";
+        ? "There is no automatic rollback. To recover, run the previous release's Setup exe again. " +
+          "Back up %USERPROFILE%\\.defenseclaw first. Expect the tray shield to go gray and a \"Gateway lost\" toast " +
+          "while the installer stops the gateway."
+        : "If a phase fails, the resolver rolls back to the installed version. " +
+          "If the machine stops mid-upgrade, run the same script again to resume from the journal.";
 
     /// <summary>The small print under the Step 1 button.</summary>
     public string StagingStepNote => IsInstallerChannel
-        ? $"Reads the release's checksums.txt first — it is a few kilobytes, and a missing entry or a rate " +
-          $"limit is worth finding before a ~270 MB download rather than after. When cosign is installed it " +
-          "verifies that file's sigstore signature at this point, and a signature it rejects stops here. Then streams " +
-          $"{UpgradeRunner.InstallerAssetName} to disk, hashing as it goes, and keeps it only if it clears the " +
-          "50 MB stub floor and its SHA-256 matches the checksums.txt entry. Nothing on this machine changes."
-        : "Fetches defenseclaw-upgrade.ps1 from the target release, refuses it if it is one of the placeholder " +
-          "stubs (under 10 KB — the real resolver is around 216 KB), and compares its SHA-256 with that " +
-          "release's checksums.txt, whose sigstore signature cosign verifies first (a rejected one stops here). " +
-          "Nothing is written to disk unless every check passes, and nothing on this machine changes.";
+        ? $"Reads checksums.txt first and verifies its sigstore signature when cosign is installed. Then downloads " +
+          $"{UpgradeRunner.InstallerAssetName} (about 270 MB) and keeps it only if it is at least 50 MB " +
+          "and its SHA-256 matches. Nothing on this machine changes."
+        : "Fetches defenseclaw-upgrade.ps1, rejects placeholder stubs under 10 KB, and compares its SHA-256 " +
+          "with checksums.txt. cosign verifies that file's sigstore signature first. Nothing on this machine changes.";
 
     /// <summary>The small print under the Step 2 button.</summary>
     public string RunStepNote => IsInstallerChannel
-        ? "Opens a confirmation showing the exact argv and what the installer will do. The button stays " +
-          "disabled until an installer whose SHA-256 matched is staged and no other command this app issued is still " +
-          "running. cosign is optional on this channel: it only decides whether the signature on checksums.txt is verified."
-        : "Opens a confirmation showing the exact argv, what the resolver will do, and how it rolls back. The " +
-          "button stays disabled until a script whose SHA-256 matched is staged, cosign is usable, and no other command " +
-          "this app issued is still running.";
+        ? "Opens a confirmation with the exact argv. Disabled until a verified installer is staged and no other command is running. " +
+          "cosign is optional here and only adds the signature check."
+        : "Opens a confirmation with the exact argv and the rollback behavior. Disabled until a verified script is staged, " +
+          "cosign is usable and no other command is running.";
 
     /// <summary>Header over the live console. Named for the channel that produced the output.</summary>
     public string ConsoleTitle => _ranChannel == UpgradeChannel.SetupInstaller
@@ -448,21 +429,21 @@ public sealed partial class UpgradeSectionViewModel : ObservableObject, IDisposa
         ? signature.State switch
         {
             ChecksumsSignatureState.Verified =>
-                "cosign verified the sigstore signature on that checksums.txt (signed by the upstream release workflow).",
+                "cosign verified the sigstore signature on that checksums.txt. It was signed by the upstream release workflow.",
             ChecksumsSignatureState.NotPublished =>
                 "The release publishes no sigstore signature for that file, so this is an integrity check only.",
             ChecksumsSignatureState.NotVerifiedNoCosign =>
-                "That file's sigstore signature was NOT verified (cosign is not installed), so this shows the download matches that file and not that the project signed it.",
+                "The sigstore signature on that file was NOT verified because cosign is not installed. A matching hash does not prove the project signed it.",
             ChecksumsSignatureState.NotVerifiedUnavailable =>
-                "That file's sigstore signature was NOT verified (its signature files could not be fetched), so this shows the download matches that file and not that the project signed it.",
+                "The sigstore signature on that file was NOT verified because its signature files could not be fetched. A matching hash does not prove the project signed it.",
             _ =>
-                "That file's sigstore signature was NOT verified (cosign could not check it), so this shows the download matches that file and not that the project signed it.",
+                "The sigstore signature on that file was NOT verified because cosign could not check it. A matching hash does not prove the project signed it.",
         }
-        : "When cosign is installed, that file's sigstore signature is verified first and a signature it rejects stops the upgrade; without cosign the signature is not verified.";
+        : "With cosign installed, that file's sigstore signature is verified first and a rejected signature stops the upgrade. Without cosign it is not verified.";
 
     public string StaleAssumptionsWarning =>
-        "This app keeps its old-version assumptions — panel layouts, CLI flags, health fields — until you " +
-        "restart it. Restart DefenseClaw for Windows after the upgrade finishes.";
+        "Restart DefenseClaw for Windows after the upgrade finishes. Until then it assumes the old version's " +
+        "panel layouts, CLI flags and health fields.";
 
     /// <summary>True while this section, or anything else in the app, has a subprocess in flight.</summary>
     public bool IsBusy => IsStaging || IsRunning || CliInFlightCount > 0;
@@ -482,10 +463,8 @@ public sealed partial class UpgradeSectionViewModel : ObservableObject, IDisposa
     /// </summary>
     public string CloseBlockedNotice =>
         (_closeRefused ? "That close was ignored. " : string.Empty) +
-        $"The {RanNoun} is running, and stopping it partway through an install can leave DefenseClaw " +
-        "half-replaced, so this window stays open until it finishes. The install carries on whether or " +
-        "not this window is open — even if you quit DefenseClaw for Windows from the tray, which is the " +
-        "way out if you must leave, at the cost of this live view of it.";
+        $"The {RanNoun} is running. Stopping it partway can leave DefenseClaw half-replaced, so this window stays open " +
+        "until it finishes. If you must leave, quit from the tray. The install keeps running.";
 
     /// <summary>
     /// Called by the window when it has just refused a close, so the banner can acknowledge the click
@@ -562,14 +541,14 @@ public sealed partial class UpgradeSectionViewModel : ObservableObject, IDisposa
             if (string.IsNullOrWhiteSpace(now))
             {
                 VersionConfirmation =
-                    $"Was {before}. The installed version could not be re-read yet — the gateway is not " +
+                    $"Was {before}. The installed version could not be read because the gateway is not " +
                     "answering. Start it and press \"Check again\".";
             }
             else if (string.Equals(Bare(now), Bare(before), StringComparison.OrdinalIgnoreCase))
             {
                 VersionConfirmation =
-                    $"Still reporting {now}. The {RanNoun} exited 0, so read the output above and the release " +
-                    "page before assuming the upgrade landed.";
+                    $"Still reporting {now}. The {RanNoun} exited 0. Read the output above and the release " +
+                    "page before assuming the upgrade worked.";
             }
             else
             {
@@ -590,10 +569,9 @@ public sealed partial class UpgradeSectionViewModel : ObservableObject, IDisposa
         ArgumentNullException.ThrowIfNull(report);
 
         ChecksumsSourceNote = report.SignatureFilesPublished
-            ? "Compared against checksums.txt from the same release. The release publishes a sigstore signature for that file; " +
-              "it is verified with cosign when cosign is installed, and is otherwise reported as not verified."
+            ? "Compared against checksums.txt from the same release. cosign verifies its sigstore signature when cosign is installed."
             : "Compared against checksums.txt from the same release. The release publishes no complete sigstore signature for " +
-              "that file, so the comparison is an integrity check only.";
+              "that file, so this is an integrity check only.";
     }
 
     /// <summary>
@@ -689,16 +667,15 @@ public sealed partial class UpgradeSectionViewModel : ObservableObject, IDisposa
             CosignLabel = "cosign missing";
             CosignBadgeKey = "Warn";
             CosignDetail =
-                "cosign was not found. It is optional on this channel: without it the installer's SHA-256 is compared with checksums.txt from the same " +
-                "release, but that file's sigstore signature is NOT verified. To verify it, install cosign (winget install Sigstore.Cosign) and press Re-check.";
+                "cosign was not found. It is optional here, but without it the sigstore signature on checksums.txt is NOT verified. " +
+                "To verify it, run winget install Sigstore.Cosign and press Re-check.";
             return;
         }
 
         CosignLabel = "cosign ready";
         CosignBadgeKey = "Ok";
         CosignDetail =
-            $"cosign is at {status.Path}. This app runs it to verify the sigstore signature on the release's checksums.txt before the installer is downloaded; " +
-            "a signature it rejects stops the upgrade.";
+            $"cosign is at {status.Path}. It verifies the sigstore signature on checksums.txt before the download, and a rejected signature stops the upgrade.";
     }
 
     /// <summary>
@@ -917,12 +894,9 @@ public sealed partial class UpgradeSectionViewModel : ObservableObject, IDisposa
         OnPropertyChanged(nameof(ConsoleTitle));
 
         ResultMessage = _ranChannel == UpgradeChannel.SetupInstaller
-            ? "The installer is running. Expect the tray shield to go gray and a \"Gateway lost\" toast partway " +
-              "through — that is the installer stopping the gateway before it installs over the top, not a " +
-              "failure. A quiet install prints little or nothing to stdout, so the console below staying nearly " +
-              "empty is normal rather than a sign it is stuck; the invocation and its exit code land in the " +
-              "Activity panel either way."
-            : "The resolver is running. Every line it prints appears below and in the Activity panel.";
+            ? "The installer is running. The tray shield goes gray and a \"Gateway lost\" toast appears while it stops the gateway. " +
+              "The console may stay nearly empty. The command and exit code are in the Activity panel."
+            : "The resolver is running. Its output appears below and in the Activity panel.";
 
         ExitBadgeText = "running";
         ExitBadgeKey = "Neutral";
@@ -954,9 +928,9 @@ public sealed partial class UpgradeSectionViewModel : ObservableObject, IDisposa
             // worded so as not to claim the install stopped, which nothing here can know.
             ExitBadgeText = "interrupted";
             ExitBadgeKey = "Warn";
-            ResultMessage = $"The {RanNoun} run was interrupted before it reported an outcome, and it may " +
-                            "still be running. Check the Activity panel, then 'defenseclaw --version' in a " +
-                            "terminal, before starting it again.";
+            ResultMessage = $"The {RanNoun} run was interrupted before it reported an outcome and may " +
+                            "still be running. Check the Activity panel, then run 'defenseclaw --version' in a " +
+                            "terminal before starting it again.";
             ShowRollbackGuidance = true;
         }
         finally
@@ -1000,8 +974,8 @@ public sealed partial class UpgradeSectionViewModel : ObservableObject, IDisposa
         {
             ExitBadgeText = "exit unknown";
             ExitBadgeKey = "Neutral";
-            ResultMessage = $"The {RanNoun} ended without reporting an exit code. Treat the install as unknown: " +
-                            "check 'defenseclaw --version' in a terminal before relying on it.";
+            ResultMessage = $"The {RanNoun} ended without an exit code, so the install state is unknown. " +
+                            "Run 'defenseclaw --version' in a terminal before relying on it.";
             ShowRollbackGuidance = true;
             return;
         }
@@ -1011,7 +985,7 @@ public sealed partial class UpgradeSectionViewModel : ObservableObject, IDisposa
         if (code == 0)
         {
             ExitBadgeKey = "Ok";
-            ResultMessage = $"The {RanNoun} exited 0. Re-polling the gateway to confirm the running version…";
+            ResultMessage = $"The {RanNoun} exited 0. Checking the running version…";
 
             try
             {
@@ -1033,7 +1007,7 @@ public sealed partial class UpgradeSectionViewModel : ObservableObject, IDisposa
             HasVersionConfirmation = true;
             VersionConfirmation = string.IsNullOrWhiteSpace(running)
                 ? "The gateway is not answering yet, so the new version could not be read from /health. " +
-                  "Give it a moment and press \"Check again\"."
+                  "Wait a moment and press \"Check again\"."
                 : $"{_versionBeforeUpgrade ?? "unknown"}  →  {running}";
 
             ResultMessage = $"The {RanNoun} exited 0. " + StaleAssumptionsWarning;
@@ -1046,8 +1020,7 @@ public sealed partial class UpgradeSectionViewModel : ObservableObject, IDisposa
         ExitBadgeKey = "Bad";
         ShowRollbackGuidance = true;
         ResultMessage =
-            $"The {RanNoun} exited {code}. The output above is kept exactly as it was produced, and the same " +
-            "invocation is in the Activity panel.";
+            $"The {RanNoun} exited {code}. The output is above and the command is in the Activity panel.";
     }
 
     /// <summary>
@@ -1101,15 +1074,15 @@ public sealed partial class UpgradeSectionViewModel : ObservableObject, IDisposa
         ChecksumsSourceNote = "Compared against checksums.txt from the same release. " + asset.ChecksumsSignature.State switch
         {
             ChecksumsSignatureState.Verified =>
-                "cosign verified that file's sigstore signature: it was signed by the upstream release workflow.",
+                "cosign verified that file's sigstore signature. It was signed by the upstream release workflow.",
             ChecksumsSignatureState.NotPublished =>
                 "The release publishes no sigstore signature for it, so this is an integrity check only.",
             ChecksumsSignatureState.NotVerifiedNoCosign =>
-                "Its sigstore signature was NOT verified (cosign is not installed): this shows the download matches that file, not that the project signed it.",
+                "Its sigstore signature was NOT verified because cosign is not installed. A matching hash does not prove the project signed it.",
             ChecksumsSignatureState.NotVerifiedCosignUnusable =>
-                "Its sigstore signature was NOT verified (cosign could not check it): this shows the download matches that file, not that the project signed it.",
+                "Its sigstore signature was NOT verified because cosign could not check it. A matching hash does not prove the project signed it.",
             ChecksumsSignatureState.NotVerifiedUnavailable =>
-                "Its sigstore signature was NOT verified (the signature files could not be fetched): this shows the download matches that file, not that the project signed it.",
+                "Its sigstore signature was NOT verified because the signature files could not be fetched. A matching hash does not prove the project signed it.",
             _ => "Its sigstore signature was not checked.",
         };
         OnPropertyChanged(nameof(ResolverPlan));

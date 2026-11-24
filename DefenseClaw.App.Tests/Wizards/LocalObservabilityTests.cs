@@ -438,8 +438,8 @@ public sealed class LocalStackReviewTests
         Assert.Equal(LocalStackReview.RefreshesFilesTitle, bar.Title);
         Assert.Contains("~/.defenseclaw/observability-stack/", bar.Message, StringComparison.Ordinal);
         Assert.Contains("overwrites any edits", bar.Message, StringComparison.Ordinal);
-        Assert.Contains("--no-refresh-config keeps them", bar.Message, StringComparison.Ordinal);
-        Assert.Contains("already running is stopped, refreshed and started again", bar.Message, StringComparison.Ordinal);
+        Assert.Contains("unless you add --no-refresh-config", bar.Message, StringComparison.Ordinal);
+        Assert.Contains("restarts the stack if it is running", bar.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -454,7 +454,7 @@ public sealed class LocalStackReviewTests
         Assert.Equal(LocalStackReview.RefreshesFilesTitle, kept.Title);
         Assert.DoesNotContain("overwrites any edits", kept.Message, StringComparison.Ordinal);
         Assert.Contains("are kept", kept.Message, StringComparison.Ordinal);
-        Assert.Contains("already running is stopped, refreshed and started again", kept.Message, StringComparison.Ordinal);
+        Assert.Contains("restarts the stack if it is running", kept.Message, StringComparison.Ordinal);
 
         // --no-refresh-bundle turns the whole refresh off; the same words as an option's value do not.
         Assert.Empty(Titles("setup local-observability up --no-refresh-bundle"));
@@ -468,7 +468,7 @@ public sealed class LocalStackReviewTests
         var stays = Assert.Single(LocalStackReview.Warnings(Argv("setup local-observability down"), null));
         Assert.Equal(LocalStackReview.ExportingContinuesTitle, stays.Title);
         Assert.Contains("stays enabled in config.yaml", stays.Message, StringComparison.Ordinal);
-        Assert.Contains("--disable-config does that", stays.Message, StringComparison.Ordinal);
+        Assert.Contains("disabled with --disable-config", stays.Message, StringComparison.Ordinal);
 
         Assert.Empty(Titles("setup local-observability down --disable-config"));
 

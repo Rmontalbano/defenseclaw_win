@@ -227,12 +227,12 @@ public sealed class DockerProbe : IDockerProbe
 
         if (!info.OperatingSystem.Contains("docker desktop", StringComparison.OrdinalIgnoreCase))
         {
-            warnings.Add("The CLI's certified path requires Docker Desktop (this engine does not identify as Docker Desktop).");
+            warnings.Add("The CLI's certified path requires Docker Desktop, and this engine does not identify as Docker Desktop.");
         }
 
         if (_userRoots().Any(root => IsUnder(dockerPath, root)))
         {
-            warnings.Add("This looks like a per-user Docker Desktop install; the CLI's certified path requires a machine-wide install.");
+            warnings.Add("This looks like a per-user Docker Desktop install, and the CLI's certified path requires a machine-wide install.");
         }
 
         if (info.KernelVersion.Contains("wsl", StringComparison.OrdinalIgnoreCase) ||
@@ -243,7 +243,7 @@ public sealed class DockerProbe : IDockerProbe
         }
         else if (_wslEngineEnabled() is null && !info.KernelVersion.Contains("linuxkit", StringComparison.OrdinalIgnoreCase))
         {
-            warnings.Add("Docker Desktop's Hyper-V backend could not be verified; the CLI requires it.");
+            warnings.Add("Docker Desktop's Hyper-V backend could not be verified, and the CLI requires it.");
         }
 
         return warnings;

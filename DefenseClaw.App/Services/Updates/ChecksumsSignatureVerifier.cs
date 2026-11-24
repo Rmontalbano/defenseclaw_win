@@ -272,17 +272,17 @@ public sealed partial class ChecksumsSignatureVerifier
         {
             return Result(
                 ChecksumsSignatureState.NotPublished,
-                "The release publishes no sigstore signature for checksums.txt (it would need checksums.txt.bundle, or checksums.txt.sig together with checksums.txt.pem), " +
-                "so comparing the download with checksums.txt is an integrity check only: it shows the download matches that file, not that the file is the one the project signed.");
+                "The release publishes no sigstore signature for checksums.txt. It would need checksums.txt.bundle, or checksums.txt.sig together with checksums.txt.pem. " +
+                "Comparing the download with checksums.txt is an integrity check only and does not prove the project signed that file.");
         }
 
         if (string.IsNullOrWhiteSpace(cosignPath))
         {
             return Result(
                 ChecksumsSignatureState.NotVerifiedNoCosign,
-                "The release publishes a sigstore signature for checksums.txt, but this app can only verify it with cosign, which was not found. " +
-                "Without it the download is compared with checksums.txt from the same release, which shows the download matches that file and not that the file is the one the project signed. " +
-                "Install cosign (winget install Sigstore.Cosign), restart this app and check again to verify the signature.");
+                "The release publishes a sigstore signature for checksums.txt, but verifying it needs cosign, which was not found. " +
+                "Without it the download is only compared with checksums.txt from the same release, which does not prove the project signed that file. " +
+                "To verify the signature, run winget install Sigstore.Cosign, restart this app and check again.");
         }
 
         var (major, unusable) = await ReadCosignMajorVersionAsync(cosignPath, cancellationToken).ConfigureAwait(false);
@@ -349,8 +349,8 @@ public sealed partial class ChecksumsSignatureVerifier
                     State = ChecksumsSignatureState.Verified,
                     CommandLine = commandLine,
                     Detail =
-                        $"cosign verified the sigstore signature on release {version}'s checksums.txt: it was signed by {CertificateIdentity} through GitHub Actions. " +
-                        "That ties the file to the upstream release workflow. The installer itself is not Authenticode-signed; its SHA-256 is compared with this file.",
+                        $"cosign verified the sigstore signature on release {version}'s checksums.txt. It was signed by {CertificateIdentity} through GitHub Actions, " +
+                        "which ties the file to the upstream release workflow. The installer itself is not Authenticode-signed. Its SHA-256 is compared with this file.",
                 };
             }
 
@@ -364,7 +364,7 @@ public sealed partial class ChecksumsSignatureVerifier
                     CosignOutput = said.Length == 0 ? null : said,
                     Detail =
                         $"cosign rejected the sigstore signature on release {version}'s checksums.txt (exit code {code}). Do not run this release's installer. " +
-                        "If cosign's message is about reaching the sigstore services, fix that and check again; if it is about the signature or who signed it, treat the release as untrustworthy" +
+                        "If cosign's message is about reaching the sigstore services, fix that and check again. If it is about the signature or who signed it, treat the release as untrustworthy" +
                         (said.Length == 0 ? "." : $". cosign said: {said}"),
                 };
             }
@@ -391,7 +391,7 @@ public sealed partial class ChecksumsSignatureVerifier
                 CosignOutput = unfinished.Length == 0 ? null : unfinished,
                 Detail =
                     $"cosign did not finish checking the sigstore signature on release {version}'s checksums.txt ({run.FailureReason ?? "no exit code"}), so it was not verified, and the upgrade is stopped. " +
-                    "This usually means cosign could not reach the sigstore services: check the network (and any proxy) and try again." +
+                    "This usually means cosign could not reach the sigstore services. Check the network and any proxy, then try again." +
                     (unfinished.Length == 0 ? string.Empty : $" cosign said: {unfinished}"),
             };
         }

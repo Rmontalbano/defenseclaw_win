@@ -188,7 +188,7 @@ internal sealed class ReleaseGatewaySource : IReleaseGatewaySource
         {
             return (null, entries.Length == 0
                 ? $"The release zip has no {AdminLayout.GatewayFileName}."
-                : $"The release zip has {entries.Length} files named {AdminLayout.GatewayFileName}; which one is the gateway is not guessed.");
+                : $"The release zip has {entries.Length} files named {AdminLayout.GatewayFileName}, so the gateway cannot be picked.");
         }
 
         var entry = entries[0];

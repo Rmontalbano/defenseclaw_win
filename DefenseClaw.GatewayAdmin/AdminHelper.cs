@@ -100,7 +100,7 @@ internal sealed class AdminHelper
 
         if (!caller.IsSplitTokenElevation)
         {
-            return Finish(AdminExit.Refused, "Refused: the elevated account is not the signed-in user's own administrator token. Sign in as a local administrator and approve the prompt as yourself; an administrator's password typed into the prompt for a standard user is not accepted.");
+            return Finish(AdminExit.Refused, "Refused: the elevated account is not the signed-in user's own administrator token. Sign in as a local administrator and approve the prompt yourself. Another administrator's password is not accepted.");
         }
 
         if (!string.Equals(caller.ParentUserSid, caller.UserSid, StringComparison.OrdinalIgnoreCase))
@@ -119,7 +119,7 @@ internal sealed class AdminHelper
         }
         else if (verb != AdminVerb.InstallCopy)
         {
-            return Finish(AdminExit.Refused, "Refused: this helper does not run from " + layout.HelperDirectory + ". Choose Prepare administrator copy once; that installs it there.");
+            return Finish(AdminExit.Refused, "Refused: this helper does not run from " + layout.HelperDirectory + ". Choose Prepare administrator copy once. That installs it there.");
         }
 
         canRecord = atHome;
@@ -298,7 +298,7 @@ internal sealed class AdminHelper
             }
             catch (IOException ex)
             {
-                lines.Add("Refused: the old administrator copy could not be replaced (is the gateway it started still running? stop it first): " + ex.Message);
+                lines.Add("Refused: the old administrator copy could not be replaced. If its gateway is still running, stop it first. " + ex.Message);
                 _fs.DeleteFile(tempPath);
                 return AdminExit.Refused;
             }
@@ -425,7 +425,7 @@ internal sealed class AdminHelper
             var stopped = RunGateway(layout, caller, "stop", StopTimeout, lines);
             if (stopped != AdminExit.Ok)
             {
-                lines.Add("The previous gateway did not stop; nothing else was changed.");
+                lines.Add("The previous gateway did not stop. Nothing else was changed.");
                 return stopped;
             }
 
@@ -512,14 +512,14 @@ internal sealed class AdminHelper
 
         if (root.IsReparsePoint)
         {
-            lines.Add("Refused: your .defenseclaw folder is a link or junction; ownership is not changed through one.");
+            lines.Add("Refused: your .defenseclaw folder is a link or junction. Ownership is not changed through a link.");
             return AdminExit.Refused;
         }
 
         var report = OwnershipRepair.Run(layout, _owners);
         lines.Add(
             $"Looked at {report.Examined} items under {layout.DataDirectory}: {report.Fixed} given back to you, {report.AlreadyUser} already yours, " +
-            $"{report.LeftForeign} owned by another account (left alone), {report.SkippedLinks} links skipped.");
+            $"{report.LeftForeign} owned by another account and left unchanged, {report.SkippedLinks} links skipped.");
         foreach (var failure in report.FirstFailures)
         {
             lines.Add("Could not change " + failure);

@@ -53,7 +53,7 @@ public static partial class WizardStepFactory
         var choices = new List<WizardChoice>();
         if (help.SubcommandOptional)
         {
-            choices.Add(new WizardChoice(string.Empty, "(no subcommand — run the guided default)"));
+            choices.Add(new WizardChoice(string.Empty, "(no subcommand: run the guided default)"));
         }
 
         foreach (var command in help.Commands)
@@ -79,7 +79,7 @@ public static partial class WizardStepFactory
         {
             Id = "command",
             Title = "Command",
-            Subtitle = "This setup target is a group; pick the subcommand to configure.",
+            Subtitle = "This setup target is a group. Pick the subcommand to configure.",
             Fields = new[] { commandField },
         });
 
@@ -168,7 +168,7 @@ public static partial class WizardStepFactory
                 {
                     Id = "no-options",
                     Title = title,
-                    Subtitle = "This command takes no options — review and run it.",
+                    Subtitle = "This command takes no options. Review and run it.",
                     VisibleWhenFieldId = gateFieldId,
                     VisibleWhenValues = gateValues ?? Array.Empty<string>(),
                 },
@@ -324,7 +324,7 @@ public static partial class WizardStepFactory
         Step(
             "api",
             "Cisco AI Defense API",
-            "The remote scan API the api analyzer calls. The key is referenced by environment-variable NAME; store its value under Setup > Credentials.",
+            "The remote scan API the api analyzer calls. The key is given as an environment variable NAME. Store its value under Setup > Credentials.",
             help,
             "--api-endpoint",
             "--api-key-env",
@@ -408,7 +408,7 @@ public static partial class WizardStepFactory
         steps.AddRange(Chunk(
             remaining,
             "More options",
-            "Everything else this command accepts, straight from its help screen.",
+            "Everything else this command accepts, from its help.",
             gate.FieldId,
             gate.Values,
             "more-"));

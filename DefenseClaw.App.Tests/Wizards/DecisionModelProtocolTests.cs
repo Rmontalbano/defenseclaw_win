@@ -13,8 +13,8 @@ namespace DefenseClaw.App.Tests.Wizards;
 public sealed class DecisionModelProtocolTests
 {
     private const string Intro109 =
-        "A small, fast model that speaks the System One protocol. It is off until you turn it on; naming an endpoint or a model turns it on too. " +
-        "When it is down, the rules verdict (and the LLM judge, where it runs) stands.";
+        "A small, fast model that speaks the System One protocol. It stays off until you turn it on or name an endpoint or a model. " +
+        "If it is down, the rules verdict and the LLM judge, where it runs, stand.";
 
     private static readonly string Help109 = LineEndings.Normalize("""
         Usage: defenseclaw setup decision-model [OPTIONS]
@@ -165,7 +165,7 @@ public sealed class DecisionModelProtocolTests
         Assert.Contains("flow_guard", connectors, StringComparison.Ordinal);
         Assert.Contains("decision_model.history_turns", connectors, StringComparison.Ordinal);
         Assert.Contains("25 turns", connectors, StringComparison.Ordinal);
-        Assert.Contains("stands if the judge gives no verdict", connectors, StringComparison.Ordinal);
+        Assert.Contains("stands if it gives no verdict", connectors, StringComparison.Ordinal);
         Assert.Contains("Each connector is on one of three paths", connectors, StringComparison.Ordinal);
         Assert.NotEmpty(text);
     }
@@ -273,21 +273,20 @@ public sealed class DecisionModelProtocolTests
         Assert.Equal(new[] { "--enable", "--base-url", "--model", "--api-key-env", "--show" }, page.Fields.Select(f => f.Flag).ToArray());
 
         var url = page.Fields[1];
-        Assert.Equal("The full endpoint URL. https is accepted anywhere; http only to a loopback address.", url.Help);
+        Assert.Equal("The full endpoint URL. https is accepted anywhere, http only to a loopback address.", url.Help);
         Assert.Equal("http://127.0.0.1:8791/v1/systemone", url.Placeholder);
         Assert.Equal("The model name the endpoint serves. It is sent in each request.", page.Fields[2].Help);
         Assert.Equal(
-            "The NAME of the environment variable that holds the bearer token (DEFENSECLAW_DECISION_MODEL_KEY when left blank). A local server needs none. " +
-            "The token itself is never typed here: store it in a terminal with `defenseclaw keys set DEFENSECLAW_DECISION_MODEL_KEY` " +
-            "(it goes to ~/.defenseclaw/.env), and restart the gateway after storing a new one.",
+            "The NAME of the variable that holds the bearer token, DEFENSECLAW_DECISION_MODEL_KEY if blank. A local server needs none. " +
+            "Never type the token here. Store it with `defenseclaw keys set DEFENSECLAW_DECISION_MODEL_KEY` in a terminal, which writes ~/.defenseclaw/.env, then restart the gateway.",
             page.Fields[3].Help);
 
         var connectors = definition.Steps[1].Fields[0].Help;
         Assert.Equal(
-            "The decision model answers on its own for the connectors in this list, where the LLM judge does not run: a confident allow is allowed, " +
+            "The decision model answers on its own for the connectors in this list, where the LLM judge does not run. A confident allow is allowed, " +
             "a confident block is denied, and anything else asks (Claude Code, Copilot, Amp, Antigravity) or raises a HIGH alert (strict mode blocks). " +
-            "Where the judge does run, the model sits in front of it: it allows the clear benign calls and sends the rest to the judge. " +
-            "Each connector is on one of three paths: rules only; rules then decision model; rules then decision model then judge.",
+            "Where the judge runs, the model allows clear benign calls and sends the rest to it. " +
+            "Each connector is on one of three paths: rules only, rules then decision model, or rules then decision model then judge.",
             connectors);
 
         var thresholds = definition.Steps[2];
@@ -298,7 +297,7 @@ public sealed class DecisionModelProtocolTests
 
         var onBlock = thresholds.Fields[3];
         Assert.Equal("On a confident block", onBlock.Label);
-        Assert.Equal("escalate (the default): the judge still checks a confident block. decide: the block stands without the judge.", onBlock.Help);
+        Assert.Equal("escalate is the default and the judge still checks a confident block. decide lets the block stand without the judge.", onBlock.Help);
         Assert.Contains(onBlock.Choices, c => c.Value == "decide");
     }
 

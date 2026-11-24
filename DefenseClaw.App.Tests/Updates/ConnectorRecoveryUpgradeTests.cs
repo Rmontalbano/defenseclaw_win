@@ -316,7 +316,7 @@ public sealed class ConnectorRecoveryUpgradeTests : IDisposable
         Assert.Contains($"The uv cache folder {DeepCache} is {DeepCache.Length} characters long", row.Reason, StringComparison.Ordinal);
         Assert.Contains("needs 151 more", row.Reason, StringComparison.Ordinal);
         Assert.Contains("restart this app", row.Reason, StringComparison.Ordinal);
-        Assert.Contains("not seen until you restart it", row.Reason, StringComparison.Ordinal);
+        Assert.Contains("so the installer sees it", row.Reason, StringComparison.Ordinal);
         Assert.Contains("LongPathsEnabled", row.Reason, StringComparison.Ordinal);
     }
 
@@ -365,8 +365,8 @@ public sealed class ConnectorRecoveryUpgradeTests : IDisposable
 
         Assert.Equal(PostUpgradeLeftovers.UninstallEntryId, row.Id);
         Assert.Contains("DefenseClaw Setup 0.8.x is still installed beside 1.0", row.Reason, StringComparison.Ordinal);
-        Assert.Contains("'defenseclaw uninstall' removes it (its data folder is kept)", row.Reason, StringComparison.Ordinal);
-        Assert.Contains("stops this release's gateway and removes the hooks of the connectors it has configured, so run setup again afterwards", row.Reason, StringComparison.Ordinal);
+        Assert.Contains("'defenseclaw uninstall' removes it and keeps its data folder", row.Reason, StringComparison.Ordinal);
+        Assert.Contains("stops this release's gateway and removes the hooks of the configured connectors, so run setup again afterwards", row.Reason, StringComparison.Ordinal);
         Assert.Contains("'defenseclaw init' will not set up hooks while Setup's hooks remain", row.Reason, StringComparison.Ordinal);
         Assert.DoesNotContain("Do not uninstall it from Windows Settings", row.Reason, StringComparison.Ordinal);
     }
@@ -394,7 +394,7 @@ public sealed class ConnectorRecoveryUpgradeTests : IDisposable
         Assert.Contains("End every agent session before you upgrade and start new ones afterwards", row.Reason, StringComparison.Ordinal);
         if (target == "1.0.9")
         {
-            Assert.DoesNotContain("support upgrades from", row.Reason, StringComparison.Ordinal);
+            Assert.DoesNotContain("cover upgrades from", row.Reason, StringComparison.Ordinal);
             Assert.DoesNotContain("no longer tested", row.Reason, StringComparison.Ordinal);
         }
     }

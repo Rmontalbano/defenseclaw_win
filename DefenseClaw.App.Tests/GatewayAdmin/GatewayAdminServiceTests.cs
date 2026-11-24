@@ -365,7 +365,7 @@ public sealed class GatewayAdminServiceTests
 
         var none = new AdminRig { ModeOn = true };
         var refused = await none.Service.PlanAsync(GatewayAction.Stop, CancellationToken.None);
-        Assert.Contains("nothing to stop as administrator", refused.Refusal, StringComparison.Ordinal);
+        Assert.Contains("no trusted administrator copy of the gateway to stop", refused.Refusal, StringComparison.Ordinal);
     }
 
     [Fact]

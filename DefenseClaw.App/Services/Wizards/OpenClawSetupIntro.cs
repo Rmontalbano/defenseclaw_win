@@ -48,17 +48,16 @@ public static class OpenClawSetupIntro
             Summary = "DefenseClaw guards OpenClaw's tool calls and prompts through OpenClaw's own plugin hooks. No guardrail proxy runs on Windows.",
             Needs = new[]
             {
-                "OpenClaw 2026.8.35 or later. Setup refuses an older one; the fix is npm install -g openclaw@latest.",
+                "OpenClaw 2026.8.35 or later. Setup refuses an older one. Update it with npm install -g openclaw@latest.",
                 "On a new install, run defenseclaw init --connector openclaw first.",
                 "OpenClaw's own gateway running (openclaw gateway run). If nothing answers at the address in openclaw.json, setup stops with \"No changes made.\"",
-                "No other connector configured. OpenClaw runs alone in this release: setup refuses while hook connectors are configured. The --replace switch removes them; " +
-                "or take them out first with Remove a connector… in the Setup panel.",
-                "Optional check, to copy and run yourself in a terminal (this app does not run it): " + PreflightCommand +
+                "No other connector configured. OpenClaw runs alone in this release, so setup refuses while hook connectors are configured. " +
+                "The --replace switch removes them, or remove them first with Remove a connector… in the Setup panel.",
+                "Optional check to run yourself in a terminal: " + PreflightCommand +
                 ". It prints \"openclaw preflight: ok\", or the reason setup would stop.",
             },
-            WillDo = "Registers the DefenseClaw plugin with OpenClaw and sets openclaw as the guarded connector. OpenClaw's own gateway must restart afterwards so it loads the plugin: " +
-                     "setup's --restart (on by default) restarts it, along with DefenseClaw's gateway. Until it has restarted, OpenClaw is not guarded. " +
-                     "The last page shows the exact command first; nothing runs until you confirm.",
+            WillDo = "Registers the DefenseClaw plugin with OpenClaw and sets openclaw as the guarded connector. OpenClaw's own gateway must restart to load the plugin. Setup's --restart, on by default, restarts it along with DefenseClaw's gateway. " +
+                     "Until it restarts, OpenClaw is not guarded. The last page shows the exact command first.",
         };
 
         var intro = new WizardStep

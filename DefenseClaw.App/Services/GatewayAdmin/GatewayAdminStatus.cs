@@ -135,7 +135,7 @@ internal sealed record GatewayAdminStatus
             }
 
             return CopyMatchesInstalled == false
-                ? "On. The installed gateway differs from the administrator copy: Restart Gateway as Administrator to use it."
+                ? "On. The installed gateway differs from the administrator copy. Restart Gateway as Administrator to use it."
                 : "On. The administrator copy matches the installed gateway.";
         }
     }

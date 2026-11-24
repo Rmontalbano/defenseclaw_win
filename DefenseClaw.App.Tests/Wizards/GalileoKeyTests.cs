@@ -103,7 +103,7 @@ public class GalileoKeyTests
         Assert.Equal(WizardFieldKind.Switch, persist.Kind);
         Assert.Equal("--persist-api-key", persist.FlagDisplay);
         Assert.Equal(ToggleValues.Off, persist.DefaultValue);
-        Assert.Contains("nothing keeps it", persist.Help, StringComparison.Ordinal);
+        Assert.Contains("used for this run only", persist.Help, StringComparison.Ordinal);
 
         Assert.Same(
             definition.Steps.Single(s => s.Fields.Contains(KeyField(definition))),

@@ -577,9 +577,9 @@ public sealed class SplunkDashboardsReviewTests
         var destroy = SplunkDashboardsReview.Summary(Words("setup splunk dashboards destroy --yes"));
 
         Assert.Contains("changes nothing there", plan, StringComparison.Ordinal);
-        Assert.Contains("working files and state", plan, StringComparison.Ordinal);
+        Assert.Contains("Terraform files and state", plan, StringComparison.Ordinal);
         Assert.Contains("Creates or updates", apply, StringComparison.Ordinal);
-        Assert.Contains("everything plan does on this machine first", apply, StringComparison.Ordinal);
+        Assert.Contains("what plan does locally first", apply, StringComparison.Ordinal);
         Assert.StartsWith("Deletes from Splunk Observability Cloud everything the Terraform state manages", destroy, StringComparison.Ordinal);
         Assert.Contains("adopted", destroy, StringComparison.Ordinal);
         Assert.Equal(3, new[] { plan, apply, destroy }.Distinct().Count());
@@ -639,7 +639,7 @@ public sealed class SplunkDashboardsReviewTests
 
         var removes = SplunkDashboardsReview.Warnings(Words("setup splunk dashboards apply --yes"))[1];
         Assert.Contains("--with-detectors", removes.Message, StringComparison.Ordinal);
-        Assert.Contains("removes them from Splunk", removes.Message, StringComparison.Ordinal);
+        Assert.Contains("applying removes any detectors", removes.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -675,7 +675,7 @@ public sealed class SplunkDashboardsReviewTests
         Assert.Equal(SplunkDashboardsReview.DeletesTitle, bar.Title);
         Assert.Contains("deletes every Splunk Observability Cloud object its state records", bar.Message, StringComparison.Ordinal);
         Assert.Contains("cannot be undone", bar.Message, StringComparison.Ordinal);
-        Assert.Contains("which is why --yes is on the command", bar.Message, StringComparison.Ordinal);
+        Assert.Contains("--yes stands in for the CLI's own confirmation", bar.Message, StringComparison.Ordinal);
 
         var without = Assert.Single(SplunkDashboardsReview.Warnings(Words("setup splunk dashboards destroy")));
         Assert.DoesNotContain("which is why --yes", without.Message, StringComparison.Ordinal);
@@ -693,8 +693,8 @@ public sealed class SplunkDashboardsReviewTests
 
         var bar = SplunkDashboardsReview.Warnings(Words(commandLine), CredentialPresence.NotSet)[^1];
         Assert.Contains("SFX_AUTH_TOKEN", bar.Message, StringComparison.Ordinal);
-        Assert.Contains("will stop at once", bar.Message, StringComparison.Ordinal);
-        Assert.Contains("change nothing", bar.Message, StringComparison.Ordinal);
+        Assert.Contains("the command stops with", bar.Message, StringComparison.Ordinal);
+        Assert.Contains("changes nothing", bar.Message, StringComparison.Ordinal);
         Assert.Contains("Setup page", bar.Message, StringComparison.Ordinal);
 
         foreach (var present in new CredentialPresence?[] { null, CredentialPresence.Unknown, CredentialPresence.InDotEnv, CredentialPresence.InEnvironment })

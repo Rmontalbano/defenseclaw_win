@@ -131,7 +131,7 @@ public sealed class AdminGatewayOwnershipTests
 
         Assert.Equal(PortOwnerTrust.Other, Verifier(rig).Classify(Listener(otherCopy)));
         Assert.Equal(
-            "defenseclaw-gateway (pid 11524) runs from another account's administrator copy, not this account's, so it is not sent this account's token",
+            "defenseclaw-gateway (pid 11524) runs from another account's administrator copy, so it is not sent this account's token",
             Verifier(rig).DescribeUntrusted(Listener(otherCopy)));
     }
 

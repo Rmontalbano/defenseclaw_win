@@ -36,7 +36,7 @@ public static partial class WizardBaseline
 
     private static WizardDefinition ApplySkillScanner(WizardDefinition definition, ConfigYaml yaml)
     {
-        const string note = "Pre-filled from config.yaml → scanners.skill_scanner (and the shared llm: block for the LLM analyzer); a key that is not set " +
+        const string note = "Pre-filled from config.yaml → scanners.skill_scanner and the shared llm: block for the LLM analyzer. A key that is not set " +
                             "shows the runtime's default. Only fields you change are sent.";
 
         var scanner = Replace(definition, SkillScannerFacts(yaml), SkillScannerSource, note);
@@ -82,7 +82,7 @@ public static partial class WizardBaseline
 
     private static WizardDefinition ApplyMcpScanner(WizardDefinition definition, ConfigYaml yaml)
     {
-        const string note = "Pre-filled from config.yaml → scanners.mcp_scanner (and the shared llm: block for the LLM analyzer); a key that is not set " +
+        const string note = "Pre-filled from config.yaml → scanners.mcp_scanner and the shared llm: block for the LLM analyzer. A key that is not set " +
                             "shows the runtime's default. Only fields you change are sent, and clearing Analyzers sends auto.";
 
         var scanner = Replace(definition, McpScannerFacts(yaml), McpScannerSource, note);
