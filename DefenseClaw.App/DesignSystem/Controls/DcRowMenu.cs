@@ -235,7 +235,7 @@ public static class DcClipboard
     }
 
     /// <summary>What a copy that was cut short tells the operator.</summary>
-    public static string TruncatedText => "Copied the first " + MaxChars.ToString("N0", CultureInfo.CurrentCulture) + " characters; the rest was too large for the clipboard.";
+    public static string TruncatedText => "Copied the first " + MaxChars.ToString("N0", CultureInfo.CurrentCulture) + " characters. The rest was too large for the clipboard.";
 
     private static void Report(ClipboardResult result)
     {

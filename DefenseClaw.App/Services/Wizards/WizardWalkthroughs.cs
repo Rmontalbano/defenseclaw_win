@@ -244,10 +244,10 @@ public static partial class WizardWalkthroughs
                     new WizardGuideLink("Set up the HTTP Event Collector", "https://help.splunk.com/en/splunk-enterprise/get-started/get-data-in/10.6/get-data-with-http-event-collector/set-up-and-use-http-event-collector-in-splunk-web"),
                 },
                 WillDo = ProbesBeforeSaving(Says("--enterprise"))
-                    ? "Sends one live HEC probe to your endpoint first. Only if it succeeds does it write a Splunk Enterprise destination and store the token in ~/.defenseclaw/.env. " +
-                      "A failed probe saves nothing and the command exits 1. Turn on \"Skip test\" on that pipeline's page to save without the probe."
+                    ? "Writes a Splunk Enterprise destination and stores the token in ~/.defenseclaw/.env only if one live HEC probe to your endpoint succeeds. " +
+                      "A failed probe saves nothing and the command exits 1. Turn on \"Skip test\" on that pipeline's page to save without it."
                     : "Writes a Splunk Enterprise destination and stores the token in ~/.defenseclaw/.env, then sends one best-effort HEC probe to your endpoint. " +
-                      "Turn on \"Skip test\" on that pipeline's page to skip the probe.",
+                      "Turn on \"Skip test\" on that pipeline's page to skip it.",
             });
         }
 
@@ -431,8 +431,8 @@ public static partial class WizardWalkthroughs
                     {
                         new WizardGuideLink("Galileo documentation (API keys, projects, Log streams)", "https://docs.galileo.ai/"),
                     },
-                    WillDo = "Writes a Galileo destination, traces only, to DefenseClaw's configuration. \"Save the key\" on the API key page keeps the key in ~/.defenseclaw/.env. " +
-                             "Preview on the last page shows what would be written. The test command on the Command page sends a content-free trace to check that Galileo accepts it.",
+                    WillDo = "Writes a Galileo destination, traces only. Save the key on the API key page to keep it in ~/.defenseclaw/.env. " +
+                             "The test command on the Command page sends a content-free trace.",
                 },
             },
         };
@@ -452,8 +452,8 @@ public static partial class WizardWalkthroughs
             ["deployment"] = ("Deployment", "Cloud sends to Galileo's hosted service. Self-hosted sends to your own Galileo installation, which needs the console URL or the trace endpoint below."),
             ["project"] = ("Project", "The Galileo project the traces are filed under, by name or ID as the console shows it. Required."),
             ["logstream"] = ("Log stream", "The Log stream inside that project, by name or ID. Required. \"default\" is the stream a new project starts with."),
-            ["console-url"] = ("Console URL (self-hosted only)", "Your self-hosted Galileo console address, https:// only. The API endpoint is derived from it by changing console. to api. Leave blank for Galileo Cloud."),
-            ["trace-endpoint"] = ("Trace endpoint (self-hosted only)", "The OTLP HTTP traces endpoint, https:// without a query. Needed only when it cannot be derived from the console URL. Overrides the console URL."),
+            ["console-url"] = ("Console URL (self-hosted only)", "Your self-hosted Galileo console address, https:// only. The API endpoint is derived from it. Leave blank for Galileo Cloud."),
+            ["trace-endpoint"] = ("Trace endpoint (self-hosted only)", "The OTLP HTTP traces endpoint, https:// without a query. Needed only when it cannot be derived from the console URL."),
         };
 
         var result = new List<WizardStep> { guideStep };

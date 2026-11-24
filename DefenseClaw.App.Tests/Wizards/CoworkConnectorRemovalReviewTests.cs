@@ -232,7 +232,7 @@ public sealed class CoworkConnectorRemovalReviewTests : IDisposable
             CoworkProtectionFacts.RemovePluginStep);
         Assert.Equal(
             "DefenseClaw cannot remove its Cowork plugin from your Claude account: remove it in Claude Desktop (Customize > Plugins, then the ... menu > Remove). " +
-            "A plugin built with 1.0.9 lets Cowork calls run after the data folder is removed; older plugins may block.",
+            "A plugin built with 1.0.9 lets Cowork calls run after the data folder is removed. Older plugins may block.",
             CoworkProtectionFacts.RemovePluginStepRunsAfterRemoval);
         Assert.Equal(CoworkProtectionFacts.RemovePluginStep, CoworkProtectionFacts.RemovePluginStepFor(false));
         Assert.Equal(CoworkProtectionFacts.RemovePluginStepRunsAfterRemoval, CoworkProtectionFacts.RemovePluginStepFor(true));

@@ -59,11 +59,11 @@ public sealed class ObservabilityDestinationsViewModel : SetupResourceViewModel
 
     protected override string TipFor(SetupVerb verb) => verb switch
     {
-        SetupVerb.Add => "Opens the setup wizard to pick a destination type and fill it in. The command is shown first.",
-        SetupVerb.Enable => "Turn this destination on. The command is shown first.",
-        SetupVerb.Disable => "Turn this destination off without deleting it. The command is shown first.",
-        SetupVerb.Test => "Connects to this destination to check that it answers. The command is shown first.",
-        SetupVerb.Remove => "Delete this destination from config.yaml. The command is shown first.",
+        SetupVerb.Add => "Opens the setup wizard to pick a destination type and fill it in. Nothing runs until you confirm.",
+        SetupVerb.Enable => "Turn this destination on. Nothing runs until you confirm.",
+        SetupVerb.Disable => "Turn this destination off without deleting it. Nothing runs until you confirm.",
+        SetupVerb.Test => "Connects to this destination to check that it answers. Nothing runs until you confirm.",
+        SetupVerb.Remove => "Delete this destination from config.yaml. Nothing runs until you confirm.",
         _ => string.Empty,
     };
 
@@ -110,7 +110,7 @@ public sealed class ObservabilityDestinationsViewModel : SetupResourceViewModel
 
         if (d.UnsupportedHere)
         {
-            facts.Add(new SetupFact("This PC", "belongs to a local stack this operating system cannot run"));
+            facts.Add(new SetupFact("This machine", "belongs to a local stack this operating system cannot run"));
         }
 
         var blocked = new Dictionary<SetupVerb, string>();
@@ -147,7 +147,7 @@ public sealed class ObservabilityDestinationsViewModel : SetupResourceViewModel
 
             if (d.IsLocal)
             {
-                blocked[SetupVerb.Test] = $"A {d.Kind} destination stores or serves events on this PC. The CLI tests only remote destinations.";
+                blocked[SetupVerb.Test] = $"A {d.Kind} destination stores or serves events on this machine. The CLI tests only remote destinations.";
             }
         }
 
@@ -217,7 +217,7 @@ public sealed class ObservabilityDestinationsViewModel : SetupResourceViewModel
                     row,
                     test,
                     $"Test destination “{name}”?",
-                    "Opens a TCP and TLS connection to each endpoint and looks for its credentials. No event is sent, so the credentials are not verified. The result is recorded locally as compliance activity.",
+                    "Opens a TLS connection to each endpoint and checks that credentials are present. No event is sent, so they are not verified. The result is recorded locally as compliance activity.",
                     "Run test",
                     CommandTier.StateChanging,
                     TestTimeout,
@@ -232,7 +232,7 @@ public sealed class ObservabilityDestinationsViewModel : SetupResourceViewModel
                     row,
                     remove,
                     $"Remove destination “{name}”?",
-                    $"Deletes this destination from config.yaml (observability.destinations). Values stored for it in .env, such as its token, stay. This cannot be undone here. Add it again with Add.",
+                    $"Deletes this destination from config.yaml (observability.destinations). Its .env values, such as its token, stay. This cannot be undone here. Add it again with Add.",
                     "Remove destination",
                     CommandTier.Destructive,
                     ChangeTimeout,

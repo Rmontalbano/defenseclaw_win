@@ -280,8 +280,8 @@ public sealed class OpenClawWindowsSetupTests
         Assert.Contains(OpenClawSetupIntro.PreflightCommand, needs, StringComparison.Ordinal);
         Assert.Contains("openclaw preflight: ok", needs, StringComparison.Ordinal);
         Assert.Contains("to run yourself in a terminal", needs, StringComparison.Ordinal);
-        Assert.Contains("restarts it", card.WillDo, StringComparison.Ordinal);
-        Assert.Contains("to load the plugin", card.WillDo, StringComparison.Ordinal);
+        Assert.Contains("must restart to load it, which --restart (on by default) does", card.WillDo, StringComparison.Ordinal);
+        Assert.Contains("Until then OpenClaw is not guarded", card.WillDo, StringComparison.Ordinal);
         Assert.Equal(PlatformStatus.Certified, definition.PlatformStatus);
 
         // The preflight command is text on the page and never a step of the wizard: nothing in the pages' fields runs it.

@@ -186,7 +186,7 @@ public abstract partial class SetupDialogViewModel : ObservableObject, IDisposab
     protected void BeginTrustRead()
     {
         ConfigProblem = Services.ConfigLoadError is { Length: > 0 } error
-            ? "config.yaml could not be read (" + error + "). Fix it in Setup, Config editor, then press Refresh."
+            ? "config.yaml could not be read (" + error + "). Fix it in Setup, Config editor, then select Refresh."
             : string.Empty;
 
         Trust.BeginRead();

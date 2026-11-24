@@ -124,14 +124,14 @@ public sealed partial class RedactionViewModel
         }
         else if (result.Succeeded)
         {
-            Outcome = Failed(info, command, "The command exited 0, but its result could not be read. The Activity panel has the output.", invocation is null ? string.Empty : Transcript(invocation));
+            Outcome = Failed(info, command, "The command exited 0, but its result could not be read. Activity has the output.", invocation is null ? string.Empty : Transcript(invocation));
         }
         else
         {
             Outcome = Failed(
                 info,
                 command,
-                "The change did not finish. The review and the Activity panel have the output. Check the policy below before trying again.",
+                "The change did not finish. The review and Activity have the output. Check the policy below before trying again.",
                 invocation is null ? string.Empty : Transcript(invocation));
         }
 

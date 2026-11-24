@@ -39,12 +39,12 @@
         <ContextMenu x:Key="BySeverityMenu">
             <MenuItem Header="Acknowledge by severity…"
                       Icon="{ctl:DcSymbolIcon ShieldCheckmark24}"
-                      ToolTip="Acknowledges all active alerts of one severity, not only those listed. A preview comes first."
+                      ToolTip="Acknowledges all active alerts of one severity, including unlisted ones. A preview comes first."
                       Click="OnAcknowledgeBySeverity" />
             <MenuItem Header="Dismiss by severity…"
                       Style="{StaticResource DcDangerMenuItem}"
                       Icon="{ctl:DcSymbolIcon AlertOff24}"
-                      ToolTip="Dismisses all active alerts of one severity, not only those listed. A preview comes first."
+                      ToolTip="Dismisses all active alerts of one severity, including unlisted ones. A preview comes first."
                       Click="OnDismissBySeverity" />
         </ContextMenu>
 
@@ -199,7 +199,7 @@
                            SearchText="{Binding FilterText}"
                            SearchPlaceholder="Filter alerts… (connector:codex)"
                            SearchAutomationName="Filter alerts"
-                           SearchHelpText="Filters by text. Narrow with connector:codex, severity:high, run:, trace:, request:, session:, id:, actor:, type:, target: or action:. Quote values with spaces. Ctrl+F focuses, Esc clears.">
+                           SearchHelpText="Filters by text, or field:value such as severity:high or connector:codex. Quote spaces. Ctrl+F focuses and Esc clears.">
             <ctl:DcPageToolbar.ConnectorSlot>
                 <ctl:DcConnectorScopeChip Model="{Binding ConnectorChip}" />
             </ctl:DcPageToolbar.ConnectorSlot>
@@ -254,7 +254,7 @@
                            Content="By severity…"
                            Appearance="Secondary"
                            Click="OnBySeverity"
-                           ToolTip="Acknowledge or dismiss all active alerts of one severity, not only the selected or loaded ones. A preview comes first."
+                           ToolTip="Acknowledge or dismiss all active alerts of one severity, including unselected and unloaded ones. A preview comes first."
                            AutomationProperties.Name="By severity"
                            AutomationProperties.HelpText="Opens a menu: Acknowledge by severity or Dismiss by severity. Either acts on all active alerts of one severity. A preview comes first." />
                 <ui:Button Content="Hide until relaunch"
@@ -330,7 +330,7 @@
                             Selector.IsSelected="{Binding IsPicked}"
                             ToolTip="{Binding AutomationName}"
                             AutomationProperties.Name="{Binding AutomationName}"
-                            AutomationProperties.HelpText="Shows only this severity. Press again to show all.">
+                            AutomationProperties.HelpText="Shows only this severity. Select again to show all.">
                         <StackPanel>
                             <DockPanel LastChildFill="True">
                                 <TextBlock DockPanel.Dock="Right"
@@ -397,7 +397,7 @@
                        Icon="{ctl:DcSymbolIcon DocumentBulletList24}"
                        Content="Events (all activity)"
                        Command="{Binding OpenEventsCommand}"
-                       ToolTip="Opens Logs on Events: every canonical event in audit.db, not only findings. Shows actionable events first; turn off Actionable only for all."
+                       ToolTip="Opens Logs on Events, which lists every canonical event in audit.db. Only actionable events show until you turn off Actionable only."
                        AutomationProperties.Name="Events (all activity)"
                        AutomationProperties.HelpText="Opens Logs on the Events stream. Alerts lists unacknowledged findings only." />
 
@@ -832,7 +832,7 @@
                     <ui:InfoBar Margin="0,8,0,0"
                                 IsClosable="False"
                                 Severity="Warning"
-                                Title="You can preview, not apply"
+                                Title="Preview only"
                                 IsOpen="{Binding HasReviewBlockedText, Mode=OneWay}"
                                 Message="{Binding ReviewBlockedText}" />
 

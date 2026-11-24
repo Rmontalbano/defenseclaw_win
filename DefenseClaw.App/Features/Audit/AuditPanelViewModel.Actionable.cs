@@ -92,8 +92,8 @@ public sealed partial class AuditPanelViewModel
     /// <summary>What the switch says when pointed at: what the list shows, or why it is paused.</summary>
     public string ActionableToolTip => ActionableSuspendedBy is { } why
         ? $"Actionable only is paused while {why}. Clear that filter to resume it."
-        : "Shows what the TUI shows by default: HIGH, CRITICAL and ERROR events, and events that blocked, denied, rejected, quarantined or failed. " +
-          "Turn off to see every event in the window.";
+        : "Shows HIGH, CRITICAL and ERROR events, and events that blocked, denied, rejected, quarantined or failed. " +
+          "Turn off to see every event.";
 
     /// <summary>A filter, or the choice itself, changed: the switch, its tooltip and the state of the list may all have moved.</summary>
     private void RaiseActionableState()

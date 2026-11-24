@@ -133,7 +133,7 @@ public sealed class SetupHubEditorTilesTests : IDisposable
             vm.ShowCards(Cards);
             var observability = vm.Groups.SelectMany(g => g.Cards).Single(c => c.Target == "observability");
 
-            Assert.Equal("defenseclaw setup observability" + Environment.NewLine + "Opens the list; Add opens the wizard.", observability.TileToolTip);
+            Assert.Equal("defenseclaw setup observability" + Environment.NewLine + "Opens the list. Add opens the wizard.", observability.TileToolTip);
             Assert.Equal("Configure Observability", observability.LaunchAutomationName);
         });
     }

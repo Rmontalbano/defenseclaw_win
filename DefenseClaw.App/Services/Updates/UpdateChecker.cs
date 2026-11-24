@@ -276,7 +276,7 @@ public sealed class UpdateChecker : IDisposable
             {
                 Detail = isRateLimited
                     ? $"GitHub's API rate limit was reached. Showing cached data from {cachedAtText}."
-                    : $"The live check failed: {fetchError} Showing cached data from {cachedAtText}.",
+                    : $"The live check failed. {fetchError} Showing cached data from {cachedAtText}.",
             };
         }
 
@@ -388,7 +388,7 @@ public sealed class UpdateChecker : IDisposable
             }
 
             return (UpdateCheckState.UpdateAvailable,
-                $"A newer release ({latestTag}) is available; installed is {installed}.");
+                $"A newer release ({latestTag}) is available. Installed is {installed}.");
         }
 
         return (UpdateCheckState.CheckFailed,

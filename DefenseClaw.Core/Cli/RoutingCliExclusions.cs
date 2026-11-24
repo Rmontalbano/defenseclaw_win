@@ -23,11 +23,11 @@ public static class RoutingCliExclusions
 
     /// <summary>The sentence for a <c>routing</c> command that is not on the read-only list (it changes routing, or it has not been read).</summary>
     public const string RoutingChangeReason =
-        "This app shows routing state only; commands that change routing are run from a terminal.";
+        "This app shows routing state only. Run commands that change routing from a terminal.";
 
     /// <summary>The sentence for a command whose argv fails <see cref="TuiRegistryCatalogues.ArgvProblem"/>.</summary>
     public const string ArgvReason =
-        "This app does not pass this command's words on as they are written; run it from a terminal.";
+        "This app does not pass this command's words on as they are written. Run it from a terminal.";
 
     /// <summary>
     /// The <c>routing</c> commands the app offers, each the whole argv, each read in <c>cli/defenseclaw/commands/cmd_routing.py</c> at 1.0.10

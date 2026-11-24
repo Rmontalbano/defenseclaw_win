@@ -25,7 +25,7 @@ public sealed record ConfigRow
     /// <summary>Neutral; Ok for a protection that is on (human approval); Warn for a value that is not what was asked for (a hook fail mode that has drifted).</summary>
     public string ToneKey { get; init; } = "Neutral";
 
-    /// <summary>The longer facts behind <see cref="Value"/>, shown as the value's tooltip and help text; empty when there are none.</summary>
+    /// <summary>The longer facts behind <see cref="Value"/> (a fail mode's outage behaviour), shown under a collapsed "Outage behaviour" expander and as the value's help text; empty when there are none.</summary>
     public string Detail { get; init; } = string.Empty;
 
     /// <summary>True when <see cref="Detail"/> has something to show.</summary>
@@ -426,7 +426,7 @@ public sealed partial class OverviewPanelViewModel
             }
 
             // 1.0.5 per-user (CUST-397): which saved value, or the policy tier, decides the outage mode. 1.0.10: what the hook does in each failure, from
-            // the app's own fixed text (absent before 1.0.10 and for proxy connectors). Both go to the row's tooltip so the value stays at 3 parts.
+            // the app's own fixed text (absent before 1.0.10 and for proxy connectors). Both go to the row's "Outage behaviour" expander so the value stays at 3 parts.
             var details = new List<string>(2);
             if (FailModeDecider(name) is { } decidedBy)
             {
@@ -448,7 +448,7 @@ public sealed partial class OverviewPanelViewModel
         var value = runtime?.HookFailMode ?? settings?.HookFailMode ?? (decider is null ? null : Services.Config.Config.Guardrail.HookFailMode);
         if (value is not { Length: > 0 })
         {
-            return ("not set", "Neutral", decider ?? string.Empty);
+            return (decider is null ? "not set" : "not saved, policy tier decides", "Neutral", decider ?? string.Empty);
         }
 
         var text = $"{value} ({(runtime?.HookFailMode is null ? "config.yaml" : "gateway")})";

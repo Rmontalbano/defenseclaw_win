@@ -233,7 +233,7 @@ public sealed class SecretWarningTests : IDisposable
         Assert.False(vm.IsConfirmOpen);
         Assert.True(vm.HasInstallFormError);
         Assert.Contains("absolute folder path", vm.InstallFormError, StringComparison.Ordinal);
-        Assert.Contains("working directory", vm.InstallFormError, StringComparison.Ordinal);
+        Assert.Contains("Enter the full path", vm.InstallFormError, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -301,7 +301,7 @@ public sealed class SecretWarningTests : IDisposable
         Assert.Equal(SecretFieldWarnings.Title, bar.Title);
         Assert.Contains("The value of --url looks like a secret", bar.Message, StringComparison.Ordinal);
         Assert.Contains("Slack webhook", bar.Message, StringComparison.Ordinal);
-        Assert.Contains("config.yaml", bar.Message, StringComparison.Ordinal);
+        Assert.Contains("Config editor", bar.Message, StringComparison.Ordinal);
         Assert.DoesNotContain("abcdefghijklmnopqrstuvwx", bar.Message, StringComparison.Ordinal);
     }
 

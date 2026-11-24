@@ -190,7 +190,7 @@ public sealed class GatewayLifecycleAdminTests
         Assert.Empty(h.Reviews);
         Assert.Empty(rig.Elevator.Requests);
         var notice = Assert.Single(h.Notices);
-        Assert.Contains("Choose Restart Gateway as Administrator", notice.Message, StringComparison.Ordinal);
+        Assert.Contains("Select Restart Gateway as Administrator", notice.Message, StringComparison.Ordinal);
     }
 
     [Fact]

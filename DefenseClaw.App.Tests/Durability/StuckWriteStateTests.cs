@@ -30,10 +30,10 @@ public sealed class StuckWriteStateTests
     }
 
     [Theory]
-    [InlineData(CasWriteState.Committed, "config.toml \u2014 finished; only leftovers remain")]
-    [InlineData(CasWriteState.NeverApplied, "config.toml \u2014 never applied")]
-    [InlineData(CasWriteState.Superseded, "config.toml \u2014 rewritten since (the pending write no longer describes it; safe to set aside)")]
-    [InlineData(CasWriteState.Unknown, "config.toml \u2014 could not verify \u2014 check before clearing")]
+    [InlineData(CasWriteState.Committed, "config.toml: finished, only leftovers remain")]
+    [InlineData(CasWriteState.NeverApplied, "config.toml: never applied")]
+    [InlineData(CasWriteState.Superseded, "config.toml: rewritten since, so the pending write no longer describes it and is safe to set aside")]
+    [InlineData(CasWriteState.Unknown, "config.toml: could not verify, so check before clearing")]
     public void Detail_names_the_file_and_its_state(CasWriteState state, string expected)
     {
         Assert.Contains(expected, Detail(Write(@"C:\Users\tester\.codex\config.toml", state)), StringComparison.Ordinal);

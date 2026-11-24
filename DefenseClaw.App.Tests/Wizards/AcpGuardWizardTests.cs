@@ -205,7 +205,7 @@ public sealed class AcpGuardWizardTests
         var profile = Field(definition, AcpGuardWizard.ProfileField);
         Assert.Equal(WizardFieldKind.Choice, profile.Kind);
         Assert.Equal(new[] { "default", "locked", AcpGuardWizard.AnotherProfile }, profile.Choices.Select(c => c.Value));
-        Assert.Equal("locked — action, fails closed (editors: zed; agents: devin)", profile.Choices[1].Label);
+        Assert.Equal("locked · action, fails closed (editors: zed; agents: devin)", profile.Choices[1].Label);
         Assert.Equal("default", profile.DefaultValue);
         Assert.Equal(WizardFieldKind.Choice, Field(definition, AcpGuardWizard.ClientField).Kind);
         Assert.Equal(string.Empty, Field(definition, AcpGuardWizard.ClientField).DefaultValue); // nothing chosen for the operator

@@ -122,7 +122,7 @@ public sealed class OverviewLayoutTests
             var configuration = y("Configuration");
             var connectors = y("Connectors");
             var observability = y("Observability destinations");
-            var activity = y("Activity — last 24 h");
+            var activity = y("Activity: last 24 h");
             var doctor = y("Doctor");
 
             Assert.True(attention < hero, "Attention comes before the hero row");

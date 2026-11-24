@@ -310,7 +310,7 @@ public static class RuntimeProbe
                 !text.Contains("windows", StringComparison.OrdinalIgnoreCase) &&
                 text.Contains("Linux", StringComparison.Ordinal))
             {
-                notes.Add("Sandboxes run on Linux and macOS only and may not work on this PC.");
+                notes.Add("Sandboxes run on Linux and macOS only and may not work on this machine.");
             }
         }
 

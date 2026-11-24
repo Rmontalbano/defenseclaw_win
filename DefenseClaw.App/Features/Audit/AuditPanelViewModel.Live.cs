@@ -352,7 +352,7 @@ public sealed partial class AuditPanelViewModel
 
         var reason = failure.Message.ReplaceLineEndings(" ").Trim();
         var seconds = Math.Max(1, (int)Math.Ceiling(wait.TotalSeconds)).ToString(CultureInfo.InvariantCulture);
-        LiveNote = $"Live refresh paused ({reason}). Showing the last update; retrying in {seconds} s.";
+        LiveNote = $"Live refresh paused ({reason}). Showing the last update. Retrying in {seconds} s.";
     }
 
     /// <summary>

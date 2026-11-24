@@ -726,7 +726,7 @@
                                              Visibility="{Binding IsTableLoading, Converter={StaticResource BoolToVisibility}}" />
                             <TextBlock Style="{StaticResource DcEmptyDetail}"
                                        VerticalAlignment="Center"
-                                       Text="Pick a table above to browse its rows."
+                                       Text="Select a table above to browse its rows."
                                        Visibility="{Binding NoTableSelected, Converter={StaticResource BoolToVisibility}}" />
                         </Grid>
                     </Grid>

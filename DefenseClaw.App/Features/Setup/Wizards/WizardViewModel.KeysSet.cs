@@ -221,7 +221,7 @@ public sealed partial class WizardViewModel
                 ExitBadgeKey = "Warn";
                 ResultMessage = $"The app could not type the value ({result.Message.TrimEnd('.')}). " +
                                 (failure is null
-                                    ? $"A console window opened for {name}: type the value there, press Re-check, then Execute again. The wizard's command was not run."
+                                    ? $"A console window opened for {name}: type the value there, select Re-check, then Execute again. The wizard's command was not run."
                                     : failure + " The wizard's command was not run.");
                 return false;
             }
@@ -230,7 +230,7 @@ public sealed partial class WizardViewModel
             ExitBadgeText = cancelled ? "cancelled" : result.Invocation?.ExitCode is { } code ? "exit " + code.ToString(CultureInfo.CurrentCulture) : "failed";
             ExitBadgeKey = cancelled ? "Warn" : "Bad";
             ResultMessage = $"Step {number} of {total} did not store {name}: {result.Message} The wizard's command was not run. " +
-                            "The command and its output are in the Activity panel.";
+                            "The command and its output are in Activity.";
             return false;
         }
 

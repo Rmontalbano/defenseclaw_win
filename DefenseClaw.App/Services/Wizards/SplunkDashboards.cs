@@ -130,6 +130,6 @@ public static class SplunkDashboards
         IsDetailLoaded = true,
         UnavailableReason =
             "The installed DefenseClaw has no \"setup splunk dashboards\" command (its help lists none of " +
-            string.Join(", ", Verbs) + "), so there is nothing to run. It is part of DefenseClaw 0.8.10; upgrade, then re-read the catalog.",
+            string.Join(", ", Verbs) + "), so there is nothing to run. It is part of DefenseClaw 0.8.10. Upgrade, then re-read the catalog.",
     };
 }

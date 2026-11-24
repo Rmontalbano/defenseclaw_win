@@ -192,7 +192,7 @@ public sealed class UnreadSidebarWindowTests : IDisposable
         Assert.Equal(InfoBadgeSeverity.Attention, raised.Severity);
         Assert.True(raised.FontSize >= 12, $"the capsule's text is {raised.FontSize} px");
         Assert.StartsWith("Audit (Ctrl+", raised.ToolTip, StringComparison.Ordinal);
-        Assert.EndsWith(" — 3 new since last visit", raised.ToolTip, StringComparison.Ordinal);
+        Assert.EndsWith(" · 3 new since last visit", raised.ToolTip, StringComparison.Ordinal);
         Png(window, "sidebar-unread-audit-3");
 
         // Opened: by the shell's own request, the way a deep link or a chord does it. The capsule goes with the first frame and the marker moves.

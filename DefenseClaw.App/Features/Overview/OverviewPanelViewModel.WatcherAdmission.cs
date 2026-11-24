@@ -31,7 +31,7 @@ public sealed partial class OverviewPanelViewModel
         var roots = admission.RootsUnavailable.ToString("N0", CultureInfo.CurrentCulture);
         var detail = $"The watcher cannot watch {roots} skill or plugin folder{(admission.RootsUnavailable == 1 ? string.Empty : "s")} for {admission.ConnectorLabel}, " +
                      "so new skills and plugins there are not scanned before admission. " +
-                     "A junction or a symbolic link is refused on Windows; use a real folder. The gateway log names each folder.";
+                     "A junction or a symbolic link is refused on Windows, so use a real folder. The gateway log names each folder.";
 
         if (admission.WritableFolders.Count > 0)
         {

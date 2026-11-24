@@ -60,7 +60,7 @@ internal sealed class GatewayAutoStart : IDisposable
         "Once per launch, when DefenseClaw first looks at the gateway and nothing is listening on its port, it runs the command below. " +
         "It does not start the gateway when the check times out, is refused credentials or gets an answer it cannot read, when a WSL " +
         "gateway holds the port, while monitoring is paused, or after you stop the gateway yourself in this session. " +
-        "Each run shows in Activity; a failed start is reported once and not retried.";
+        "Each run shows in Activity. A failed start is reported once and not retried.";
 
     private readonly Settings.AppSettingsStore _settings;
     private readonly IGatewaySnapshotSource _source;
@@ -335,7 +335,7 @@ internal sealed class GatewayAutoStart : IDisposable
                     ? $"exit code {code}"
                     : invocation.FailureReason ?? "the command did not finish";
                 Record(GatewayAutoStartOutcome.Failed, $"defenseclaw-gateway start failed: {why}.");
-                Raise("Gateway did not start", $"The automatic start failed ({why}). See the Activity panel. It will not be retried.", isFailure: true);
+                Raise("Gateway did not start", $"The automatic start failed ({why}). See Activity. It will not be retried.", isFailure: true);
             }
 
             if (_afterRun is not null)

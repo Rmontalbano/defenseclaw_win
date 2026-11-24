@@ -51,7 +51,7 @@
                            SearchText="{Binding FilterText}"
                            SearchPlaceholder="Filter tool rules…"
                            SearchAutomationName="Filter tool rules"
-                           SearchHelpText="Matches tool name, connector, reason and state. Shortcut Ctrl+F; Esc clears it.">
+                           SearchHelpText="Matches tool name, connector, reason and state. Shortcut Ctrl+F. Esc clears it.">
             <ctl:DcPageToolbar.Leading>
                 <ui:ProgressRing Width="16"
                                  Height="16"
@@ -123,7 +123,7 @@
                         </ui:CardExpander.Header>
                         <StackPanel>
                             <TextBlock Style="{StaticResource DcCaption}"
-                                       Text="Enter a bare tool name. The toolbar's connector is the scope; 'All configured connectors' sets the fallback rule for every connector." />
+                                       Text="Enter a tool name without @connector/. The toolbar's connector is the scope. All configured connectors sets the fallback rule." />
                             <WrapPanel Style="{StaticResource DcToolbarPanel}" Margin="0,10,0,0">
                                 <ui:TextBox Width="260"
                                             PlaceholderText="Tool name, for example delete_file"
@@ -267,7 +267,7 @@
                         <ctl:DcSymbolIcon Style="{StaticResource DcEmptyIcon}" Symbol="ErrorCircle24" />
                         <TextBlock Style="{StaticResource DcEmptyTitle}" Text="{Binding ErrorTitle}" />
                         <TextBlock Style="{StaticResource DcEmptyDetail}" Text="{Binding ErrorMessage}" />
-                        <TextBlock Style="{StaticResource DcEmptyDetail}" Text="Press Refresh to try again. The command and its output are in Activity." />
+                        <TextBlock Style="{StaticResource DcEmptyDetail}" Text="Select Refresh to try again. The command and its output are in Activity." />
                     </StackPanel>
                 </Border>
 

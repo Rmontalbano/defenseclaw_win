@@ -206,7 +206,7 @@ public sealed class PolicyModelPanelTests : IDisposable
         var policy = vm.ActionGroups.Select(g => g.Name).ToArray();
         Assert.Equal(new[] { "Activate", "LLM block level", "LLM alert level" }, policy);
         Assert.DoesNotContain(policy, g => g.StartsWith("Tool-call", StringComparison.Ordinal));
-        Assert.All(Act(vm, "LLM block level", "HIGH+").Action.Consequence.Details.Take(1), d => Assert.Contains("tool calls keep each scope's levels", d, StringComparison.Ordinal));
+        Assert.All(Act(vm, "LLM block level", "HIGH+").Action.Consequence.Details.Take(1), d => Assert.Contains("Tool calls keep each scope's levels", d, StringComparison.Ordinal));
     }
 
     // ------------------------------------------------------------------ every change is reviewed

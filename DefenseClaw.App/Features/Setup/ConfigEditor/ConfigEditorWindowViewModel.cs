@@ -303,7 +303,7 @@ public sealed partial class ConfigEditorWindowViewModel : ObservableObject, IDis
 
     public string WindowTitle =>
         HasSecretReferences
-            ? "DefenseClaw Config Editor — contains secret references"
+            ? "DefenseClaw Config Editor: contains secret references"
             : "DefenseClaw Config Editor";
 
     public string ConfigFilePath => _paths.ConfigFilePath;
@@ -417,7 +417,7 @@ public sealed partial class ConfigEditorWindowViewModel : ObservableObject, IDis
         : "No settings to show";
 
     public string FormEmptyDetail =>
-        LoadFailed ? "Form needs config.yaml to load. Fix the error above and press Reload."
+        LoadFailed ? "Form needs config.yaml to load. Fix the error above and select Reload."
         : ParseError is not null ? "Fix the YAML in the Raw tab, then switch back to Form."
         : FormUnavailableReason is not null ? "Raw editing still works. The notice above says why Form could not be built."
         : "config.yaml has no sections yet. Add settings in the Raw tab or with a Setup wizard.";

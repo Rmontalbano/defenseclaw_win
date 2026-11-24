@@ -223,7 +223,7 @@ public sealed class RuntimeSelectorTests : IDisposable
         });
 
         Assert.True(model.HasRuntimeProblem);
-        Assert.Contains("on this PC", model.RuntimeProblem, StringComparison.Ordinal);
+        Assert.Contains("on this machine", model.RuntimeProblem, StringComparison.Ordinal);
         var saved = Saved(services).Developer;
         Assert.Equal(RuntimeKind.Installed, saved.Kind);
         Assert.Null(saved.ContainerName);

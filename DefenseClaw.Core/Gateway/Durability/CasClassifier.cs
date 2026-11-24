@@ -35,10 +35,10 @@ public static class CasWriteText
     /// <summary>The plain-English state of one write.</summary>
     public static string State(CasWriteState state) => state switch
     {
-        CasWriteState.Committed => "finished; only leftovers remain",
+        CasWriteState.Committed => "finished, only leftovers remain",
         CasWriteState.NeverApplied => "never applied",
-        CasWriteState.Superseded => "rewritten since (the pending write no longer describes it; safe to set aside)",
-        _ => "could not verify — check before clearing",
+        CasWriteState.Superseded => "rewritten since, so the pending write no longer describes it and is safe to set aside",
+        _ => "could not verify, so check before clearing",
     };
 
     /// <summary>True when any of <paramref name="writes"/> was checked and came out <see cref="CasWriteState.Unknown"/>.</summary>
@@ -50,7 +50,7 @@ public static class CasWriteText
     {
         ArgumentNullException.ThrowIfNull(writes);
 
-        var lines = writes.Where(w => w.Assessment is not null).Take(3).Select(w => $"{FileName(w)} — {State(w.Assessment!.State)}").ToArray();
+        var lines = writes.Where(w => w.Assessment is not null).Take(3).Select(w => $"{FileName(w)}: {State(w.Assessment!.State)}").ToArray();
         if (lines.Length == 0)
         {
             return string.Empty;

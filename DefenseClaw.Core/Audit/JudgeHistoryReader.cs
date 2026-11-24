@@ -102,7 +102,7 @@ public sealed partial class JudgeHistoryReader
     public const int FieldLimit = 2_048;
 
     /// <summary>Shown when neither file exists, the same words as the TUI.</summary>
-    public const string MissingGuidance = "Judge history is unavailable. Configure observability.local.judge_bodies_path or audit_db; data appears after the first judge response.";
+    public const string MissingGuidance = "Judge history is unavailable. Configure observability.local.judge_bodies_path or audit_db. Data appears after the first judge response.";
 
     /// <summary>Shown when a database has no <c>judge_responses</c> table yet.</summary>
     public const string NotInitializedGuidance = "The judge_responses table is not initialized yet.";

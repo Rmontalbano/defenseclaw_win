@@ -51,7 +51,7 @@ public sealed class ConnectorRecoveryOverviewTests : IDisposable
     {
         var row = Assert.Single(DurabilityAttention.Rows(Snapshot(AppGatewayState.GatewayStopped), _ => null, Now));
 
-        Assert.Contains("No DefenseClaw command recovers this. Clearing moves the pending files to quarantine and deletes nothing. Stop the gateway first.", row.Detail, StringComparison.Ordinal);
+        Assert.Contains("No DefenseClaw command recovers this. Stop the gateway, then clear it. Clearing moves the pending files to quarantine and deletes nothing.", row.Detail, StringComparison.Ordinal);
         var action = Assert.Single(row.Actions.Items);
         Assert.Equal(AttentionActionIds.ClearStuckWrite, action.Id);
         Assert.Equal("Clear the stuck pending write", action.Label);

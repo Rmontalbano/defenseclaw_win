@@ -83,8 +83,8 @@ public sealed class FirstRunFailMode105Tests : IDisposable
         Assert.True(vm.AsksFailMode);
         Assert.True(vm.HasFailModeHint);
         Assert.Equal(FirstRunFailMode.SavedOrPolicyHint, vm.FailModeHint);
-        Assert.Contains("policy = save nothing", vm.FailModeHint, StringComparison.Ordinal);
-        Assert.Contains("A saved choice wins over the policy tier", vm.FailModeHint, StringComparison.Ordinal);
+        Assert.Contains("policy keeps any mode saved earlier", vm.FailModeHint, StringComparison.Ordinal);
+        Assert.Contains("Other hook failures always block", vm.FailModeHint, StringComparison.Ordinal);
     }
 
     [Theory]

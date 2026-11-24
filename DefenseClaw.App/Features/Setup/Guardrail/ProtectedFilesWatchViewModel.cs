@@ -92,11 +92,11 @@ public sealed partial class ProtectedFilesWatchViewModel : ObservableObject
         new ProtectedFilesModeChoice(
             ProtectedFilesSettings.Off,
             "Off",
-            "The gateway does not check these files. No protected-file alert is raised."),
+            "The gateway does not watch these files. No protected-file alert is raised."),
     };
 
     /// <summary>What the gateway does, in two sentences.</summary>
-    public string Summary => "The gateway checks a short list of files every 2 seconds while it runs. " + ProtectedFileWatchFacts.BlocksNothing;
+    public string Summary => "The gateway watches a short list of files every 2 seconds while it runs. " + ProtectedFileWatchFacts.BlocksNothing;
 
     /// <summary>The attribution limit.</summary>
     public string AttributionText => ProtectedFileWatchFacts.Attribution;

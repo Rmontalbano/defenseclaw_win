@@ -131,7 +131,7 @@ internal static class DurabilityAttention
             rows.Add(new AttentionRow
             {
                 Title = AgentBlock.Title(facts),
-                Detail = $"{who} hooks fail closed (hooks\\.hookcfg), so every agent action is blocked while the gateway is down. " +
+                Detail = $"{who} hooks fail closed (hooks\\.hookcfg), so every action is blocked while the gateway is down. " +
                          "Start the gateway or switch to fail open." + because,
                 SeverityKey = "Critical",
                 OffersStart = true,
@@ -171,11 +171,11 @@ internal static class DurabilityAttention
                     ? "A write to Codex's config.toml is stuck"
                     : $"{facts.PendingWrites.Count.ToString(CultureInfo.CurrentCulture)} guarded config write{(facts.PendingWrites.Count == 1 ? string.Empty : "s")} never finished",
                 Detail = Describe(facts.PendingWrites, now) + (StateSentence(facts.PendingWrites) is { Length: > 0 } states ? " " + states : string.Empty) +
-                         " If the agent rewrote the file, later writes are refused (\"requested recovery leaf is occupied by an unrecognized inode\") and the gateway exits at start. " +
+                         " If the agent rewrote the file, later writes fail (\"unrecognized inode\") and the gateway exits at start. " +
                          (recoverConfig
                              ? ConnectorRecovery.OverviewSentence
                              : "No DefenseClaw command recovers this. " +
-                               "Clearing moves the pending files to quarantine and deletes nothing. Stop the gateway first.") +
+                               "Stop the gateway, then clear it. Clearing moves the pending files to quarantine and deletes nothing.") +
                          (stuckNow ? " This is why the gateway stops at start." : string.Empty),
                 SeverityKey = stuckNow ? "Critical" : "High",
                 Actions = recoverConfig
@@ -190,7 +190,7 @@ internal static class DurabilityAttention
             rows.Add(new AttentionRow
             {
                 Title = "Files moved aside from a stuck write",
-                Detail = $"{quarantine.Files.ToString(CultureInfo.CurrentCulture)} file{(quarantine.Files == 1 ? string.Empty : "s")} moved to {quarantine.Directory} {Age(now - quarantine.CreatedUtc)} ago.",
+                Detail = $"{quarantine.Files.ToString(CultureInfo.CurrentCulture)} file{(quarantine.Files == 1 ? string.Empty : "s")} moved to {quarantine.Directory} {Age(now - quarantine.CreatedUtc)} ago. Select Put back to restore them.",
                 SeverityKey = "Info",
                 Actions = Actions(
                     blockedReason,

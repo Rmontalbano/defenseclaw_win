@@ -186,7 +186,7 @@ public sealed class UnreadCapsuleViewTests
             Assert.True(badge.FontSize >= 12, $"the capsule's text is {badge.FontSize} px");
 
             Assert.Equal("Audit, 7 new since last visit", AutomationProperties.GetName(sidebar.Audit));
-            Assert.Equal("Audit (Ctrl+4) — 7 new since last visit", sidebar.Audit.ToolTip);
+            Assert.Equal("Audit (Ctrl+4) · 7 new since last visit", sidebar.Audit.ToolTip);
             Assert.Equal("Audit, 7 new since last visit", UIElementAutomationPeer.CreatePeerForElement(sidebar.Audit).GetName());
 
             // The capsule's own automation name is the sentence itself: "N new since last visit".

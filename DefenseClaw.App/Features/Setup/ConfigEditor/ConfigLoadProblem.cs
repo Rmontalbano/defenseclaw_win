@@ -52,14 +52,14 @@ public sealed record ConfigLoadProblem(ConfigLoadProblemKind Kind, string Title,
                 exception.Message,
                 null,
                 null,
-                "config.yaml is too large to open here. Edit it down in your editor, then press Reload. Save stays off until it loads.")
+                "config.yaml is too large to open here. Edit it down in your editor, then select Reload. Save stays off until it loads.")
             : new ConfigLoadProblem(
                 ConfigLoadProblemKind.Unreadable,
                 "config.yaml could not be read",
                 exception.Message,
                 null,
                 null,
-                "Another program may have it open, or this account cannot read it. Close that program or fix the permissions, then press Reload. Save stays off until it loads.");
+                "Another program may have it open, or this account cannot read it. Close that program or fix the permissions, then select Reload. Save stays off until it loads.");
     }
 
     /// <summary>The problem for a file that was read and did not parse.</summary>
@@ -89,7 +89,7 @@ public sealed record ConfigLoadProblem(ConfigLoadProblemKind Kind, string Title,
                 exception.Message,
                 null,
                 null,
-                "Raw shows the file as it is. Edit it here or in your editor, then press Reload. Form stays off until it loads.");
+                "Raw shows the file as it is. Edit it here or in your editor, then select Reload. Form stays off until it loads.");
         }
 
         return new ConfigLoadProblem(
@@ -98,6 +98,6 @@ public sealed record ConfigLoadProblem(ConfigLoadProblemKind Kind, string Title,
             exception.Message,
             line,
             column,
-            "Raw shows the file as it is on disk. Fix the named line and Save, or fix it in your editor and press Reload. Form is off until the file parses.");
+            "Raw shows the file as it is on disk. Fix the named line and Save, or fix it in your editor and select Reload. Form is off until the file parses.");
     }
 }

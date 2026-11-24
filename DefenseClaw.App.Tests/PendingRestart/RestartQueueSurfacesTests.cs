@@ -322,7 +322,7 @@ public sealed class RestartQueueSurfacesTests : IDisposable
         // The monitor has not polled: "still checking" is the writable installation's reason; a read-only one says its own.
         UiThread.Run(() =>
         {
-            Assert.Equal("Still checking the gateway; try again in a moment.", RestartQueueReview.BlockedReason(Services));
+            Assert.Equal("Still checking the gateway. Try again in a moment.", RestartQueueReview.BlockedReason(Services));
 
             Services.Installation.Replace(TestInstallations.ManagedAt(_scene.Temp.Path));
             Assert.Equal(Services.Installation.BlockedReason, RestartQueueReview.BlockedReason(Services));

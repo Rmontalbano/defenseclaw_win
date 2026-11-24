@@ -142,7 +142,7 @@ public sealed class RoutingSetupWindowsPolicyTests
         Assert.DoesNotContain("--enable", Flags(steps));
         Assert.EndsWith(RoutingSetupWindowsPolicy.RuntimeSentenceWithRouteOnly, steps[0].Subtitle, StringComparison.Ordinal);
         Assert.DoesNotContain(RoutingSetupWindowsPolicy.RuntimeSentence, steps[0].Subtitle, StringComparison.Ordinal);
-        Assert.Contains("Route-only routing of hook connectors is a separate path", steps[0].Subtitle, StringComparison.Ordinal);
+        Assert.Contains("Route-only routing of hook connectors is separate and shown in the Model routing row on Overview", steps[0].Subtitle, StringComparison.Ordinal);
     }
 
     [Fact]

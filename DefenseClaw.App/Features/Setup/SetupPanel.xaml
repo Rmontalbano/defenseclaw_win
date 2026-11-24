@@ -754,7 +754,7 @@
                                        Icon="{ctl:DcSymbolIcon PlugConnected24}"
                                        Command="{Binding OpenBatchCommand}"
                                        ToolTip="Set up several connectors in one reviewed command: setup --yes --connector ... --mode ..."
-                                       AutomationProperties.HelpText="Opens a dialog to set up several connectors. The command is shown first." />
+                                       AutomationProperties.HelpText="Opens a dialog to set up several connectors. Nothing runs until you confirm." />
                         </StackPanel>
                     </StackPanel>
                 </Border>
@@ -1305,7 +1305,7 @@
                                    Icon="{ctl:DcSymbolIcon PlugConnected24}"
                                    Command="{Binding OpenBatchFromChooserCommand}"
                                    ToolTip="Set up several connectors in one reviewed command: setup --yes --connector ... --mode ..."
-                                   AutomationProperties.HelpText="Opens a dialog to set up several connectors. The command is shown first." />
+                                   AutomationProperties.HelpText="Opens a dialog to set up several connectors. Nothing runs until you confirm." />
                         <ui:Button Margin="0,0,8,0"
                                    Content="Remove a connector…"
                                    Icon="{ctl:DcSymbolIcon PlugDisconnected24}"
@@ -1314,7 +1314,7 @@
                                    ToolTipService.ShowOnDisabled="True"
                                    ToolTip="{Binding RemoveConnectorCard.TileToolTip}"
                                    Visibility="{Binding HasRemoveConnector, Converter={StaticResource BoolToVisibility}}"
-                                   AutomationProperties.HelpText="Opens the remove wizard. The command is shown first." />
+                                   AutomationProperties.HelpText="Opens the remove wizard. Nothing runs until you confirm." />
                         <ui:Button Appearance="Secondary"
                                    Content="Close"
                                    Command="{Binding CloseConnectorSetupCommand}"

@@ -279,7 +279,7 @@ public sealed partial class JudgeHistoryViewModel : ObservableObject
 
         // The text is a path or a database error: masked like everything else this window shows.
         BannerText = DisplayRedaction.Text(result.Message, 1_024);
-        Title = Items.Count == 0 ? (BannerIsError ? "Judge responses - error" : "Judge responses") : $"Judge responses - last {Items.Count.ToString(CultureInfo.InvariantCulture)}";
+        Title = Items.Count == 0 ? (BannerIsError ? "Judge responses · error" : "Judge responses") : $"Judge responses · last {Items.Count.ToString(CultureInfo.InvariantCulture)}";
         CountText = Items.Count == 0
             ? string.Empty
             : HasMore

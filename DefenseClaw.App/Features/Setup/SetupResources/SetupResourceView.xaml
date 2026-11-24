@@ -72,7 +72,7 @@
             <ui:InfoBar Margin="{StaticResource DcCardGap}"
                         IsClosable="False"
                         Severity="Warning"
-                        Title="State-changing actions disabled. The list is still read."
+                        Title="State-changing actions are disabled and the list is still read"
                         IsOpen="{Binding HasInstallationBlock, Mode=OneWay}"
                         Message="{Binding InstallationBlockedReason}" />
 
@@ -143,7 +143,7 @@
                                     </ItemsControl>
                                     <TextBlock Style="{StaticResource DcCaption}" Margin="0,8,0,0"
                                                Visibility="{Binding HasUntrustedConnectors, Converter={StaticResource BoolToVisibility}}"
-                                               Text="Trust a folder only if you control it. Anything in a trusted folder can be run. Trust opens the setup wizard with the folder filled in." />
+                                               Text="Trust a folder only if you control it. Trust opens the setup wizard with the folder filled in." />
                                 </StackPanel>
                             </Border>
                         </StackPanel>
@@ -349,7 +349,7 @@
                             <StackPanel Visibility="{Binding HasDetailCommand, Converter={StaticResource BoolToVisibility}}">
                                 <TextBlock Style="{StaticResource DcFieldLabel}" Margin="0,10,0,4" Text="The command that ran" />
                                 <TextBlock Style="{StaticResource DcMono}" Text="{Binding DetailCommand}" />
-                                <Expander Header="Exactly as the CLI printed it" Margin="0,10,0,0"
+                                <Expander Header="As the CLI printed it" Margin="0,10,0,0"
                                           AutomationProperties.Name="Output of the show command"
                                           Visibility="{Binding HasDetailRaw, Converter={StaticResource BoolToVisibility}}">
                                     <ctl:DcCommandOutput MaxHeight="220" OutputName="Output of the show command" Text="{Binding DetailRaw, Mode=OneWay}" />

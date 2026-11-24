@@ -154,7 +154,7 @@ public static partial class WizardGoals
         {
             Id = "rule-pack",
             Label = "Change one connector's rule pack",
-            Summary = "Only that connector's rule pack changes; its peers keep theirs.",
+            Summary = "Only that connector's rule pack changes. Its peers keep theirs.",
             Presets = Set(("scope", GuardrailScopes.Connector)),
             Flags = new[] { "--rule-pack", "--rule-pack-dir", "--block-message", "--restart" },
             Pages = new[] { WizardPages.GuardrailScope },

@@ -201,7 +201,7 @@ public abstract partial class SetupResourceViewModel
             : string.Empty;
         ShowNotice(
             plan.Verb == SetupVerb.Test ? "Test failed" : "The command did not finish",
-            (why.Length > 0 ? why + " " : string.Empty) + "The review dialog and the Activity panel have the whole output." + (plan.ChangesList ? " The list above is read again." : string.Empty),
+            (why.Length > 0 ? why + " " : string.Empty) + "The review dialog and Activity have the whole output." + (plan.ChangesList ? " The list above is read again." : string.Empty),
             InfoBarSeverity.Warning);
     }
 }

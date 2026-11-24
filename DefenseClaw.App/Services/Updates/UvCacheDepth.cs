@@ -23,8 +23,8 @@ internal static class UvCacheDepth
     public const int Limit = 259;
 
     public const string NextStep =
-        "Set the user environment variable UV_CACHE_DIR to a short folder that only your account can write to, for example C:\\dcuv, " +
-        "then restart this app so the installer sees it. Then upgrade again. " +
+        "Set the user environment variable UV_CACHE_DIR to a short folder only your account can write to, such as C:\\dcuv, " +
+        "then restart this app so the installer sees it and upgrade again. " +
         "Or have an administrator turn on Windows long path support (LongPathsEnabled).";
 
     /// <summary>The installer's cache folder for this environment value and data directory, in its own arithmetic: absolute, no trailing backslash; null when the path is not valid.</summary>
@@ -67,8 +67,8 @@ internal static class UvCacheDepth
 
         var length = cache.Length.ToString(CultureInfo.InvariantCulture);
         return new PreflightRow(RowId, "uv cache path", PreflightStatus.Warn,
-            $"The uv cache folder {cache} is {length} characters long. uv needs {Extra} more to build win-unicode-console, " +
-            $"which passes the Windows limit of 260 characters, so DefenseClaw {target}'s installer would stop with WinError 206 and change nothing. " +
+            $"The uv cache folder {cache} is {length} characters long. uv needs {Extra} more, " +
+            $"which passes the Windows limit of 260, so DefenseClaw {target}'s installer would stop with WinError 206 and change nothing. " +
             NextStep);
     }
 }

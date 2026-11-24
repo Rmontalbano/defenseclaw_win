@@ -75,7 +75,7 @@ public sealed class UpdateClaimsTests
     {
         var xaml = Read("DefenseClaw.App", "Features", "Shell", "Updates", "UpdatesWindow.xaml");
 
-        Assert.Contains("compares its SHA-256 with checksums.txt, whose sigstore signature is verified when cosign is installed", xaml, StringComparison.Ordinal);
+        Assert.Contains("compares the installer's SHA-256 with checksums.txt, and verifies the sigstore signature of checksums.txt when cosign is installed", xaml, StringComparison.Ordinal);
     }
 
     [Fact]

@@ -166,7 +166,7 @@ public class ActivityTranscriptTests
         _ = transcript.Pull(invocation);
         var firstMarker = transcript.Lines[0].Text;
         Assert.Equal(CliStream.Notice, transcript.Lines[0].Stream);
-        Assert.Contains($"{invocation.DroppedOutputLineCount} earlier line(s) dropped", firstMarker, StringComparison.Ordinal);
+        Assert.Contains($"{invocation.DroppedOutputLineCount} earlier lines dropped", firstMarker, StringComparison.Ordinal);
 
         // Enough further output for a second trim.
         var events = Watch(transcript);
@@ -175,7 +175,7 @@ public class ActivityTranscriptTests
 
         Assert.Single(transcript.Lines, l => l.IsNotice);
         Assert.NotEqual(firstMarker, transcript.Lines[0].Text);
-        Assert.Contains($"{invocation.DroppedOutputLineCount} earlier line(s) dropped", transcript.Lines[0].Text, StringComparison.Ordinal);
+        Assert.Contains($"{invocation.DroppedOutputLineCount} earlier lines dropped", transcript.Lines[0].Text, StringComparison.Ordinal);
         Assert.Contains(NotifyCollectionChangedAction.Replace, events);
         Assert.Equal(Retained(invocation), Texts(transcript));
     }

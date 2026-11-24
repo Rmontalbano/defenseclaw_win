@@ -15,21 +15,20 @@ namespace DefenseClaw.App.ViewModels;
 public sealed partial class AiRuntimePanelViewModel
 {
     public const string PollExplanation =
-        "Polls the runtime planes now and updates this page. Reads this PC's process and connection tables, and Security-log events when plane C is on. " +
-        "Changes no setting.\n\n" +
-        "Fails with HTTP 503 unless the gateway is running with the planes enabled.";
+        "Polls the runtime planes now. Reads process and connection tables on this machine, and Security-log events when plane C is on.\n\n" +
+        "Fails with HTTP 503 unless the gateway runs with the planes enabled.";
 
     public const string EnableExplanation =
-        "Turns the runtime planes on in ai_discovery.runtime in config.yaml, then restarts the gateway unless you untick the restart. " +
-        "Planes A and B need no elevation for your own processes. Plane C reads the Security event log, needs an elevated gateway and the Advanced Audit Policy, and turns on only if you choose it here.";
+        "Turns the runtime planes on in ai_discovery.runtime and restarts the gateway unless you untick the restart. " +
+        "Plane C reads the Security event log and needs an elevated gateway and the audit policy.";
 
     public const string DisableExplanation =
-        "Turns the runtime planes off in ai_discovery.runtime in config.yaml, then restarts the gateway unless you untick the restart. " +
-        "Recorded findings are kept. While the planes are off, nothing watches for shadow AI traffic or unattributed agent actions.";
+        "Turns the runtime planes off in ai_discovery.runtime and restarts the gateway unless you untick the restart. " +
+        "Findings are kept. Nothing watches for shadow AI traffic or unattributed agent actions while off.";
 
     public const string PlaneCWarning =
-        "Plane C reads process, file and identity events from the Security event log and raises signals only when an AI agent is in the process lineage. " +
-        "Without an elevated gateway and the audit policy it stays blind and says why.";
+        "Plane C reads the Security event log and raises signals only when an AI agent is in the process lineage. " +
+        "Without an elevated gateway and the audit policy it reports no coverage and says why.";
 
     private int _hostPlaneIndex;
     private int _dnsCaptureIndex;
@@ -183,7 +182,7 @@ public sealed partial class AiRuntimePanelViewModel
 
     /// <summary>Why a change is off while the snapshot is stale: what made it stale, and what to do about it.</summary>
     private string StaleBlockedReason =>
-        "The snapshot is stale." + (StaleReason.Length > 0 ? " " + StaleReason.TrimEnd('.') + "." : string.Empty) + " Refresh it first.";
+        "The snapshot is stale." + (StaleReason.Length > 0 ? " " + StaleReason.TrimEnd('.') + "." : string.Empty) + " Select Refresh first.";
 
     /// <summary>
     /// The review's last question, asked when the operator confirms: has the snapshot it was opened on gone stale while the dialog was up
@@ -340,7 +339,7 @@ public sealed partial class AiRuntimePanelViewModel
         });
         text.Append("\n- DNS capture: ").Append(options.DnsCapture switch
         {
-            true => "turned on, so peers are named from the answers this PC resolved.",
+            true => "turned on, so peers are named from the answers this machine resolved.",
             false => "turned off. Peers are named by reverse DNS.",
             _ => "left as it is.",
         });

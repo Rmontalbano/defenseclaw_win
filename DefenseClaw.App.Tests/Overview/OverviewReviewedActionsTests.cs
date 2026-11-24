@@ -416,7 +416,7 @@ public sealed class OverviewReviewedActionsTests : IDisposable
     // ------------------------------------------------------------------ why a button is off: DefenseClaw is not there to run it
 
     [Theory]
-    [InlineData(null, "Still checking the gateway; try again in a moment.")]
+    [InlineData(null, "Still checking the gateway. Try again in a moment.")]
     [InlineData(InstallState.NotInstalled, "DefenseClaw is not installed on this machine.")]
     [InlineData(InstallState.InstalledNotInitialized, "DefenseClaw is not initialized yet. Run 'defenseclaw init' first.")]
     public void Until_there_is_an_install_to_run_them_on_every_button_is_off_and_says_why(InstallState? install, string reason)

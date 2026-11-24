@@ -42,8 +42,7 @@ public sealed partial class CoworkSetupViewModel : ObservableObject
 
     /// <summary>Said next to "Build the plugin again": each run is a new version (cmd_setup_cowork.py).</summary>
     internal const string RebuildNoteText =
-        "Each run builds a new plugin version. Cowork reads as not protected until a Cowork event reaches it. " +
-        "If Claude lists two plugins afterwards, remove the older one.";
+        "Each run builds a new plugin version. If Claude lists two plugins afterwards, remove the older one.";
 
     /// <summary>Said when the managed-host refusal's own text is not in the output.</summary>
     internal const string ManagedFallbackText =

@@ -71,7 +71,7 @@ public sealed class ConnectorStartHealthTests
             hermes =>
             {
                 Assert.Equal(("hermes", ConnectorSkipKind.SetupFailed), (hermes.Name, hermes.Kind));
-                Assert.Equal("setup failed when the gateway started, so it is not enforced; see gateway.log, then run: defenseclaw setup hermes", hermes.Reason);
+                Assert.Equal("setup failed when the gateway started, so it is not enforced. See gateway.log, then run: defenseclaw setup hermes", hermes.Reason);
             });
     }
 

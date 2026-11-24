@@ -275,10 +275,10 @@ public sealed class TrayShieldStateTests
     {
         var running = Snapshot(AppGatewayState.Running);
 
-        Assert.Equal("DefenseClaw — 3 unacknowledged findings\nRunning", AlertCountPresentation.TrayTooltip(running, Counts(3)));
-        Assert.Equal("DefenseClaw — 441 unacknowledged findings\nRunning", AlertCountPresentation.TrayTooltip(running, Counts(441)));
-        Assert.Equal("DefenseClaw — 500+ unacknowledged findings\nRunning", AlertCountPresentation.TrayTooltip(running, Counts(500, hasMore: true)));
-        Assert.Equal("DefenseClaw — no unacknowledged findings\nGateway stopped", AlertCountPresentation.TrayTooltip(Snapshot(AppGatewayState.GatewayStopped), Counts(0)));
+        Assert.Equal("DefenseClaw · 3 unacknowledged findings\nRunning", AlertCountPresentation.TrayTooltip(running, Counts(3)));
+        Assert.Equal("DefenseClaw · 441 unacknowledged findings\nRunning", AlertCountPresentation.TrayTooltip(running, Counts(441)));
+        Assert.Equal("DefenseClaw · 500+ unacknowledged findings\nRunning", AlertCountPresentation.TrayTooltip(running, Counts(500, hasMore: true)));
+        Assert.Equal("DefenseClaw · no unacknowledged findings\nGateway stopped", AlertCountPresentation.TrayTooltip(Snapshot(AppGatewayState.GatewayStopped), Counts(0)));
     }
 
     [Fact]
@@ -286,9 +286,9 @@ public sealed class TrayShieldStateTests
     {
         var running = Snapshot(AppGatewayState.Running);
 
-        Assert.Equal("DefenseClaw — 3 unacknowledged findings\nScanning — Running", AlertCountPresentation.TrayTooltip(running, Counts(3), scanning: true));
-        Assert.Equal("DefenseClaw — Scanning — Running", AlertCountPresentation.TrayTooltip(running, counts: null, scanning: true));
-        Assert.Equal("DefenseClaw — no unacknowledged findings\nScanning — Gateway stopped", AlertCountPresentation.TrayTooltip(Snapshot(AppGatewayState.GatewayStopped), Counts(0), scanning: true));
+        Assert.Equal("DefenseClaw · 3 unacknowledged findings\nScanning · Running", AlertCountPresentation.TrayTooltip(running, Counts(3), scanning: true));
+        Assert.Equal("DefenseClaw · Scanning · Running", AlertCountPresentation.TrayTooltip(running, counts: null, scanning: true));
+        Assert.Equal("DefenseClaw · no unacknowledged findings\nScanning · Gateway stopped", AlertCountPresentation.TrayTooltip(Snapshot(AppGatewayState.GatewayStopped), Counts(0), scanning: true));
     }
 
     [Fact]
@@ -298,9 +298,9 @@ public sealed class TrayShieldStateTests
 
         var tooltip = AlertCountPresentation.TrayTooltip(paused, Counts(3), scanning: true);
 
-        Assert.Equal("DefenseClaw — 3 unacknowledged findings\nMonitoring paused", tooltip);
+        Assert.Equal("DefenseClaw · 3 unacknowledged findings\nMonitoring paused", tooltip);
         Assert.DoesNotContain("Scanning", tooltip, StringComparison.Ordinal);
-        Assert.Equal("DefenseClaw — Monitoring paused", AlertCountPresentation.TrayTooltip(paused, counts: null, scanning: true));
+        Assert.Equal("DefenseClaw · Monitoring paused", AlertCountPresentation.TrayTooltip(paused, counts: null, scanning: true));
     }
 
     [Fact]

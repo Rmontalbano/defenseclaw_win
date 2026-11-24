@@ -1137,7 +1137,7 @@ public sealed partial class CliRunner : IDisposable
         // has nothing left to cancel, and must not be touched or re-labelled.
         if (!invocation.IsRunning)
         {
-            reason = "Already finished — there is nothing to cancel.";
+            reason = "Already finished. There is nothing to cancel.";
             return false;
         }
 
@@ -1156,8 +1156,8 @@ public sealed partial class CliRunner : IDisposable
         if (run.SurvivesShutdown)
         {
             reason =
-                "This run survives app shutdown (it is the DefenseClaw upgrade installer). Killing it part-way " +
-                "can leave DefenseClaw half-installed, so it cannot be cancelled from here — let it finish.";
+                "This run survives app shutdown. It is the DefenseClaw upgrade installer, and killing it part-way " +
+                "can leave DefenseClaw half-installed, so it cannot be cancelled from here. Let it finish.";
             return false;
         }
 
@@ -1175,7 +1175,7 @@ public sealed partial class CliRunner : IDisposable
             _ = Task.Run(() => TryKill(process, job));
         }
 
-        reason = "Cancel requested — the process tree is being killed.";
+        reason = "Cancel requested. The process tree is being killed.";
         return true;
     }
 
@@ -1196,7 +1196,7 @@ public sealed partial class CliRunner : IDisposable
 
         if (match is null)
         {
-            reason = "No invocation with that id is in the activity list (it never existed, or has aged out).";
+            reason = "No invocation with that id is in Activity. It never existed or has aged out.";
             return false;
         }
 

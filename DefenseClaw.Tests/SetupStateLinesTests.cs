@@ -128,7 +128,7 @@ public class SetupStateLinesTests
         Assert.StartsWith("Desktop notifications: off.", off.Detail, StringComparison.Ordinal);
         Assert.Equal("Desktop notifications on", silent.Text);
         Assert.Contains("config.yaml does not say", silent.Detail, StringComparison.Ordinal);
-        Assert.Contains("not the tray alerts of this app", silent.Detail, StringComparison.Ordinal);
+        Assert.Contains("The tray alerts of this app are separate", silent.Detail, StringComparison.Ordinal);
     }
 
     [Fact]

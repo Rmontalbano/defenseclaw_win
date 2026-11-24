@@ -255,7 +255,7 @@ public sealed class OverviewEnforcementTests : IDisposable
 
         Assert.Equal("ON", vm.GuardrailTile.Value);
         Assert.Equal("Ok", vm.GuardrailTile.ToneKey);
-        Assert.Equal("Guardrail - observe", vm.GuardrailTile.Title);
+        Assert.Equal("Guardrail · observe", vm.GuardrailTile.Title);
         Assert.Equal("Current configuration", vm.GuardrailTile.Caption);
 
         using var off = OverviewScene.Create(seedAudit: false);

@@ -96,7 +96,7 @@ internal static class StripPresentation
 
         parts.Add(paused
             ? "Monitoring is paused. This is the last reading."
-            : "From the gateway's /health, as on the Overview's Services card.");
+            : "From the gateway's /health.");
         return string.Join(' ', parts);
     }
 

@@ -153,7 +153,7 @@ public sealed class SecretPtyRunner
                 null,
                 0,
                 answers.Count,
-                "This version of Windows has no pseudo-console (it needs Windows 10 version 1809 or later)."));
+                "This version of Windows has no pseudo-console. It needs Windows 10 version 1809 or later."));
         }
 
         return _runner.RunInPseudoConsoleAsync(executable, byName, argv, answers, PromptTimeout, CompletionTimeout, cancellationToken);

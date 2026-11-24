@@ -307,10 +307,18 @@
                                             </StackPanel>
                                             <TextBlock Style="{StaticResource DcTextSecondary}"
                                                        Margin="0,2,0,0"
-                                                       ToolTip="{Binding Reference}"
-                                                       ToolTipService.IsEnabled="{Binding HasReference}"
                                                        AutomationProperties.HelpText="{Binding Reference}"
                                                        Text="{Binding Detail}" />
+                                            <!-- The reference facts (the outage rule, the attribution caveat) on screen, collapsed: reachable by keyboard and by mouse. -->
+                                            <Expander Margin="0,2,0,0"
+                                                      Header="{Binding ReferenceLabel}"
+                                                      AutomationProperties.Name="{Binding ReferenceLabel}"
+                                                      Visibility="{Binding HasReference, Converter={StaticResource BoolToVisibility}}">
+                                                <TextBlock Style="{StaticResource DcTextSecondary}"
+                                                           Margin="0,2,0,0"
+                                                           TextWrapping="Wrap"
+                                                           Text="{Binding Reference}" />
+                                            </Expander>
                                             <Border Style="{StaticResource DcCodeBlock}"
                                                     Margin="0,6,0,0"
                                                     HorizontalAlignment="Left"
@@ -644,12 +652,12 @@
                                        Command="{Binding ToggleNotificationsCommand}"
                                        ToolTip="{Binding NotificationsTip}"
                                        ToolTipService.ShowOnDisabled="True"
-                                       AutomationProperties.HelpText="Turns the runtime's desktop notifications for blocked tool calls and pending approvals on or off with defenseclaw setup notifications, after you confirm. Tray alerts have a separate setting." />
+                                       AutomationProperties.HelpText="Turns gateway desktop notifications on or off with defenseclaw setup notifications, after you confirm. Tray alerts are separate." />
                             <ui:DropDownButton Content="Diagnostics"
                                                Margin="0,0,8,8"
                                                Icon="{ctl:DcSymbolIcon MoreHorizontal24}"
                                                AutomationProperties.Name="Diagnostics"
-                                               AutomationProperties.HelpText="A menu of read-only checks, gateway stop and restart (which ask first), and the command palette.">
+                                               AutomationProperties.HelpText="A menu of read-only checks, gateway stop and restart, which ask first, and the command palette.">
                                 <ui:DropDownButton.Flyout>
                                     <ContextMenu>
                                         <MenuItem Header="Validate configuration"
@@ -703,7 +711,7 @@
                             <TextBlock Style="{StaticResource DcCaption}"
                                        TextWrapping="Wrap"
                                        Margin="0,2,0,0"
-                                       Text="Runs your installed gateway with administrator rights, one Windows prompt per start. Needed only for runtime monitoring's agent-actions plane." />
+                                       Text="Runs the gateway as administrator, with one Windows prompt per start. Only runtime monitoring's agent-actions plane needs it." />
                             <TextBlock Style="{StaticResource DcCaption}"
                                        TextWrapping="Wrap"
                                        Margin="0,2,0,0"
@@ -772,7 +780,7 @@
                         </StackPanel>
                         <TextBlock Style="{StaticResource DcCaption}"
                                    Margin="0,4,0,0"
-                                   Text="Actions that change state show the exact command and ask first. Diagnostics are read-only; output is in Activity." />
+                                   Text="Actions that change state show the exact command and ask first. Diagnostics are read-only. Output is in Activity." />
                     </StackPanel>
                 </Border>
 
@@ -842,16 +850,25 @@
                                                            TextWrapping="NoWrap"
                                                            Margin="0,0,12,0"
                                                            Text="{Binding Label}" />
-                                                <TextBlock Grid.Column="1"
-                                                           Style="{StaticResource DcToneText}"
-                                                           FontSize="{DynamicResource DcFontSize}"
-                                                           FontWeight="Normal"
-                                                           TextWrapping="Wrap"
-                                                           Tag="{Binding ToneKey}"
-                                                           ToolTip="{Binding Detail}"
-                                                           ToolTipService.IsEnabled="{Binding HasDetail}"
-                                                           AutomationProperties.HelpText="{Binding Detail}"
-                                                           Text="{Binding Value}" />
+                                                <StackPanel Grid.Column="1">
+                                                    <TextBlock Style="{StaticResource DcToneText}"
+                                                               FontSize="{DynamicResource DcFontSize}"
+                                                               FontWeight="Normal"
+                                                               TextWrapping="Wrap"
+                                                               Tag="{Binding ToneKey}"
+                                                               AutomationProperties.HelpText="{Binding Detail}"
+                                                               Text="{Binding Value}" />
+                                                    <!-- The outage behaviour behind a fail mode, one case per line, collapsed but on screen and keyboard-reachable. -->
+                                                    <Expander Margin="0,2,0,0"
+                                                              Header="Outage behaviour"
+                                                              AutomationProperties.Name="Outage behaviour"
+                                                              Visibility="{Binding HasDetail, Converter={StaticResource BoolToVisibility}}">
+                                                        <TextBlock Style="{StaticResource DcTextSecondary}"
+                                                                   Margin="0,2,0,0"
+                                                                   TextWrapping="Wrap"
+                                                                   Text="{Binding Detail}" />
+                                                    </Expander>
+                                                </StackPanel>
                                             </Grid>
                                         </Border>
                                     </DataTemplate>
@@ -1081,7 +1098,7 @@
                                                    TextWrapping="Wrap"
                                                    Margin="26,2,0,0"
                                                    Visibility="{Binding HasWarning, Converter={StaticResource BoolToVisibility}}"
-                                                   Text="{Binding WarningText, StringFormat='Fail-mode mismatch: {0}'}" />
+                                                   Text="{Binding WarningText, StringFormat='Fail mode mismatch: {0}'}" />
 
                                         <!-- The selected row's detail: posture chips, counters, surface and last activity. -->
                                         <StackPanel Margin="26,4,0,0">
@@ -1103,7 +1120,7 @@
                                                     <TextBlock Style="{StaticResource DcBadgeText}" Text="{Binding Mode, StringFormat='mode {0}'}" />
                                                 </Border>
                                                 <Border Style="{StaticResource DcChip}" Margin="0,0,6,4">
-                                                    <TextBlock Style="{StaticResource DcBadgeText}" Text="{Binding FailMode, StringFormat='fail-mode {0}'}" />
+                                                    <TextBlock Style="{StaticResource DcBadgeText}" Text="{Binding FailMode, StringFormat='fail mode {0}'}" />
                                                 </Border>
                                                 <Border Style="{StaticResource DcChip}" Margin="0,0,6,4">
                                                     <TextBlock Style="{StaticResource DcBadgeText}" Text="{Binding Source, StringFormat='source {0}'}" />
@@ -1361,7 +1378,7 @@
                 <!-- 7. Activity, last 24 h: the numbers, the hourly chart, and the audit events by severity. -->
                 <Border Style="{StaticResource DcCard}" Margin="{StaticResource DcCardGap}">
                     <StackPanel>
-                        <ctl:DcCardHeader Symbol="DataBarVertical24" Section="Observe" Content="Activity — last 24 h" />
+                        <ctl:DcCardHeader Symbol="DataBarVertical24" Section="Observe" Content="Activity: last 24 h" />
 
                         <ItemsControl ItemsSource="{Binding ActivitySummary}"
                                       Margin="0,0,0,8"

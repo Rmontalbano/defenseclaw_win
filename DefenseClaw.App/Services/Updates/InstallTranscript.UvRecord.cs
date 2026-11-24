@@ -55,7 +55,7 @@ public static partial class InstallTranscript
                 var line = Sanitize(raw);
                 if (UvCouldNotCheck.IsMatch(line))
                 {
-                    var reason = string.Equals(line, last, StringComparison.Ordinal) ? line : line + " — " + last;
+                    var reason = string.Equals(line, last, StringComparison.Ordinal) ? line : line + " · " + last;
                     return new InstallerRefusal(InstallerRefusalKind.NothingChanged, Cap(reason), GenericNextStep);
                 }
             }
@@ -82,7 +82,7 @@ public static partial class InstallTranscript
         var usable = cache.Length is > 0 and <= MaxUvCachePathChars && !cache.Any(char.IsControl);
         var reasonCache = usable ? "the uv cache " + cache : UvCacheNamedInLog;
         var stepCache = usable ? "the uv cache folder " + cache : UvCacheNamedInLog;
-        var reason = $"The Python packages {names} in {place} still differ from their wheels after a fresh download; delete {reasonCache}. Nothing was changed.";
+        var reason = $"The Python packages {names} in {place} still differ from their wheels after a fresh download. Delete {reasonCache}. Nothing was changed.";
         var step = $"Delete {stepCache}, then upgrade again. uv downloads the packages again on the next run.";
         return new InstallerRefusal(InstallerRefusalKind.UvCacheDamaged, reason, step);
     }

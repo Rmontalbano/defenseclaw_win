@@ -164,7 +164,7 @@ public sealed class InstallerRefusalTests : IDisposable
 
         Assert.Equal(UpgradeResultState.InstallerFailed, verdict.State);
         Assert.Contains("No install log was found for this run", verdict.Summary, StringComparison.Ordinal);
-        Assert.Contains("taking over the install lock", verdict.Summary, StringComparison.Ordinal);
+        Assert.Contains("held the lock", verdict.Summary, StringComparison.Ordinal);
         Assert.Contains("console window", verdict.Summary, StringComparison.Ordinal);
 
         // With a log, the old sentence stands.

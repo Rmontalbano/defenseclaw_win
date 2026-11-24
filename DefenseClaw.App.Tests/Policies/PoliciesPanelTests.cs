@@ -139,7 +139,7 @@ public sealed class PoliciesPanelTests : IDisposable
         Assert.Equal(PoliciesState.Loaded, vm.State);
         Assert.Equal(new[] { "default", "bare-builtin", "strict", "team-baseline" }, vm.Rows.Select(r => r.Name).ToArray());
         Assert.Equal("default", vm.ActiveName);
-        Assert.Equal("4 policies - active: default", vm.CaptionText);
+        Assert.Equal("4 policies · active: default", vm.CaptionText);
         Assert.Equal(new[] { "Built-in", "Built-in", "Built-in", "Custom" }, vm.Rows.Select(r => r.Kind).ToArray());
         Assert.Equal("Active", Row(vm, "default").ActiveText);
         Assert.Equal(string.Empty, Row(vm, "strict").ActiveText);
@@ -154,7 +154,7 @@ public sealed class PoliciesPanelTests : IDisposable
 
         vm.SearchText = "custom";
         Assert.Equal(new[] { "team-baseline" }, vm.Rows.Select(r => r.Name).ToArray());
-        Assert.Equal("1 of 4 policies - active: default", vm.CaptionText);
+        Assert.Equal("1 of 4 policies · active: default", vm.CaptionText);
     }
 
     [Fact]

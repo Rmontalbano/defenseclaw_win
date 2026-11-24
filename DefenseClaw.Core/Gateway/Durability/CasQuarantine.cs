@@ -93,7 +93,7 @@ public static class CasQuarantine
         var sets = CasReceipts.FindPending(stateDirectory, now, minimumAge).Where(p => wanted.Contains(p.Id)).ToArray();
         if (sets.Length == 0)
         {
-            return new CasQuarantineResult(false, "Nothing was moved: the pending write is no longer there (it finished, or was already moved).", null, 0);
+            return new CasQuarantineResult(false, "Nothing was moved: the pending write is no longer there. It finished or was already moved.", null, 0);
         }
 
         try
@@ -155,13 +155,13 @@ public static class CasQuarantine
             var tail = skipped.Count > 0 ? " Left in place: " + string.Join("; ", skipped) + "." : string.Empty;
             return new CasQuarantineResult(
                 true,
-                string.Create(CultureInfo.InvariantCulture, $"Moved {manifest.Entries.Count} file(s) of {sets.Length} stuck write(s) to {directory}. Nothing was deleted.") + tail,
+                string.Create(CultureInfo.InvariantCulture, $"Moved {manifest.Entries.Count} file{(manifest.Entries.Count == 1 ? string.Empty : "s")} of {sets.Length} stuck write{(sets.Length == 1 ? string.Empty : "s")} to {directory}. Nothing was deleted.") + tail,
                 directory,
                 manifest.Entries.Count);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            return new CasQuarantineResult(false, "Not everything could be moved: " + ex.Message + " Files already moved are listed in the folder's manifest.json; Put back restores them.", null, 0);
+            return new CasQuarantineResult(false, "Not everything could be moved: " + ex.Message + " Files already moved are listed in the folder's manifest.json. Put back restores them.", null, 0);
         }
     }
 
@@ -228,7 +228,7 @@ public static class CasQuarantine
             }
 
             Save(quarantineDirectory, manifest);
-            var message = string.Create(CultureInfo.InvariantCulture, $"Put back {restored} file(s).") + (notes.Count > 0 ? " Left in the folder: " + string.Join("; ", notes) + "." : string.Empty);
+            var message = string.Create(CultureInfo.InvariantCulture, $"Put back {restored} file{(restored == 1 ? string.Empty : "s")}.") + (notes.Count > 0 ? " Left in the folder: " + string.Join("; ", notes) + "." : string.Empty);
             return new CasQuarantineResult(restored > 0 || notes.Count == 0, message, quarantineDirectory, restored);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)

@@ -632,7 +632,7 @@ public sealed class SetupResourceViewTests : IDisposable
             Assert.True(RowGrid(view).IsVisible);
             Assert.Equal(vm.Rows.Count, VisualTree.Descendants<DataGridRow>(RowGrid(view)).Count());
             var bar = Assert.Single(OpenBars(view));
-            Assert.Equal("State-changing actions disabled. The list is still read.", bar.Title);
+            Assert.Equal("State-changing actions are disabled and the list is still read", bar.Title);
             Assert.Equal(TestInstallations.ManagedReason, bar.Message);
 
             // Every control that changes something is off, and its tooltip is the installation's sentence (shown on a disabled control too).

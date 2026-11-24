@@ -156,7 +156,7 @@
                     <ContentPresenter Content="{Binding}" ContentTemplate="{StaticResource FieldValidationTemplate}" />
                 </StackPanel>
                 <ui:TextBox Grid.Column="1"
-                            AutomationProperties.HelpText="Name of the environment variable that holds the value."
+                            AutomationProperties.HelpText="Name of the environment variable that holds the value, not the value itself."
                             AutomationProperties.Name="{Binding DisplayName}"
                             FontFamily="{DynamicResource DcMonoFontFamily}"
                             IsEnabled="{Binding IsEditable}"
@@ -924,7 +924,7 @@
                                         Severity="Warning" />
                             <TextBlock Margin="{StaticResource DcCardGap}"
                                        Style="{StaticResource DcCaption}"
-                                       Text="Secrets and header values are masked and read-only here. Edit them in the Raw tab, or use defenseclaw keys set with an *_env setting."
+                                       Text="Secrets and header values are masked here. Edit them in the Raw tab, or use defenseclaw keys set with an *_env setting."
                                        TextWrapping="Wrap"
                                        Visibility="{Binding ShowFormEmptyState, Converter={StaticResource InverseBoolToVisibility}}" />
                             <ItemsControl x:Name="SectionItems"

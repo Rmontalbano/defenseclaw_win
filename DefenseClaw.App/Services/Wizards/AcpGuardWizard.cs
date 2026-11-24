@@ -299,7 +299,7 @@ public static class AcpGuardWizard
         var admits = profile.AllowedClients.Count > 0 || profile.AllowedAgents.Count > 0
             ? string.Create(CultureInfo.CurrentCulture, $" (editors: {Join(profile.AllowedClients)}; agents: {Join(profile.AllowedAgents)})")
             : string.Empty;
-        return profile.Name + " — " + mode + fail + admits;
+        return profile.Name + " · " + mode + fail + admits;
     }
 
     private static string Join(IReadOnlyList<string> names) => names.Count == 0 ? "none" : string.Join(", ", names);

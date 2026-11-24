@@ -192,7 +192,7 @@ public sealed class AlertToastPolicyTests
 
         var toast = decision.Toast!;
         Assert.Equal("New findings", toast.Title);
-        Assert.Equal("20 new CRITICAL and 20 new HIGH findings — open Alerts for detail.", toast.Body);
+        Assert.Equal("20 new CRITICAL and 20 new HIGH findings. Open Alerts for detail.", toast.Body);
         Assert.Equal(AuditSeverity.High, toast.Floor);
     }
 

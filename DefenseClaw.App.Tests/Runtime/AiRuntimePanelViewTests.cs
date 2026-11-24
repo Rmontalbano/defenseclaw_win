@@ -292,7 +292,7 @@ public sealed class AiRuntimePanelViewTests : IDisposable
                 Assert.All(buttons.Where(b => (b.Content as string) is "Poll now…" or "Change settings…" or "Disable…"), b => Assert.False(b.IsEnabled, b.Content?.ToString()));
                 Assert.False(buttons.Single(b => AutomationProperties.GetName(b) == "Poll now").IsEnabled);
                 Assert.True(buttons.Single(b => AutomationProperties.GetName(b) == "Refresh").IsEnabled);
-                Assert.Contains(texts, t => t.Contains("is stale", StringComparison.Ordinal) && t.Contains("Refresh it first", StringComparison.Ordinal));
+                Assert.Contains(texts, t => t.Contains("is stale", StringComparison.Ordinal) && t.Contains("Select Refresh first", StringComparison.Ordinal));
 
                 RenderTo.Png(host, "cust309-runtime-stale");
             }
@@ -540,7 +540,7 @@ public sealed class AiRuntimePanelViewTests : IDisposable
                 Assert.Contains("Poll now…", texts);
                 Assert.Contains("Change settings…", texts);
                 Assert.Contains("Disable…", texts);
-                Assert.Contains("Prerequisites on this PC", texts);
+                Assert.Contains("Prerequisites on this machine", texts);
                 Assert.Contains(AiRuntimePanelViewModel.WindowsNote, texts);
                 Assert.Contains(AiRuntimePanelViewModel.CopyOnlyNote, texts);
                 Assert.Contains("Copy commands", texts);

@@ -311,8 +311,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         DegradedTitle = snapshot.State switch
         {
             AppGatewayState.NotInstalled => "DefenseClaw was not found",
-            AppGatewayState.Degraded => "Degraded mode — the gateway answered, but not cleanly",
-            _ => "Degraded mode — the gateway is not answering",
+            AppGatewayState.Degraded => "Degraded mode: the gateway's answer was not clean",
+            _ => "Degraded mode: the gateway is not answering",
         };
         DegradedMessage = snapshot.State == AppGatewayState.NotInstalled
             ? snapshot.Detail
@@ -323,10 +323,10 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
 
         ShowWslBanner = snapshot.WslGatewayDetected;
         WslMessage = snapshot.PortOwner is { } owner
-            ? $"Port {snapshot.ApiPort} is held by {owner.ProcessName} (pid {owner.Pid}). That is a WSL gateway " +
-              "relayed onto Windows, not the native install — everything below describes the WSL instance. " +
+            ? $"Port {snapshot.ApiPort} is held by {owner.ProcessName} (pid {owner.Pid}), a WSL gateway " +
+              "relayed onto Windows. Everything below describes the WSL instance. " +
               "Stop the gateway inside WSL, then restart the native one."
-            : $"Port {snapshot.ApiPort} is relayed from WSL, not served by the native install.";
+            : $"Port {snapshot.ApiPort} is relayed from WSL. The native install does not serve it.";
 
         ShowTokenBanner = snapshot.IsTokenRejected;
 

@@ -137,7 +137,7 @@ public sealed partial class ActivityPanelViewModel : PanelViewModelBase
         $"Each keeps up to {CliInvocation.MaxRetainedOutputLines.ToString(CultureInfo.CurrentCulture)} output lines " +
         $"({(CliInvocation.MaxRetainedOutputBytes / 1024).ToString(CultureInfo.CurrentCulture)} KiB), or " +
         $"{CliInvocation.MaxFullOutputLines.ToString("N0", CultureInfo.CurrentCulture)} lines / " +
-        $"{(CliInvocation.MaxFullOutputBytes / (1024 * 1024)).ToString(CultureInfo.CurrentCulture)} MiB for a list the app parses as JSON. " +
+        $"{(CliInvocation.MaxFullOutputBytes / (1024 * 1024)).ToString(CultureInfo.CurrentCulture)} MiB for a list parsed as JSON. " +
         "Older lines are dropped and the command says how many.";
 
     public string EmptyTitle => "No CLI activity yet";
@@ -935,7 +935,7 @@ public sealed partial class ActivityRow : ObservableObject
         var lines = invocation.OutputLines;
         var builder = new StringBuilder();
 
-        _ = builder.AppendLine("DefenseClaw for Windows - command log");
+        _ = builder.AppendLine("DefenseClaw for Windows: command log");
         _ = builder.Append("Command:  ").AppendLine(invocation.CommandLine);
         _ = builder.Append("Started:  ").AppendLine(invocation.StartedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss zzz", CultureInfo.InvariantCulture));
 
@@ -946,31 +946,31 @@ public sealed partial class ActivityRow : ObservableObject
         }
         else
         {
-            _ = builder.AppendLine("Finished: (still running when exported - this is a snapshot)");
+            _ = builder.AppendLine("Finished: (still running when exported)");
         }
 
         _ = builder.Append("Result:   ").AppendLine(DescribeResult(invocation));
 
         if (invocation.UsedStdinSecret)
         {
-            _ = builder.AppendLine("Stdin:    a secret was piped in on stdin; its value is never recorded");
+            _ = builder.AppendLine("Stdin:    a secret was piped in on stdin. Its value is never recorded");
         }
 
         if (invocation.UsedPromptSecret)
         {
-            _ = builder.AppendLine("Prompt:   a secret was typed at the command's hidden prompt by this app; its value is never recorded");
+            _ = builder.AppendLine("Prompt:   a secret was typed at the command's hidden prompt by the app. Its value is never recorded");
         }
 
         if (invocation.EnvironmentNames.Count > 0)
         {
             _ = builder.Append("Env:      ").Append(string.Join(", ", invocation.EnvironmentNames))
-                .AppendLine(" set for this run only; values are never recorded");
+                .AppendLine(" set for this run only. Values are never recorded");
         }
 
         if (invocation.IsOutputTruncated)
         {
             _ = builder.Append("Note:     ").Append(invocation.DroppedOutputLineCount.ToString(CultureInfo.InvariantCulture))
-                .AppendLine(" earlier line(s) were dropped to stay inside the retention budget");
+                .AppendLine(invocation.DroppedOutputLineCount == 1 ? " earlier line was dropped to stay inside the retention budget" : " earlier lines were dropped to stay inside the retention budget");
         }
 
         _ = builder.AppendLine(new string('-', 72));

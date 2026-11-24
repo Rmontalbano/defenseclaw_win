@@ -217,7 +217,7 @@
                                 <ctl:DcSegment Value="none" Content="none" ToolTip="No redaction: everything is sent as recorded." />
                                 <ctl:DcSegment Value="sensitive" Content="sensitive" ToolTip="Removes credentials, hashes file paths, and masks PII, credentials and secrets found in content, reasons, evidence and errors." />
                                 <ctl:DcSegment Value="content" Content="content" ToolTip="Like sensitive, but replaces content, reasons, evidence and errors whole." />
-                                <ctl:DcSegment Value="strict" Content="strict" ToolTip="Keeps only metadata and identifiers; removes everything else." />
+                                <ctl:DcSegment Value="strict" Content="strict" ToolTip="Keeps only metadata and identifiers." />
                             </ctl:DcSegmented>
                             <TextBlock Style="{StaticResource DcBody}" Margin="0,0,0,8" Text="{Binding QuickDescription}" />
 
@@ -263,7 +263,7 @@
                                               AutomationProperties.HeadingLevel="Level2"
                                               Symbol="ShieldSettings24" Section="Setup" Content="Advanced: every operation" />
                             <TextBlock Style="{StaticResource DcCaption}" Margin="0,0,0,8"
-                                       Text="Buckets, defaults, profiles, destinations and routes. Dry run is on by default; turn it off to apply." />
+                                       Text="Buckets, defaults, profiles, destinations and routes. Dry run is on by default. Turn it off to apply." />
 
                             <StackPanel Style="{StaticResource Field}">
                                 <TextBlock Style="{StaticResource FieldLabel}" Text="Operation" />
@@ -652,7 +652,7 @@
                             <ui:Button Margin="0,10,0,0" HorizontalAlignment="Left" Appearance="Primary"
                                        Content="Apply this change…"
                                        Icon="{ctl:DcSymbolIcon Save24}"
-                                       AutomationProperties.Name="Review the command and apply the change just previewed"
+                                       AutomationProperties.Name="Review the command and apply the previewed change"
                                        Visibility="{Binding DataContext.CanApplyPreview, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource BoolToVisibility}}"
                                        Command="{Binding DataContext.ApplyPreviewedCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" />
 

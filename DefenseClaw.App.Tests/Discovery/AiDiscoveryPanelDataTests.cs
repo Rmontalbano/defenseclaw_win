@@ -14,7 +14,7 @@ public sealed class AiDiscoveryPanelDataTests
 {
     private const string State0810 = "ai-discovery-state.0.8.10.json";
     private const string State95159fd = "ai-discovery-state.95159fd.json";
-    private const string BandsLabel = "Confidence bands — inventory.db (ai_confidence_snapshots, latest scan)";
+    private const string BandsLabel = "Confidence bands: inventory.db (ai_confidence_snapshots, latest scan)";
 
     private static string[] Products(AiDiscoveryPanelViewModel vm) =>
         vm.CardsView.Cast<DiscoveryComponentCard>().Select(c => c.Product).ToArray();
@@ -527,7 +527,7 @@ public sealed class AiDiscoveryPanelDataTests
             var vm = scene.ViewModel;
 
             Assert.Equal(new[] { "Example SDK" }, Products(vm));
-            Assert.Contains("falling back to inventory.db", vm.Sources[0].Detail, StringComparison.Ordinal);
+            Assert.Contains("Falling back to inventory.db", vm.Sources[0].Detail, StringComparison.Ordinal);
             Assert.Equal("high (86%)", Cards(vm).Single().IdentityDisplay);
         });
     }

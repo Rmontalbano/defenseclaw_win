@@ -422,13 +422,14 @@
                                                MaxWidth="720"
                                                HorizontalAlignment="Left"
                                                Style="{StaticResource DcCaption}"
+                                               ToolTip="{Binding Details}"
                                                Text="{Binding Help}" />
 
                                     <!-- Text / integer / number / env-var-name -->
                                     <ui:TextBox Width="420"
                                                 HorizontalAlignment="Left"
                                                 AutomationProperties.Name="{Binding AutomationName}"
-                                                AutomationProperties.HelpText="{Binding Help}"
+                                                AutomationProperties.HelpText="{Binding HelpWithDetails}"
                                                 PlaceholderText="{Binding Placeholder}"
                                                 Text="{Binding Value, UpdateSourceTrigger=PropertyChanged}"
                                                 IsEnabled="{Binding IsEnabled}"
@@ -444,7 +445,7 @@
                                     <ui:TextBox Width="420"
                                                 HorizontalAlignment="Left"
                                                 AutomationProperties.Name="{Binding AutomationName}"
-                                                AutomationProperties.HelpText="{Binding Help}"
+                                                AutomationProperties.HelpText="{Binding HelpWithDetails}"
                                                 PlaceholderText="{Binding Placeholder}"
                                                 Text="{Binding Value, UpdateSourceTrigger=PropertyChanged}"
                                                 IsEnabled="{Binding IsEnabled}"
@@ -468,7 +469,7 @@
                                     <ComboBox Width="420"
                                               HorizontalAlignment="Left"
                                               AutomationProperties.Name="{Binding AutomationName}"
-                                              AutomationProperties.HelpText="{Binding Help}"
+                                              AutomationProperties.HelpText="{Binding HelpWithDetails}"
                                               DisplayMemberPath="Label"
                                               ItemsSource="{Binding Choices}"
                                               SelectedItem="{Binding SelectedChoice, Mode=TwoWay}"
@@ -478,7 +479,7 @@
                                     <!-- Bare switch: present in argv when on, absent when off -->
                                     <ui:ToggleSwitch HorizontalAlignment="Left"
                                                      AutomationProperties.Name="{Binding AutomationName}"
-                                                     AutomationProperties.HelpText="{Binding Help}"
+                                                     AutomationProperties.HelpText="{Binding HelpWithDetails}"
                                                      IsChecked="{Binding IsOn, Mode=TwoWay}"
                                                      IsEnabled="{Binding IsEnabled}"
                                                      Visibility="{Binding IsSwitch, Converter={StaticResource BoolToVisibility}}" />

@@ -191,7 +191,7 @@ public sealed partial class AiDiscoveryTuningViewModel : SetupDialogViewModel
         {
             Switch("include_shell_history", "Shell history", "--include-shell-history", "Check shell history for AI command-line tools."),
             Switch("include_package_manifests", "Package manifests", "--include-package-manifests", "Check package.json, pyproject, Cargo.toml and similar for AI SDKs."),
-            Switch("include_env_var_names", "Environment variable names", "--include-env-var-names", "Check the names, not the values, of variables that hold AI provider keys."),
+            Switch("include_env_var_names", "Environment variable names", "--include-env-var-names", "Check the names of variables that hold AI provider keys. Their values stay unread."),
             Switch("include_network_domains", "Network domains", "--include-network-domains", "Check hosts and SSH config for AI provider domains, and ask vetted loopback model servers what they host."),
         };
         PrivacySwitches = new[]
@@ -579,7 +579,7 @@ public sealed partial class AiDiscoveryTuningViewModel : SetupDialogViewModel
 
         if (!result.Succeeded)
         {
-            return "The options of agent discovery enable could not be read (" + result.Error + "). Press Refresh to try again.";
+            return "The options of agent discovery enable could not be read (" + result.Error + "). Select Refresh to try again.";
         }
 
         var help = SetupHelpParser.Parse(result.Text, commandDepth: 3);
@@ -736,7 +736,7 @@ public sealed partial class AiDiscoveryTuningViewModel : SetupDialogViewModel
 
     public bool ReviewBlocked => ReviewBlockedReason is not null;
 
-    public string ReviewTip => ReviewBlockedReason ?? "Shows the command first. Nothing runs until you confirm.";
+    public string ReviewTip => ReviewBlockedReason ?? "Nothing runs until you confirm.";
 
     private bool CanReview() => ReviewBlockedReason is null;
 
@@ -816,7 +816,7 @@ public sealed partial class AiDiscoveryTuningViewModel : SetupDialogViewModel
             {
                 warnings.Add(new CommandReviewWarning(
                     "Stores raw local paths",
-                    "Raw local paths will be kept in the discovery state file, not only hashed fingerprints. Turn this on only for diagnostics on a trusted machine."));
+                    "The discovery state file keeps raw local paths as well as hashed fingerprints. Turn this on only for diagnostics on a trusted machine."));
             }
 
             if (current.AllowWorkspaceSignatures && !_original.AllowWorkspaceSignatures)

@@ -485,7 +485,7 @@ public sealed partial class PolicyModelViewModel
         }
         else
         {
-            ShowNotice("The command did not finish", "The review dialog and the Activity panel show its output. The settings are read again.", InfoBarSeverity.Warning);
+            ShowNotice("The command did not finish", "The review dialog and Activity show its output. The settings are read again.", InfoBarSeverity.Warning);
         }
     }
 

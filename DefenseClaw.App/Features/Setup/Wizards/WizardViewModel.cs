@@ -567,7 +567,7 @@ public sealed partial class WizardViewModel : ObservableObject, IDisposable
 
         return onlyReads
             ? failure + ". The command only reads, so nothing was left half-done."
-            : failure + ". The command may have left setup half-applied. Read the output above and the Activity panel before running it again.";
+            : failure + ". The command may have left setup half-applied. Read the output above and Activity before running it again.";
     }
 
     /// <summary>
@@ -583,7 +583,7 @@ public sealed partial class WizardViewModel : ObservableObject, IDisposable
 
         return lead + (onlyReads
             ? " It only reads, so nothing is left half-done."
-            : " It may leave setup half-applied. Read the output and the Activity panel afterwards before running it again.");
+            : " It may leave setup half-applied. Read the output and Activity afterwards before running it again.");
     }
 
     /// <summary>The operator said yes: cancel the run's token, which makes the runner kill its process tree.</summary>
@@ -629,7 +629,7 @@ public sealed partial class WizardViewModel : ObservableObject, IDisposable
     private void RunAgain()
     {
         ResetRunState();
-        ResultMessage = "Ready to run again. Check the command above, then press Execute.";
+        ResultMessage = "Ready to run again. Check the command above, then select Execute.";
     }
 
     /// <summary>
@@ -905,9 +905,9 @@ public sealed partial class WizardViewModel : ObservableObject, IDisposable
 
             ResultMessage = (preview, code) switch
             {
-                (true, 0) => "Preview finished. Nothing was written. Read the output, then press Execute to apply it.",
+                (true, 0) => "Preview finished. Nothing was written. Read the output, then select Execute to apply it.",
                 (true, _) => "The preview failed. Nothing was written. The output above is as the command printed it.",
-                (false, 0) => "The command completed. Its argv, output and exit code are in the Activity panel.",
+                (false, 0) => "The command completed. Its argv, output and exit code are in Activity.",
                 _ => "The command failed. The output above is as the command printed it.",
             };
             return;

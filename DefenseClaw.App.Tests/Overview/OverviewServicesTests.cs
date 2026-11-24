@@ -115,7 +115,7 @@ public sealed class OverviewServiceCardsTests
 
         var agent = Card(cards, "agent");
         Assert.Equal(("running", "Ok"), (agent.StateText, agent.StateKey));
-        Assert.Equal("Claude Code - both - 14 req", agent.Detail);
+        Assert.Equal("Claude Code · both · 14 req", agent.Detail);
 
         var watchdog = Card(cards, "watcher");
         Assert.Equal(("running", "Ok"), (watchdog.StateText, watchdog.StateKey));
@@ -433,11 +433,11 @@ public sealed class OverviewServiceCardsTests
         var withArray = Card(
             Cards(Connectors(Connector("claudecode", "running", requests: 3707, toolBlocks: 2, subprocessBlocks: 1)), roster: new[] { "claudecode" }),
             "agent");
-        Assert.Equal(("running", "Claude Code - both - 3707 req - 2 tool blocks - 1 subprocess block"), (withArray.StateText, withArray.Detail));
+        Assert.Equal(("running", "Claude Code · both · 3707 req · 2 tool blocks · 1 subprocess block"), (withArray.StateText, withArray.Detail));
 
         var primaryOnly = Health("{\"connector\":" + Connector("claudecode", "degraded", requests: 5) + "}");
         var legacy = Card(Cards(primaryOnly, roster: new[] { "claudecode" }), "agent");
-        Assert.Equal(("degraded", "Warn", "Claude Code - both - 5 req"), (legacy.StateText, legacy.StateKey, legacy.Detail));
+        Assert.Equal(("degraded", "Warn", "Claude Code · both · 5 req"), (legacy.StateText, legacy.StateKey, legacy.Detail));
     }
 
     // ---- Sandbox ----
@@ -515,7 +515,7 @@ public sealed class OverviewServicesPanelTests : IDisposable
 
         Assert.Equal(OverviewPanelViewModel.ServiceKeys, vm.ServiceRows.Select(r => r.Key));
         Assert.Equal("running", Card(vm, "agent").StateText);
-        Assert.Equal("Claude Code - both - 14 req", Card(vm, "agent").Detail);
+        Assert.Equal("Claude Code · both · 14 req", Card(vm, "agent").Detail);
     }
 
     [Fact]

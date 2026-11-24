@@ -1001,7 +1001,7 @@ public sealed class AiRuntimePanelTests : IDisposable
         await scene.Vm.CheckPrerequisitesCommand.ExecuteAsync(null);
 
         Assert.True(scene.Vm.HasGuidanceOs);
-        Assert.Equal("This guidance is for linux, where the runtime runs. It does not apply to this PC.", scene.Vm.GuidanceOsNote);
+        Assert.Equal("This guidance is for linux, where the runtime runs. It does not apply to this machine.", scene.Vm.GuidanceOsNote);
         Assert.False(scene.Vm.HasCommands);
     }
 
@@ -1030,7 +1030,7 @@ public sealed class AiRuntimePanelTests : IDisposable
         Assert.False(scene.Vm.ShowGrants);
         Assert.True(scene.Vm.ShowPrerequisitesMessage);
         Assert.StartsWith("The permissions check did not complete", scene.Vm.PrerequisitesMessage, StringComparison.Ordinal);
-        Assert.StartsWith("The permissions check did not complete", scene.Vm.PrerequisitesMessage, StringComparison.Ordinal);
+        Assert.EndsWith("Treat every grant as missing.", scene.Vm.PrerequisitesMessage, StringComparison.Ordinal);
         Assert.False(scene.Vm.HasCommands);
 
         static CliInvocation WithFailure(IReadOnlyList<string> argv)

@@ -42,12 +42,12 @@ public sealed partial class SandboxesPanelViewModel : PanelViewModelBase
     public string StateTitle => IsUsableHere ? "Sandboxes are managed by the DefenseClaw runtime" : "Sandboxes are not available on Windows";
 
     public string StateDetail => IsUsableHere
-        ? "The runtime's sandbox commands run and manage them."
+        ? "The runtime's sandbox commands run and manage the sandboxes."
         : "The runtime supports OpenShell sandboxes on Linux and macOS only. This app offers no sandbox actions on Windows.";
 
     /// <summary>Where they do work, and with what: informational only (<see cref="ElsewhereSetupCommand"/> is not a button here).</summary>
     public string ElsewhereText =>
-        $"On Linux or macOS, turn them on with {ElsewhereSetupCommand}. This PC's protection is set in Setup.";
+        $"On Linux or macOS, turn them on with {ElsewhereSetupCommand}. This machine's protection is set in Setup.";
 
     /// <summary>What the connected runtime says about its sandbox commands, in a sentence; follows the runtime probe while the page is on screen.</summary>
     public string RuntimeFact

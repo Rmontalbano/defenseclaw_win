@@ -300,7 +300,7 @@ public sealed partial class OverviewPanelViewModel
             parts.Add($"{primary.SubprocessBlocks.ToString(CultureInfo.InvariantCulture)} subprocess block{(primary.SubprocessBlocks == 1 ? string.Empty : "s")}");
         }
 
-        return string.Join(" - ", parts);
+        return string.Join(" · ", parts);
     }
 
     // ---- The cards that read one block ------------------------------------------------------------------------------------------------

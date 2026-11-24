@@ -280,9 +280,9 @@ public sealed partial class ChecksumsSignatureVerifier
         {
             return Result(
                 ChecksumsSignatureState.NotVerifiedNoCosign,
-                "The release publishes a sigstore signature for checksums.txt, but verifying it needs cosign, which was not found. " +
-                "Without it the download is only compared with checksums.txt from the same release, which does not prove the project signed that file. " +
-                "To verify the signature, run winget install Sigstore.Cosign, restart this app and check again.");
+                "cosign was not found, so the sigstore signature on checksums.txt is not checked. " +
+                "The download is only compared with checksums.txt, which does not prove the project signed that file. " +
+                "Run winget install Sigstore.Cosign, restart this app and check again.");
         }
 
         var (major, unusable) = await ReadCosignMajorVersionAsync(cosignPath, cancellationToken).ConfigureAwait(false);
@@ -349,8 +349,8 @@ public sealed partial class ChecksumsSignatureVerifier
                     State = ChecksumsSignatureState.Verified,
                     CommandLine = commandLine,
                     Detail =
-                        $"cosign verified the sigstore signature on release {version}'s checksums.txt. It was signed by {CertificateIdentity} through GitHub Actions, " +
-                        "which ties the file to the upstream release workflow. The installer itself is not Authenticode-signed. Its SHA-256 is compared with this file.",
+                        $"cosign verified the sigstore signature on release {version}'s checksums.txt. It was signed by {CertificateIdentity} through GitHub Actions. " +
+                        "The installer is not Authenticode-signed. Its SHA-256 is compared with this file.",
                 };
             }
 
@@ -390,7 +390,7 @@ public sealed partial class ChecksumsSignatureVerifier
                 CommandLine = commandLine,
                 CosignOutput = unfinished.Length == 0 ? null : unfinished,
                 Detail =
-                    $"cosign did not finish checking the sigstore signature on release {version}'s checksums.txt ({run.FailureReason ?? "no exit code"}), so it was not verified, and the upgrade is stopped. " +
+                    $"cosign did not finish checking the sigstore signature on release {version}'s checksums.txt ({run.FailureReason ?? "no exit code"}), so the upgrade is stopped. " +
                     "This usually means cosign could not reach the sigstore services. Check the network and any proxy, then try again." +
                     (unfinished.Length == 0 ? string.Empty : $" cosign said: {unfinished}"),
             };

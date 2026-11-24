@@ -158,7 +158,7 @@ public sealed class InventoryBomFlowTests : IDisposable
         var step = Assert.Single(vm.Review.CommandReview!.Steps);
         Assert.Equal(new[] { "aibom", "scan", "--json", "--only", "skills,plugins,mcp", "--connector", "codex" }, step.Argv);
         Assert.Contains("only the skills, plugins, MCP servers of the codex connector", vm.Review.CommandReview.Summary, StringComparison.Ordinal);
-        Assert.Contains("Fails if the gateway is down", vm.Review.CommandReview.Summary, StringComparison.Ordinal);
+        Assert.Contains("Fails if the gateway is not running", vm.Review.CommandReview.Summary, StringComparison.Ordinal);
 
         await vm.Review.ConfirmCommand.ExecuteAsync(null);
         Assert.Equal(step.Argv, Assert.Single(_ran).Argv);
@@ -270,7 +270,7 @@ public sealed class InventoryBomFlowTests : IDisposable
         Assert.Empty(_ran);
         Assert.True(vm.Review.IsFinished);
         Assert.Equal("Bad", vm.Review.ResultKey);
-        Assert.Equal("Not run. " + TestInstallations.ManagedReason + " Nothing was changed. The refusal is in the Activity panel.", vm.Review.ResultText);
+        Assert.Equal("Not run. " + TestInstallations.ManagedReason + " Nothing was changed. The refusal is in Activity.", vm.Review.ResultText);
         var recorded = Assert.Single(services.Cli.Activity);
         Assert.Equal(new[] { "aibom", "scan", "--json" }, recorded.Argv);
         Assert.Contains(TestInstallations.ManagedReason, recorded.FailureReason, StringComparison.Ordinal);
@@ -434,7 +434,7 @@ public sealed class InventoryBomFlowTests : IDisposable
 
         Assert.True(vm.BomFailed);
         Assert.Contains("its output was not the expected JSON: ", vm.BomStatus, StringComparison.Ordinal);
-        Assert.Contains("See the Activity panel", vm.BomStatus, StringComparison.Ordinal);
+        Assert.Contains("See Activity", vm.BomStatus, StringComparison.Ordinal);
         Assert.False(vm.CanSaveBom);
     }
 

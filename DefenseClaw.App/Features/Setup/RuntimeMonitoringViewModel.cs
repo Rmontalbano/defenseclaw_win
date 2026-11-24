@@ -105,7 +105,7 @@ public sealed partial class RuntimeMonitoringViewModel : SetupDialogViewModel
         "Runtime monitoring needs DefenseClaw 1.0 or later. " + RuntimeCapabilityCatalog.UnsupportedMessage + ".";
 
     public const string ScopeNote =
-        "These planes watch what is running now. It is off by default. Everything is read and recorded on this PC.";
+        "These planes watch what is running now. It is off by default. Everything is read and recorded on this machine.";
 
     public const string NoSingleAbNote =
         "Plane A and plane B start together. Turning monitoring off stops every plane. Plane C and DNS capture are separate opt-ins.";
@@ -153,7 +153,7 @@ public sealed partial class RuntimeMonitoringViewModel : SetupDialogViewModel
 
     public string Title => DialogTitle;
 
-    public string Subtitle => "Whether DefenseClaw watches this PC for AI use, by plane, and what each plane needs.";
+    public string Subtitle => "Whether DefenseClaw watches this machine for AI use, by plane, and what each plane needs.";
 
     public string Scope => ScopeNote;
 
@@ -286,10 +286,10 @@ public sealed partial class RuntimeMonitoringViewModel : SetupDialogViewModel
     public bool CanChooseRestart => _canSkipRestart;
 
     public string HostPlaneNote =>
-        "Plane C reads process, identity and privilege events from the Windows Security log. It needs an administrator gateway and Advanced Audit Policy. Without both it records nothing.";
+        "Plane C reads the Windows Security log. Without an administrator gateway and Advanced Audit Policy it records nothing.";
 
     public string DnsNote =>
-        "DNS capture names each connection's peer from the domains this PC looked up. It reads the DNS Client operational log, which Windows keeps off by default.";
+        "DNS capture names connection peers from DNS lookups. Windows keeps the DNS Client operational log it reads off by default.";
 
     partial void OnMonitoringOnChanged(bool value) => Recompute();
 
@@ -475,7 +475,7 @@ public sealed partial class RuntimeMonitoringViewModel : SetupDialogViewModel
         _enableFlags = null;
         if (!result.Succeeded)
         {
-            return "The options of agent discovery runtime enable could not be read (" + result.Error + "). Press Refresh to try again.";
+            return "The options of agent discovery runtime enable could not be read (" + result.Error + "). Select Refresh to try again.";
         }
 
         var help = SetupHelpParser.Parse(result.Text, commandDepth: 4);
@@ -588,7 +588,7 @@ public sealed partial class RuntimeMonitoringViewModel : SetupDialogViewModel
     public bool ReviewBlocked => ReviewBlockedReason is not null;
 
     /// <summary>The tooltip of "Review changes": the reason it is off, or what it does.</summary>
-    public string ReviewTip => ReviewBlockedReason ?? "Shows the exact command first. Nothing runs until you confirm.";
+    public string ReviewTip => ReviewBlockedReason ?? "Nothing runs until you confirm.";
 
     /// <summary>The tooltip of the switches: the reason they cannot be changed, or empty.</summary>
     public string SwitchTip => InstallationBlockedReason ?? Support ?? (HasConfigProblem ? ConfigProblem : string.Empty);

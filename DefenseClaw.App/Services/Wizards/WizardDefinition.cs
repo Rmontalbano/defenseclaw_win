@@ -145,6 +145,9 @@ public sealed partial class WizardField
     /// <summary>Help text, taken from the CLI's own description where possible.</summary>
     public string Help { get; init; } = string.Empty;
 
+    /// <summary>The rest of the help: shown as the tooltip of the help line and read after <see cref="Help"/> by a screen reader. Empty when there is none.</summary>
+    public string Details { get; init; } = string.Empty;
+
     public IReadOnlyList<WizardChoice> Choices { get; init; } = Array.Empty<WizardChoice>();
 
     /// <summary>

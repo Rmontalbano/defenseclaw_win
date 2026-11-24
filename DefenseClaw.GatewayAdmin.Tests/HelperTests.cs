@@ -459,7 +459,7 @@ public class HelperStartStopTests
         var result = rig.Run(AdminVerb.Start);
 
         Assert.Equal(AdminExit.Refused, result.ExitCode);
-        Assert.Contains("The installed gateway differs from the administrator copy. Choose Restart Gateway as Administrator to use the installed version.", rig.AllLines(result), StringComparison.Ordinal);
+        Assert.Contains("The installed gateway differs from the administrator copy. Select Restart Gateway as Administrator to use the installed version.", rig.AllLines(result), StringComparison.Ordinal);
         Assert.Empty(rig.Runner.Requests);
         Assert.Empty(rig.Token.Owners);
     }

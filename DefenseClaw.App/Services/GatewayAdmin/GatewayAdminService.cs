@@ -363,7 +363,7 @@ internal sealed class GatewayAdminService : IGatewayAdministrator, IGatewayEleva
         if (action == GatewayAction.Start && copyUsable && status.CopyMatchesInstalled != true)
         {
             // The Mac's sentence: only Restart refreshes the copy.
-            return AdminPlan.Refused("The installed gateway differs from the administrator copy. Choose Restart Gateway as Administrator to use the installed version. No gateway action was performed.");
+            return AdminPlan.Refused("The installed gateway differs from the administrator copy. Select Restart Gateway as Administrator to use the installed version. No gateway action was performed.");
         }
 
         ReleaseGateway? release = null;
@@ -479,7 +479,7 @@ internal sealed class GatewayAdminService : IGatewayAdministrator, IGatewayEleva
                 return AdminPlan.Refused(stageProblem ?? "The administrator helper (DefenseClaw.GatewayAdmin.exe) is not next to the app.");
             }
 
-            return AdminPlan.Refused("The administrator helper is not installed yet. Choose Prepare administrator copy first. It installs the helper.");
+            return AdminPlan.Refused("The administrator helper is not installed yet. Select Prepare administrator copy first. It installs the helper.");
         }
 
         var layout = _d.Layout.Get()!;
@@ -551,7 +551,7 @@ internal sealed class GatewayAdminService : IGatewayAdministrator, IGatewayEleva
         return string.Equals(release.GatewaySha256, installedSha, StringComparison.OrdinalIgnoreCase)
             ? (release, null)
             : (null, $"The installed gateway (SHA-256 {Hex.Short(installedSha)}) is not the defenseclaw-gateway.exe in the {release.Version} release (SHA-256 {Hex.Short(release.GatewaySha256)}). " +
-                     "It may be a build from source or a modified file, and it is not copied to a place that runs with administrator rights.");
+                     "It may be a build from source or a modified file, so it is not copied to a place that runs with administrator rights.");
     }
 
     private AdminPlan Build(
@@ -697,7 +697,7 @@ internal sealed class GatewayAdminService : IGatewayAdministrator, IGatewayEleva
         {
             AdminExit.Ok => new AdminStepOutcome(true, false, words ?? DoneSentence(step.Verb)),
             AdminExit.Declined => new AdminStepOutcome(false, true, "Declined in the helper's own confirmation window. Nothing was changed."),
-            AdminExit.Refused => new AdminStepOutcome(false, false, "The helper refused: " + (words ?? "see the Windows prompt text; no details were left.")),
+            AdminExit.Refused => new AdminStepOutcome(false, false, "The helper refused: " + (words ?? "see the Windows prompt text. No details were left.")),
             AdminExit.Usage => new AdminStepOutcome(false, false, "The helper did not accept the command. It may be a different version."),
             { } code => new AdminStepOutcome(false, false, $"The helper failed (exit code {code}): " + (words ?? "no details were left.")),
             null => new AdminStepOutcome(false, false, "The helper did not report an exit code."),

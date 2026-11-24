@@ -201,7 +201,7 @@ public sealed class RegistryPayloadTests : IDisposable
         Assert.Equal("MEDIUM", docs.WorstSeverity);
         Assert.Equal("Medium", docs.FindingsKey);
         Assert.Equal("2 findings, worst severity MEDIUM", docs.FindingsAutomationName);
-        Assert.Contains("2 findings — worst severity MEDIUM", docs.FindingsToolTip, StringComparison.Ordinal);
+        Assert.Contains("2 findings, worst severity MEDIUM", docs.FindingsToolTip, StringComparison.Ordinal);
         Assert.Contains("keeps only the count", docs.FindingsToolTip, StringComparison.Ordinal); // the cache has a count only
         Assert.Contains("Scan scan-0002", docs.FindingsToolTip, StringComparison.Ordinal);
         Assert.Matches(@"scanned \d{4}-\d{2}-\d{2} \d{2}:\d{2}", docs.FindingsToolTip); // local time of last_scanned_at

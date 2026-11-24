@@ -51,16 +51,16 @@ public static class WizardCautions
             warnings.Add(new CommandReviewWarning(
                 InsecureTlsTitle,
                 "The CLI will not check this endpoint's certificate, so anyone on the network path can read what is sent, including the API key. " +
-                "The CLI marks this option lab use only. Give it the endpoint's CA bundle instead if you can."));
+                "The option is for lab use only. Give the CLI the endpoint's CA bundle if you can."));
         }
 
         if (IsObservabilityAdd(options) && HasFlag(options, "--allow-private-networks"))
         {
             warnings.Add(new CommandReviewWarning(
                 PrivateNetworkTitle,
-                "Telemetry goes to an address on this computer or a private network, which the CLI normally refuses" +
-                (HasFlag(options, "--plaintext") ? ", without TLS, so anyone on the path can read it" : string.Empty) +
-                ". Use this only for a collector you run."));
+                "Telemetry goes to an address on this machine or a private network, which the CLI normally refuses." +
+                (HasFlag(options, "--plaintext") ? " It is sent without TLS, so anyone on the path can read it." : string.Empty) +
+                " Use this only for a collector you run."));
         }
 
         if (GuardrailScope.IsDisableCommand(argv))

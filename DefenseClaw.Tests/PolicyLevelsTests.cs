@@ -85,7 +85,7 @@ public sealed class PolicyLevelsTests
             PolicyLevels.SeverityActions("MEDIUM+", "LOW+", "off"));
 
         Assert.Equal("The global default blocks CRITICAL, asks a human for HIGH+ and alerts on MEDIUM+.", PolicyLevels.PostureSummary("global", "action", "CRITICAL", "MEDIUM+", "HIGH+"));
-        Assert.Equal("codex logs only; in action mode it would block CRITICAL and alert on HIGH+.", PolicyLevels.PostureSummary("codex", "observe", "CRITICAL", "HIGH+", "off"));
+        Assert.Equal("codex logs only. In action mode it would block CRITICAL and alert on HIGH+.", PolicyLevels.PostureSummary("codex", "observe", "CRITICAL", "HIGH+", "off"));
     }
 
     [Fact]

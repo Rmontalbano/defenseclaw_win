@@ -641,7 +641,7 @@ public sealed class EventStreamReader
             var reason = FirstValue(root, ReasonKeys);
             var target = FirstValue(root, TargetKeys);
             var summary = reason.Length > 0 ? reason : details;
-            var message = DisplayRedaction.Text($"{eventName} {action} — {summary}");
+            var message = DisplayRedaction.Text($"{eventName} {action}: {summary}");
 
             // A connector's hook call keeps its decision, mode and timing in the key=value details, which the TUI's detail lays out row by row.
             var hookDetails = StructuredDetailParser.IsHook(rowAction) ? DisplayRedaction.Text(details) : null;

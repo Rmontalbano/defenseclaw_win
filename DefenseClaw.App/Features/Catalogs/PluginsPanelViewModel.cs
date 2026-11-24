@@ -178,7 +178,7 @@ public sealed partial class PluginsPanelViewModel : GovernPanelViewModelBase
         GovernVerbs.Allow =>
             "Allow-listed plugins skip the scan gate during install. Allowing also removes the plugin from the block list.",
         GovernVerbs.Remove =>
-            "Deletes the plugin's files, with no quarantine copy and no undo. The gateway is not restarted; the CLI only prints a reminder.",
+            "Deletes the plugin's files, with no quarantine copy and no undo. The gateway is not restarted. The CLI only prints a reminder.",
         _ => base.NoteFor(verb, row),
     };
 
@@ -334,7 +334,6 @@ public sealed partial class PluginsPanelViewModel : GovernPanelViewModelBase
         }
 
         return "That is not an absolute folder path, a registry package name, a clawhub:// URI or an http(s):// URL. " +
-               "A relative folder resolves against DefenseClaw's working directory, so enter the full path, " +
-               "for example C:\\plugins\\my-plugin.";
+               "Enter the full path, for example C:\\plugins\\my-plugin.";
     }
 }

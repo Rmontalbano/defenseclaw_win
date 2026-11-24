@@ -1133,7 +1133,7 @@ public sealed class RedactionViewModelTests : IDisposable
         Assert.Equal(string.Empty, vm.Problem); // an existing profile keeps its base
 
         vm.Form.ProfileName = "strict";
-        Assert.Equal("A built-in profile cannot be edited: give the custom profile a name of its own.", vm.Problem);
+        Assert.Equal("A built-in profile cannot be edited. Give the custom profile a new name.", vm.Problem);
 
         vm.SelectedOperation = RedactionOperations.Info(RedactionOperation.ProfileShow);
         Assert.Equal(["none", "sensitive", "content", "strict", "example-profile"], vm.Form.ProfileNames.ToArray());

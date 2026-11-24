@@ -55,8 +55,9 @@ public sealed partial class OverviewPanelViewModel
             Title = changes.Count == 1
                 ? "A protected file changed during an agent call"
                 : $"{changes.Count.ToString("N0", CultureInfo.CurrentCulture)} protected-file changes during agent calls",
-            Detail = $"{ProtectedFileAlert.FileLabel(newest.Target)} changed while a tool call of {agent} was running.{more}",
+            Detail = $"{ProtectedFileAlert.FileLabel(newest.Target)} changed while a tool call of {agent} was running. Attribution is by time.{more}",
             Reference = ProtectedFileWatchFacts.Attribution + " " + ProtectedFileWatchFacts.BlocksNothing,
+            ReferenceLabel = "Attribution",
             SeverityKey = "High",
             Actions = new AttentionActions(new[]
             {

@@ -227,7 +227,7 @@ public sealed class InstallStateDetector
         var trust = verdict.Trust;
         if (wslDetected)
         {
-            return $"Port {port} is owned by {owner?.ProcessName} (pid {owner?.Pid}) — this is a WSL gateway " +
+            return $"Port {port} is owned by {owner?.ProcessName} (pid {owner?.Pid}). This is a WSL gateway " +
                    "relayed to Windows, not the native install.";
         }
 

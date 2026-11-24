@@ -70,7 +70,7 @@ public static class SplunkDashboardsReview
                 "with the same names. It does what plan does locally first.",
             SplunkDashboards.Destroy =>
                 "Deletes from Splunk Observability Cloud everything the Terraform state manages, including the DefenseClaw dashboard group, its " +
-                "dashboards, charts and detectors, and same-named dashboards an earlier plan or apply adopted, even ones that predate DefenseClaw.",
+                "dashboards, charts and, if it created them, its detectors, and same-named dashboards an earlier plan or apply adopted, even ones that predate DefenseClaw.",
             _ => string.Empty,
         };
     }

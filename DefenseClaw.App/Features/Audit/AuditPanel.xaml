@@ -186,7 +186,7 @@
                            SearchWidth="260"
                            SearchPlaceholder="Search details, event, tool, target…"
                            SearchAutomationName="Search details, event, tool and target"
-                           SearchHelpText="Free text over details, event, tool and target. Or one field: connector:codex, severity:high, run:, trace:, request:, session:, id:, actor:, type:, target:, action:, details:. Quote spaces: target:&quot;my skill&quot;. Ctrl+F focuses; Esc clears.">
+                           SearchHelpText="Free text, or field:value such as severity:high or connector:codex. Quote spaces. Ctrl+F focuses and Esc clears.">
             <ctl:DcPageToolbar.ConnectorSlot>
                 <ctl:DcConnectorScopeChip Model="{Binding ConnectorChip}" />
             </ctl:DcPageToolbar.ConnectorSlot>
@@ -202,7 +202,7 @@
                                ToolTip="Export the list to JSON or CSV (Ctrl+E)"
                                AutomationProperties.Name="Export"
                                AutomationProperties.AcceleratorKey="Ctrl+E"
-                               AutomationProperties.HelpText="Save the filtered events (newest 5,000 at most) as JSON or CSV. Ctrl+E." />
+                               AutomationProperties.HelpText="Save up to the newest 5,000 filtered events as JSON or CSV. Ctrl+E." />
                     <ui:Button Icon="{ctl:DcSymbolIcon ArrowClockwise24}"
                                Command="{Binding RefreshCommand}"
                                ToolTip="Refresh (F5)"
@@ -266,7 +266,7 @@
                                  ToolTip="{Binding ActionableToolTip}"
                                  ToolTipService.ShowOnDisabled="True"
                                  AutomationProperties.Name="Actionable only"
-                                 AutomationProperties.HelpText="Shows HIGH, CRITICAL and ERROR events and anything that blocked, denied, rejected, quarantined or failed, as the TUI does. Paused while a search, view, action filter, run or minimum severity is set." />
+                                 AutomationProperties.HelpText="Shows HIGH, CRITICAL and ERROR events, and events that blocked, denied, rejected, quarantined or failed. Paused while any filter is set." />
 
                 <Border Style="{StaticResource DcChip}"
                         Margin="0,0,12,8"
@@ -283,7 +283,7 @@
                            Appearance="Secondary"
                            Icon="{ctl:DcSymbolIcon Dismiss12}"
                            Command="{Binding ClearRunFilterCommand}"
-                           ToolTip="Showing one run. Click to show all runs."
+                           ToolTip="Showing one run. Select to show all runs."
                            AutomationProperties.Name="Clear the run filter"
                            Visibility="{Binding HasRunFilter, Converter={StaticResource BoolToVisibility}}">
                     <TextBlock Text="{Binding RunFilterText}" />
@@ -381,8 +381,8 @@
                     <ComboBox Width="140"
                               ItemsSource="{Binding Actions}"
                               SelectedItem="{Binding SelectedActionOption, Mode=TwoWay}"
-                              ToolTip="Pick an action to fill the action filter"
-                              AutomationProperties.Name="Action, pick to fill the action filter" />
+                              ToolTip="Select an action to fill the action filter"
+                              AutomationProperties.Name="Action, select to fill the action filter" />
                 </StackPanel>
 
                 <StackPanel Orientation="Horizontal">

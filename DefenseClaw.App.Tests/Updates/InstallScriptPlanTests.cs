@@ -426,7 +426,7 @@ public sealed class InstallScriptPlanTests : IDisposable
         var unknown = InstallScriptPlan.ReadMigrationSummary(_temp.Path);
         Assert.NotNull(unknown);
         Assert.Null(unknown!.Moved);
-        Assert.Contains("2 top-level field(s)", unknown.Text, StringComparison.Ordinal);
+        Assert.Contains("2 top-level fields", unknown.Text, StringComparison.Ordinal);
 
         _ = _temp.WriteFile("migration-v9.json", "{ not json");
         var broken = InstallScriptPlan.ReadMigrationSummary(_temp.Path);
@@ -480,9 +480,8 @@ public sealed class InstallScriptPlanTests : IDisposable
         Assert.Equal(PostUpgradeLeftovers.AutostartId, row.Id);
         Assert.Equal(PreflightStatus.Warn, row.Status);
         Assert.Contains(RemovedStartup, row.Reason, StringComparison.Ordinal);
-        Assert.Contains("will not start when you sign in", row.Reason, StringComparison.Ordinal);
+        Assert.Contains("will not start at sign-in", row.Reason, StringComparison.Ordinal);
         Assert.Contains("auto-start setting", row.Reason, StringComparison.Ordinal);
-        Assert.Contains("does not change", row.Reason, StringComparison.Ordinal);
     }
 
     [Fact]

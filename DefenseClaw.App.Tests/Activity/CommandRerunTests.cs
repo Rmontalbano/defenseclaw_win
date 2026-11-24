@@ -289,7 +289,7 @@ public sealed class CommandRerunTests : IDisposable
         var reload = _rerun.ReviewFor(Finished(Gateway, 0, "policy", "reload"));
 
         Assert.True(teardown.IsDestructive);
-        Assert.Contains("pristine backup", teardown.Summary, StringComparison.Ordinal);
+        Assert.Contains("restores the agent's config from backup", teardown.Summary, StringComparison.Ordinal);
         Assert.Contains("audit database", teardown.Summary, StringComparison.Ordinal);
         Assert.Equal(CommandTier.StateChanging, reload.Tier);
         Assert.Contains("reload its OPA policies", reload.Summary, StringComparison.Ordinal);

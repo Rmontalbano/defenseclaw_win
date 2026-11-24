@@ -144,7 +144,7 @@ public sealed class EventStreamActionableTests : IDisposable
         Assert.Equal("block", row.Action);
         Assert.Equal("api.example.test", row.Target);
         Assert.Equal("egress", row.EventType);
-        Assert.Equal("egress.decided block — host is not on the allow list", row.Message);
+        Assert.Equal("egress.decided block: host is not on the allow list", row.Message);
         Assert.True(row.IsActionable);
     }
 

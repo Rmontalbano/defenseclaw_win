@@ -116,7 +116,7 @@ public sealed class StatusStripChipTests : IDisposable
         Assert.Equal(tone, chip.Tone);
         Assert.Equal(name, chip.AutomationName);
         Assert.Equal(StripChipKind.State, chip.Kind);
-        Assert.Contains("Overview", chip.ToolTip, StringComparison.Ordinal);
+        Assert.Contains("/health", chip.ToolTip, StringComparison.Ordinal);
     }
 
     [Theory]

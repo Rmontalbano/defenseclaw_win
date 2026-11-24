@@ -58,12 +58,12 @@ public sealed class WebhooksViewModel : SetupResourceViewModel
 
     protected override string TipFor(SetupVerb verb) => verb switch
     {
-        SetupVerb.Add => "Opens the setup wizard for Slack, PagerDuty, Webex or a generic webhook. The command is shown first.",
-        SetupVerb.Enable => "Turn this webhook on. The command is shown first.",
-        SetupVerb.Disable => "Turn this webhook off without deleting it. The command is shown first.",
-        SetupVerb.Test => "Sends one synthetic test event to this webhook. It arrives as a real message. The command is shown first.",
+        SetupVerb.Add => "Opens the setup wizard for Slack, PagerDuty, Webex or a generic webhook. Nothing runs until you confirm.",
+        SetupVerb.Enable => "Turn this webhook on. Nothing runs until you confirm.",
+        SetupVerb.Disable => "Turn this webhook off without deleting it. Nothing runs until you confirm.",
+        SetupVerb.Test => "Sends one synthetic test event to this webhook. It arrives as a real message. Nothing runs until you confirm.",
         SetupVerb.Show => "Read this webhook with the CLI's show command. It only reads.",
-        SetupVerb.Remove => "Delete this webhook from config.yaml. The command is shown first.",
+        SetupVerb.Remove => "Delete this webhook from config.yaml. Nothing runs until you confirm.",
         _ => string.Empty,
     };
 

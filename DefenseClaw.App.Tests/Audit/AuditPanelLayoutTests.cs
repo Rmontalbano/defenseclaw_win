@@ -202,7 +202,7 @@ public class AuditPanelLayoutTests
             expander.IsExpanded = true;
             scene.Host.Relayout();
             var combos = VisualTree.Descendants<ComboBox>(expander).Select(c => System.Windows.Automation.AutomationProperties.GetName(c)).ToList();
-            Assert.Equal(new[] { "Bucket", "Minimum severity", "Connector", "Time range", "Action, pick to fill the action filter" }, combos);
+            Assert.Equal(new[] { "Bucket", "Minimum severity", "Connector", "Time range", "Action, select to fill the action filter" }, combos);
             Assert.True(VisualTree.Descendants<ComboBox>(expander).All(c => c.IsVisible));
             scene.Render("audit-1400x900-presets-filters-open");
             expander.IsExpanded = false;

@@ -70,7 +70,7 @@ public sealed partial record TelemetryFacts(TelemetryCondition Condition, string
                         " failing. These are exporters and do not hold the local audit history. The Overview's Observability card names them.");
                 }
 
-                return new TelemetryFacts(TelemetryCondition.Healthy, "Running; no destination is failing.");
+                return new TelemetryFacts(TelemetryCondition.Healthy, "Running. No destination is failing.");
 
             case "error":
                 var reasons = new List<string>();
@@ -105,7 +105,7 @@ public sealed partial record TelemetryFacts(TelemetryCondition Condition, string
                 return new TelemetryFacts(TelemetryCondition.Off, "Telemetry is " + state + ".");
 
             default:
-                return new TelemetryFacts(TelemetryCondition.Transitional, state.Length > 0 ? "Telemetry is " + state + "; Refresh in a moment." : "Telemetry state not readable.");
+                return new TelemetryFacts(TelemetryCondition.Transitional, state.Length > 0 ? "Telemetry is " + state + ". Select Refresh in a moment." : "Telemetry state not readable.");
         }
     }
 
@@ -197,7 +197,7 @@ public sealed record ReleaseIdentity(ReleaseIdentityKind Kind, string Text)
                 $"Official release {shown}: the installer verified the sigstore signature on the release's checksums.txt and every asset against it." + script),
             TranscriptAssetCheck.ChecksumsOnly => new ReleaseIdentity(
                 ReleaseIdentityKind.OfficialChecksums,
-                $"Release {shown}: every asset matched the release's checksums.txt. Its signature was not verified because cosign is not installed, so the signer is not proven." + script),
+                $"Release {shown}: every asset matched the release's checksums.txt. The signature was not verified because cosign is not installed." + script),
             _ => new ReleaseIdentity(
                 ReleaseIdentityKind.NotVerified,
                 $"Reports {shown}. The install log does not show how the release was checked, and a version number alone does not make a build official." + script),
@@ -251,7 +251,7 @@ public static class UpgradeVerdicts
             if (run.Exit.Outcome == InstallOutcome.Refused)
             {
                 return new UpgradeVerdict(UpgradeResultState.InstallerFailed, "Rollback refused; nothing changed", "Warn",
-                    "install.ps1 -Rollback refused before it changed anything, so nothing on this machine was changed. The current install is still the live one. " +
+                    "install.ps1 -Rollback refused before it changed anything, so nothing on this machine was changed. The current install is still live. " +
                     "The installer's reason and next step are above.");
             }
 
@@ -320,15 +320,15 @@ public static class UpgradeVerdicts
             if (transcript.GuardrailOff)
             {
                 return new UpgradeVerdict(UpgradeResultState.NeedsAttention, "Installed; protection is off", "Warn",
-                    "Installed. Protection is off in the kept config (guardrail.enabled = false), so the installer did not start the gateway and agent hooks " +
-                    "are not guarded. To turn it on, run defenseclaw setup guardrail");
+                    "Installed. guardrail.enabled is false, so the gateway was not started and agent hooks " +
+                    "are not guarded. To enable it, run defenseclaw setup guardrail");
             }
 
             return transcript.GatewayLeftStopped
                 ? new UpgradeVerdict(UpgradeResultState.NeedsAttention, "Installed; gateway not started", "Warn",
-                    "Installed. The gateway was not running before the upgrade, so the installer did not start it; agent hooks are not guarded until it runs.")
+                    "Installed. The gateway was not running before the upgrade, so the installer did not start it. Agent hooks are not guarded until it runs.")
                 : new UpgradeVerdict(UpgradeResultState.GatewayStartFailed, "Installed; gateway not running", "Bad",
-                    "The installer reports success, but the gateway is not answering (" + facts.GatewayText + "). Start it, then check again.");
+                    "The installer reports success, but the gateway is not answering (" + facts.GatewayText + "). Start it, then select Check again.");
         }
 
         if (facts.GatewayOwnerVerified != true)
@@ -365,7 +365,7 @@ public static class UpgradeVerdicts
         if (mismatches.Count > 0)
         {
             return new UpgradeVerdict(UpgradeResultState.NeedsAttention, "Installed; version differs", "Warn",
-                $"The installer reports success, but {string.Join(" and ", mismatches)}, not {expected}. Open a new terminal or restart this app so the updated PATH is read, then check again.");
+                $"The installer reports success, but {string.Join(" and ", mismatches)}, not {expected}. Open a new terminal or restart this app, then check again.");
         }
 
         if (run.Exit.Outcome == InstallOutcome.InstalledNeedsAttention)

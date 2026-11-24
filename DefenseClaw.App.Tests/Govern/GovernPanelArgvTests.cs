@@ -443,7 +443,7 @@ public sealed class GovernPanelArgvTests : IDisposable
 
     [Theory]
     [InlineData("", "npx", "", "", "", "", "Enter a server name")]
-    [InlineData("n", "", "", "", "", "", "either a command")]
+    [InlineData("n", "", "", "", "", "", "Enter a command for a local server or a URL")]
     [InlineData("n", "npx", "https://h.example.test", "", "", "", "not both")]
     [InlineData("n", "", "ftp://h.example.test", "", "", "", "http:// or https://")]
     [InlineData("n", "", "not a url", "", "", "", "http:// or https://")]

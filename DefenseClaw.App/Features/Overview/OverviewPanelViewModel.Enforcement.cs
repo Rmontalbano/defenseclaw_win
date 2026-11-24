@@ -223,7 +223,7 @@ public sealed partial class OverviewPanelViewModel
         var guardrail = Services.Config.Config.Guardrail;
         var mode = GuardrailModeText();
         GuardrailTile.Set(
-            mode is null ? "Guardrail" : $"Guardrail - {mode}",
+            mode is null ? "Guardrail" : $"Guardrail · {mode}",
             guardrail.Enabled ? "ON" : "OFF",
             guardrail.Enabled ? "Ok" : "Neutral",
             "Current configuration");

@@ -190,7 +190,7 @@ public sealed partial class OverviewPanelViewModel
         var rows = new List<(string Label, string Value)>
         {
             ("Applies to", (EffectivePolicyUser.Length > 0 ? EffectivePolicyUser : "this account") + (connector.Length > 0 ? " on " + connector : string.Empty)),
-            ("Profile", policy.ProfilesConfigured ? policy.Profile : "none configured; base configuration applies"),
+            ("Profile", policy.ProfilesConfigured ? policy.Profile : "none configured, so base configuration applies"),
         };
         Add(rows, "Matched by", policy.Match);
         Add(rows, "Mode", policy.Mode);

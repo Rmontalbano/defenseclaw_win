@@ -304,7 +304,7 @@ public sealed class GatewayAdminServiceTests
 
         var start = await rig.Service.PlanAsync(GatewayAction.Start, CancellationToken.None);
         Assert.Equal(
-            "The installed gateway differs from the administrator copy. Choose Restart Gateway as Administrator to use the installed version. No gateway action was performed.",
+            "The installed gateway differs from the administrator copy. Select Restart Gateway as Administrator to use the installed version. No gateway action was performed.",
             start.Refusal);
 
         // The release the installed gateway would be checked against is that of the new bytes; here it is not the same as the installed file.

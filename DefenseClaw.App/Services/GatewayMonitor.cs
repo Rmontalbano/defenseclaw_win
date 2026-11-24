@@ -1179,7 +1179,7 @@ public sealed class GatewayMonitor : IDisposable, IGatewaySnapshotSource, IPollF
         else if (state is AppGatewayState.GatewayStopped or AppGatewayState.NotInstalled or AppGatewayState.NotInitialized)
         {
             _lastAlerts = Array.Empty<GatewayAlert>();
-            _lastAlertsUnavailable = "The gateway is not answering; alerts are unavailable.";
+            _lastAlertsUnavailable = "The gateway is not answering. Alerts are unavailable.";
             _lastAlertsStatus = null;
 
             // Nothing is serving /status, so the runtime hook contract is unknowable and a
@@ -1383,7 +1383,7 @@ public sealed class GatewayMonitor : IDisposable, IGatewaySnapshotSource, IPollF
             case GatewayStatus.Unauthorized:
                 _lastAlerts = Array.Empty<GatewayAlert>();
                 _lastAlertsUnavailable =
-                    $"/alerts needs a bearer token; none was found via {_services.Token.VariableName}." +
+                    $"/alerts needs a bearer token. None was found via {_services.Token.VariableName}." +
                     (_services.Token.Note is { } note ? $" {note}" : string.Empty);
                 break;
 

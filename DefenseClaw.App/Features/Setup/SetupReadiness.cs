@@ -153,7 +153,7 @@ public static class SetupReadiness
         {
             checks.Add(new ReadinessCheck(
                 "Active Connector",
-                "No connector mode is configured. Add one from the setup cards below.",
+                "No connector mode is configured. Add one from the setup cards below. Claude Code and Codex are the Windows connectors.",
                 ReadinessStatus.Fail));
         }
 

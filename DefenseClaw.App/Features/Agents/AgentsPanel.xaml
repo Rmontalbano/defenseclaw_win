@@ -136,7 +136,7 @@
                                     PlaceholderText="agent id"
                                     Text="{Binding LookupText, UpdateSourceTrigger=PropertyChanged}"
                                     AutomationProperties.Name="Agent id to open"
-                                    AutomationProperties.HelpText="Type an agent id from a log, then press Open.">
+                                    AutomationProperties.HelpText="Type an agent id from a log, then select Open.">
                             <ui:TextBox.InputBindings>
                                 <KeyBinding Key="Return" Command="{Binding OpenLookupCommand}" />
                             </ui:TextBox.InputBindings>
@@ -228,7 +228,7 @@
                             <TextBlock Style="{StaticResource DcTextSecondary}"
                                        Margin="0,8,0,0"
                                        TextWrapping="Wrap"
-                                       Text="Pick an agent to see its subagents, timeline and blocks."
+                                       Text="Select an agent to see its subagents, timeline and blocks."
                                        Visibility="{Binding ShowPickHint, Converter={StaticResource BoolToVisibility}}" />
                         </StackPanel>
                     </Border>
@@ -277,7 +277,7 @@
                             <TextBlock Style="{StaticResource DcCaption}"
                                        TextWrapping="Wrap"
                                        Margin="0,0,0,6"
-                                       Text="Pick a subagent to see its timeline."
+                                       Text="Select a subagent to see its timeline."
                                        ToolTip="Each subagent shows how it was linked to its parent: reported, trace exact, derived or inferred. The link status is active, unresolved, conflicted, superseded or rejected."
                                        AutomationProperties.HelpText="Each subagent shows how it was linked to its parent: reported, trace exact, derived or inferred. The link status is active, unresolved, conflicted, superseded or rejected." />
                             <TreeView x:Name="AgentTree"

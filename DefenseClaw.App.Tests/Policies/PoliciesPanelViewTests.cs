@@ -68,7 +68,7 @@ public sealed class PoliciesPanelViewTests
             {
                 var toolbar = Assert.Single(VisualTree.Descendants<DcPageToolbar>(view));
                 Assert.Equal("Policies", toolbar.Title);
-                Assert.Equal("4 policies - active: default", toolbar.Caption);
+                Assert.Equal("4 policies · active: default", toolbar.Caption);
 
                 var grid = Assert.Single(VisualTree.Descendants<Wpf.Ui.Controls.DataGrid>(view));
                 Assert.Equal(4, grid.Items.Count);

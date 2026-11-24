@@ -215,7 +215,7 @@ public sealed partial class OverviewPanelViewModel : IAcceptsNavigation
             rows.Add(new AttentionRow
             {
                 Title = "Connector roster degraded",
-                Detail = rosterProblem.TrimEnd('.') + ". Check your connector config.",
+                Detail = rosterProblem.TrimEnd('.') + ". Check your connector config. This card shows a reduced view.",
                 SeverityKey = "Critical",
             });
         }
@@ -249,7 +249,7 @@ public sealed partial class OverviewPanelViewModel : IAcceptsNavigation
             rows.Add(new AttentionRow
             {
                 Title = "skill-scanner not on PATH",
-                Detail = "Not on PATH or in the installer's bin directory, so skill scans cannot run. Run the command below, then press Refresh.",
+                Detail = "Not on PATH or in the installer's bin directory, so skill scans cannot run. Run the command below, then select Refresh.",
                 SeverityKey = "High",
                 Command = InstallSkillScannerCommand,
             });

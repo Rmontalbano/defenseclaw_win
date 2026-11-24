@@ -218,7 +218,7 @@ public sealed partial class PoliciesPanelViewModel : PanelViewModelBase
             }
 
             var shown = Rows.Count == _all.Count ? $"{_all.Count} policies" : $"{Rows.Count} of {_all.Count} policies";
-            return ActiveName is { } active ? $"{shown} - active: {active}" : $"{shown} - none active";
+            return ActiveName is { } active ? $"{shown} · active: {active}" : $"{shown} · none active";
         }
     }
 

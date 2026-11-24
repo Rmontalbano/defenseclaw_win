@@ -29,7 +29,7 @@ public static partial class WizardStepFactory
         {
             AllowPrivateNetworksFlag => field.WithWording(
                 "Allow a private or loopback endpoint",
-                "Off by default, and without it the CLI refuses an endpoint on this computer or a private network. Turn it on only for a collector you run yourself. " +
+                "Off by default, and the CLI then refuses an endpoint on this machine or a private network. Turn it on only for a collector you run. " +
                 "For the bundled local stack, use the local-otlp preset instead."),
             PlaintextFlag => field.WithWording(
                 "Send without TLS",

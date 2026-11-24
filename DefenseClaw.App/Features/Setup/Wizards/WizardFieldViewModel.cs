@@ -114,6 +114,11 @@ public sealed partial class WizardFieldViewModel : ObservableObject
 
     public string Help => Field.Help;
 
+    /// <summary>The help line and its details, for the tooltip and the screen reader.</summary>
+    public string HelpWithDetails => Field.Details.Length == 0 ? Field.Help : Field.Help + " " + Field.Details;
+
+    public string Details => Field.Details;
+
     public string Placeholder => Field.Placeholder;
 
     /// <summary>The flag this answer becomes, shown small under the label so nothing is implicit.</summary>
@@ -253,7 +258,7 @@ public sealed partial class WizardFieldViewModel : ObservableObject
 
     /// <summary>The password box's tooltip: where the value goes, said for the route in use.</summary>
     public string EntryToolTip => OffersKeysSetEntry
-        ? "Stored by the keys set prompt when you press Execute. It is not put on a command line."
+        ? "Stored by the keys set prompt when you select Execute. It is not put on a command line."
         : "Supplied to the command as an environment variable for one run. It is not put on the command line.";
 
     public bool HasEntryProblem => EntryProblem.Length > 0;
@@ -271,7 +276,6 @@ public sealed partial class WizardFieldViewModel : ObservableObject
             if (OffersKeysSetEntry)
             {
                 return $"Type it here. Execute stores it with `defenseclaw keys set {CredentialEnvName}` and then runs the command below, which reads it by name. " +
-                       "Both commands are on the review page. " +
                        "The value stays out of command lines, Activity and this output, and the box is cleared after use.";
             }
 
@@ -290,7 +294,7 @@ public sealed partial class WizardFieldViewModel : ObservableObject
     public string EntryStatus => EntryProblem.Length > 0
         ? EntryProblem
         : HasEntry && OffersKeysSetEntry
-            ? $"A value is entered (hidden). Execute stores it as {CredentialEnvName} first, then runs the command. Nothing runs before you press Execute."
+            ? $"A value is entered (hidden). Execute stores it as {CredentialEnvName} first, then runs the command. Nothing runs before you select Execute."
             : HasEntry
             ? $"A value is entered (hidden). It goes to the command as {InAppEnvName}, then is cleared." +
               (PersistSentence.Length > 0 ? " " + PersistSentence : string.Empty)
@@ -358,7 +362,7 @@ public sealed partial class WizardFieldViewModel : ObservableObject
             }
 
             return HasEntry
-                ? $"Supplied to the command as the environment variable {InAppEnvName}=••• (value masked, this run only, not on the command line)." +
+                ? $"Supplied to the command as the environment variable {InAppEnvName}=••• for this run only. The value is masked and not on the command line." +
                   (PersistSentence.Length > 0 ? " " + PersistSentence : string.Empty)
                 : $"Nothing entered here. The command reads {(CredentialEnvName.Length > 0 ? CredentialEnvName : InAppEnvName)} from ~/.defenseclaw/.env if it is stored. Go back to type a value.";
         }
@@ -523,7 +527,7 @@ public sealed partial class WizardFieldViewModel : ObservableObject
 
         // null means the console opened; anything else is the reason it did not.
         CredentialMessage = _credentials.OpenKeysSetTerminal(CredentialEnvName) ??
-            "A console window opened. Paste the value at its hidden prompt, then come back here and press Re-check.";
+            "A console window opened. Paste the value at its hidden prompt, then come back here and select Re-check.";
     }
 
     [RelayCommand]

@@ -119,7 +119,7 @@ public static class ConnectorStartHealth
                     : ConnectorSkipKind.SetupFailed;
                 if (kind == ConnectorSkipKind.SetupFailed && reason.Length == 0)
                 {
-                    reason = $"setup failed when the gateway started, so it is not enforced; see gateway.log, then run: defenseclaw setup {name}";
+                    reason = $"setup failed when the gateway started, so it is not enforced. See gateway.log, then run: defenseclaw setup {name}";
                 }
 
                 result.Add(new ConnectorSkip(name, kind, reason, repairs.GetValueOrDefault(name)));

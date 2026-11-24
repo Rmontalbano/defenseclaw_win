@@ -23,8 +23,8 @@ public static partial class WizardStepFactory
         // out exactly as before.
         var protocol = DecisionModelHasProtocol(help);
 
-        WizardField? F(string flag, string label, string text, string? placeholder = null) =>
-            FieldOf(help, flag, f => f.WithWording(label, text).WithHelp(text, placeholder));
+        WizardField? F(string flag, string label, string text, string? placeholder = null, string? details = null) =>
+            FieldOf(help, flag, f => (details is null ? f.WithWording(label, text) : f.WithWording(label, text).WithDetails(details)).WithHelp(text, placeholder));
 
         var steps = new List<WizardStep>
         {
@@ -62,12 +62,13 @@ public static partial class WizardStepFactory
                 F(
                     "--api-key-env",
                     "Token variable name",
+                    "The name of the variable that holds the token. Blank means DEFENSECLAW_DECISION_MODEL_KEY.",
+                    "DEFENSECLAW_DECISION_MODEL_KEY",
                     protocol
-                        ? "The NAME of the variable that holds the token, DEFENSECLAW_DECISION_MODEL_KEY if blank. A local server needs none, and Gemini Decision 1 takes a Google AI Studio key sent as x-goog-api-key. " +
+                        ? "A local server needs none, and Gemini Decision 1 takes a Google AI Studio key sent as x-goog-api-key. " +
                           "Never type the token here. Store it with `defenseclaw keys set DEFENSECLAW_DECISION_MODEL_KEY` in a terminal, which writes ~/.defenseclaw/.env, then restart the gateway."
-                        : "The NAME of the variable that holds the bearer token, DEFENSECLAW_DECISION_MODEL_KEY if blank. A local server needs none. " +
-                          "Never type the token here. Store it with `defenseclaw keys set DEFENSECLAW_DECISION_MODEL_KEY` in a terminal, which writes ~/.defenseclaw/.env, then restart the gateway.",
-                    "DEFENSECLAW_DECISION_MODEL_KEY"),
+                        : "A local server needs none. " +
+                          "Never type the token here. Store it with `defenseclaw keys set DEFENSECLAW_DECISION_MODEL_KEY` in a terminal, which writes ~/.defenseclaw/.env, then restart the gateway."),
                 F(
                     "--show",
                     "Only show the current settings",
@@ -146,16 +147,14 @@ public static partial class WizardStepFactory
             DefaultValue = DecisionModelCard.KeepConnectors,
             BaselineValue = DecisionModelCard.KeepConnectors,
             IsSynthetic = true,
-            Help = protocol
-                ? "The decision model answers on its own for the connectors in this list, where the LLM judge does not run. A confident block is denied when its risk score is at or above decision_model.block_risk_score. A confident allow is allowed, " +
-                  "and anything else asks (Claude Code, Copilot, Amp, Antigravity) or raises a HIGH alert (strict mode blocks). " +
+            Help = "Connectors listed here use the decision model where the LLM judge does not run.",
+            Details = protocol
+                ? "A confident block is denied when its risk is at or above the block threshold and its risk score is at or above decision_model.block_risk_score, on a call the rules did not flag. " +
+                  "A confident allow is allowed. Anything else asks (Claude Code, Copilot, Amp, Antigravity) or raises a HIGH alert (strict mode blocks). " +
                   "Where the judge runs, every confident block goes to it and stands if it gives no verdict, and flow_guard can withdraw a confident allow. " +
-                  "The last 25 turns (decision_model.history_turns) are sent. " +
-                  "Each connector is on one of three paths: rules only, rules then decision model, or rules then decision model then judge."
-                : "The decision model answers on its own for the connectors in this list, where the LLM judge does not run. A confident allow is allowed, " +
-                  "a confident block is denied, and anything else asks (Claude Code, Copilot, Amp, Antigravity) or raises a HIGH alert (strict mode blocks). " +
-                  "Where the judge runs, the model allows clear benign calls and sends the rest to it. " +
-                  "Each connector is on one of three paths: rules only, rules then decision model, or rules then decision model then judge.",
+                  "The last 25 turns (decision_model.history_turns) are sent."
+                : "A confident allow is allowed and a confident block is denied. Anything else asks (Claude Code, Copilot, Amp, Antigravity) or raises a HIGH alert (strict mode blocks). " +
+                  "Where the judge runs, the model allows the clear benign calls and sends the rest to it.",
         };
 
         var only = new WizardField

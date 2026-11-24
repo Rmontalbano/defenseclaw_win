@@ -148,10 +148,10 @@ public sealed class CatalogTrustConfigTests
     public void The_config_reason_is_the_house_sentence_and_names_what_it_is_about()
     {
         Assert.Equal(
-            "Changes are off: config.yaml or .env changed after this list was read. Refresh to act on current data.",
+            "Changes are off: config.yaml or .env changed after this list was read. Select Refresh to act on current data.",
             CatalogTrust.ConfigChangedReason());
         Assert.Equal(
-            "Changes are off: config.yaml or .env changed after these settings were read. Refresh to act on current data.",
+            "Changes are off: config.yaml or .env changed after these settings were read. Select Refresh to act on current data.",
             CatalogTrust.ConfigChangedReason("these settings were read"));
     }
 

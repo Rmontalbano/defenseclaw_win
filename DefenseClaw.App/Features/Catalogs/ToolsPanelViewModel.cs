@@ -60,8 +60,8 @@ public sealed partial class ToolsPanelViewModel : GovernPanelViewModelBase
     protected override string BuildEmptyTitle(string scope) => $"No tool rules for {scope}";
 
     protected override string BuildEmptyDetail(string scope) =>
-        "This list shows only tools that were blocked or allowed by name; every tool still gets the normal scan. " +
-        "Use “Manage a tool by name” below to add a rule or check one.";
+        "Only tools with a name rule are listed. All tools are still scanned. " +
+        "Add or check a rule under “Manage a tool by name”.";
 
     protected override GovernRow? ParseRow(JsonElement item, string? groupConnector)
     {
@@ -194,9 +194,9 @@ public sealed partial class ToolsPanelViewModel : GovernPanelViewModelBase
     protected override string? NoteFor(GovernVerbs verb, GovernRow row) => verb switch
     {
         GovernVerbs.Block =>
-            "Blocks the tool at runtime for the scope shown. Resolution order: block @connector/tool, allow @connector/tool, block tool, allow tool, then the normal scan.",
+            "Blocks the tool at runtime for the scope shown. Order: block @connector/tool, allow @connector/tool, block tool, allow tool, normal scan.",
         GovernVerbs.Allow =>
-            "An allowed tool skips rule, pattern and judge scanning. Write tools still get CodeGuard. Resolution order: block @connector/tool, allow @connector/tool, block tool, allow tool, then the normal scan.",
+            "An allowed tool skips rule, pattern and judge scans. Write tools still get CodeGuard. Order: block @connector/tool, allow @connector/tool, block tool, allow tool, normal scan.",
         GovernVerbs.Unblock => "Removes the rule only. The tool goes back to the normal scan.",
         _ => base.NoteFor(verb, row),
     };

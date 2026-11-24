@@ -119,7 +119,7 @@ internal sealed class AdminHelper
         }
         else if (verb != AdminVerb.InstallCopy)
         {
-            return Finish(AdminExit.Refused, "Refused: this helper does not run from " + layout.HelperDirectory + ". Choose Prepare administrator copy once. That installs it there.");
+            return Finish(AdminExit.Refused, "Refused: this helper does not run from " + layout.HelperDirectory + ". Select Prepare administrator copy once. That installs it there.");
         }
 
         canRecord = atHome;
@@ -382,7 +382,7 @@ internal sealed class AdminHelper
 
         if (!string.Equals(installed, copy.Sha256, StringComparison.OrdinalIgnoreCase))
         {
-            lines.Add("Refused: The installed gateway differs from the administrator copy. Choose Restart Gateway as Administrator to use the installed version. No gateway action was performed.");
+            lines.Add("Refused: The installed gateway differs from the administrator copy. Select Restart Gateway as Administrator to use the installed version. No gateway action was performed.");
             return AdminExit.Refused;
         }
 
@@ -457,7 +457,7 @@ internal sealed class AdminHelper
         var copy = _inspector.InspectGatewayCopy(layout);
         if (!copy.Exists)
         {
-            lines.Add("Refused: there is no administrator copy of the gateway yet. Choose Prepare administrator copy first. No gateway action was performed.");
+            lines.Add("Refused: there is no administrator copy of the gateway yet. Select Prepare administrator copy first. No gateway action was performed.");
             return null;
         }
 

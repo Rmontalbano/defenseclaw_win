@@ -100,7 +100,7 @@ public sealed class UpdatesTrustPanelTests : IDisposable
         Assert.Equal("Neutral", badge);
         Assert.Contains("checksums.txt.bundle", detail, StringComparison.Ordinal);
         Assert.Contains("but not yet verified", detail, StringComparison.Ordinal);
-        Assert.Contains("verifies it with cosign when cosign is installed", detail, StringComparison.Ordinal);
+        Assert.Contains("checks the signature when cosign is installed", detail, StringComparison.Ordinal);
         Assert.Contains("does not prove the project signed it", detail, StringComparison.Ordinal);
         Assert.DoesNotContain("signed with sigstore", label + detail, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("verified (cosign)", label, StringComparison.Ordinal);

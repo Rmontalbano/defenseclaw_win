@@ -37,11 +37,11 @@ public static class CoworkProtectionFacts
 
     /// <summary>
     /// The uninstall and reset sentence from 1.0.9 (cmd_uninstall.py@1.0.9:509-512 <c>_COWORK_REMOVAL_STEP</c>): a plugin built with 1.0.9 lets Cowork calls run
-    /// after the data folder is removed; older plugins may block. <see cref="RemovePluginStep"/> stays the 1.0.8 sentence.
+    /// after the data folder is removed. Older plugins may block. <see cref="RemovePluginStep"/> stays the 1.0.8 sentence.
     /// </summary>
     public const string RemovePluginStepRunsAfterRemoval =
         "DefenseClaw cannot remove its Cowork plugin from your Claude account: remove it in Claude Desktop (Customize > Plugins, then the ... menu > Remove). " +
-        "A plugin built with 1.0.9 lets Cowork calls run after the data folder is removed; older plugins may block.";
+        "A plugin built with 1.0.9 lets Cowork calls run after the data folder is removed. Older plugins may block.";
 
     /// <summary>The remove-plugin sentence for a runtime whose plugin does (1.0.9) or does not (1.0.8) keep running after the data folder is removed.</summary>
     public static string RemovePluginStepFor(bool pluginRunsAfterRemoval) =>
@@ -76,7 +76,7 @@ public static class CoworkProtectionFacts
     /// at 1.0.8), which adds Claude Code's hooks and restarts the gateway.
     /// </summary>
     public const string ClaudeCodeTooMessage =
-        "Claude Code is not a configured connector on this machine. Cowork needs it, so this command also adds the DefenseClaw hooks to Claude Code's settings " +
+        "Claude Code is not a configured connector here. Cowork needs it, so this command also adds the DefenseClaw hooks to Claude Code's settings " +
         "and restarts the gateway. Cancel here if you do not want that.";
 
     /// <summary>

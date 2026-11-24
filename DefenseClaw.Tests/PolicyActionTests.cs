@@ -228,7 +228,7 @@ public sealed class PolicyActionTests
         Assert.Equal("Switch claudecode to observe mode?", toObserve.Consequence.Heading);
         Assert.Equal("action \u2192 observe", toObserve.Consequence.Summary);
         Assert.Equal("This weakens protection: claudecode stops blocking and only logs findings. Its hooks fail open while the gateway is down unless their fail mode is closed.", toObserve.Consequence.Warning);
-        Assert.Contains("Only this connector changes; the others keep their mode. A running gateway restarts.", toObserve.Consequence.Details);
+        Assert.Contains("Only this connector changes. The others keep their mode. A running gateway restarts.", toObserve.Consequence.Details);
 
         // codex observes already; going to action is stricter
         var codexToAction = model.Actions("posture", "codex").Single(a => a.Kind == PolicyActionKind.Mode && a.Argv.Contains("action"));
@@ -331,7 +331,7 @@ public sealed class PolicyActionTests
         Assert.True(block["MEDIUM+"].IsCurrent);
         Assert.Equal(new[] { "policy", "edit", "guardrail", "--block-threshold", "4", "-p", "strict" }, block["CRITICAL"].Argv);
         Assert.Equal("This weakens protection: the policy blocks CRITICAL instead of MEDIUM+.", block["CRITICAL"].Consequence.Warning);
-        Assert.Contains("LLM traffic through the guardrail proxy only; tool calls keep each scope's levels (Posture view).", block["CRITICAL"].Consequence.Details);
+        Assert.Contains("LLM traffic through the guardrail proxy only. Tool calls keep each scope's levels (Posture view).", block["CRITICAL"].Consequence.Details);
         Assert.Contains("The gateway reloads the policy.", block["CRITICAL"].Consequence.Details);
         Assert.Contains("The built-in strict policy is copied to your policy folder first.", block["CRITICAL"].Consequence.Details);
 

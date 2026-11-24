@@ -138,7 +138,7 @@ public sealed class LocalStackAvailabilityTests
     [Theory]
     [InlineData(DockerState.NotInstalled, "Docker was not found on this machine's PATH.")]
     [InlineData(DockerState.EngineDown, "Docker is installed but its engine is not running. Start Docker Desktop and wait for it to say it is running.")]
-    [InlineData(DockerState.ComposeMissing, "Docker Compose v2 is not available (docker compose version failed). Install or enable the Compose plugin; Docker Desktop includes it.")]
+    [InlineData(DockerState.ComposeMissing, "Docker Compose v2 is not available (docker compose version failed). Install or enable the Compose plugin. Docker Desktop includes it.")]
     public async Task Every_definite_no_closes_it_and_gives_the_probes_own_reason(DockerState state, string summary)
     {
         var probe = new ManualDockerProbe();

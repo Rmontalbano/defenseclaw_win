@@ -366,7 +366,7 @@ public sealed class NotificationRoutingViewModelTests : IDisposable
         Row(vm, "hitl_approval").IsOn = false;
 
         Assert.Contains("Gateway desktop notifications", vm.ScopeNote, StringComparison.Ordinal);
-        Assert.Contains("Tray alerts are a separate setting (Settings, Notifications)", vm.ScopeNote, StringComparison.Ordinal);
+        Assert.Contains("Tray alerts are in Settings, Notifications", vm.ScopeNote, StringComparison.Ordinal);
         Assert.Contains("Tray alerts do not change", vm.BuildPlan()!.Summary, StringComparison.Ordinal);
         Assert.Contains("Tray alerts (Settings, Notifications) do not change.", NotificationSwitch.Explanation(turnOn: false), StringComparison.Ordinal);
     }

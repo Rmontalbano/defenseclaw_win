@@ -170,7 +170,7 @@ public class JudgeExtraBodyAndProvidersTests
         Assert.Null(ConfigFieldCatalog.Resolve("openshell.middleware.enabled", Older));
 
         var info = ConfigFieldCatalog.Resolve("openshell.middleware.enabled", Newer)!;
-        Assert.Equal("Retired in 1.0.8 and has no effect. config set refuses it. Remove it from config.yaml; files that still have it load.", info.ReadOnlyReason);
+        Assert.Equal("Retired in 1.0.8 and has no effect. config set refuses it. Remove it from config.yaml. Files that still have it load.", info.ReadOnlyReason);
     }
 
     [Fact]

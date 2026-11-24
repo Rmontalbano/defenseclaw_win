@@ -51,7 +51,7 @@ public sealed class InstallationSettingsTests : IDisposable
         var model = Build(Create());
 
         Assert.Equal("User default", model.InstallationSelectedBy);
-        Assert.Equal("Unmanaged — setup changes allowed", model.InstallationAccessText);
+        Assert.Equal("Unmanaged: setup changes allowed", model.InstallationAccessText);
         Assert.Equal("Ok", model.InstallationAccessTone);
         Assert.Equal(string.Empty, model.InstallationReason);
         Assert.False(model.HasInstallationReason);
@@ -64,7 +64,7 @@ public sealed class InstallationSettingsTests : IDisposable
         var model = Build(Create(TestInstallations.Managed(_temp.Path)));
 
         Assert.Equal("Managed installation (Cisco Secure Client)", model.InstallationSelectedBy);
-        Assert.Equal("Managed enterprise — read only", model.InstallationAccessText);
+        Assert.Equal("Managed enterprise: read only", model.InstallationAccessText);
         Assert.Equal("Medium", model.InstallationAccessTone);
         Assert.Equal(TestInstallations.ManagedReason, model.InstallationReason);
         Assert.True(model.HasInstallationReason);
@@ -77,7 +77,7 @@ public sealed class InstallationSettingsTests : IDisposable
         var model = Build(Create(TestInstallations.ManagedAt(_temp.Path)));
 
         Assert.Equal("DEFENSECLAW_HOME", model.InstallationSelectedBy);
-        Assert.Equal("Managed enterprise — read only", model.InstallationAccessText);
+        Assert.Equal("Managed enterprise: read only", model.InstallationAccessText);
         Assert.Equal(TestInstallations.ManagedReason, model.InstallationReason);
     }
 
@@ -87,7 +87,7 @@ public sealed class InstallationSettingsTests : IDisposable
         var model = Build(Create(TestInstallations.Invalid()));
 
         Assert.Equal("DEFENSECLAW_HOME", model.InstallationSelectedBy);
-        Assert.Equal("Invalid installation selection — read only", model.InstallationAccessText);
+        Assert.Equal("Invalid installation selection: read only", model.InstallationAccessText);
         Assert.Equal("High", model.InstallationAccessTone);
         Assert.Contains("absolute path", model.InstallationReason, StringComparison.Ordinal);
         Assert.True(model.HasInstallationReason);
@@ -99,7 +99,7 @@ public sealed class InstallationSettingsTests : IDisposable
         var model = Build(Create(TestInstallations.DeveloperRuntime()));
 
         Assert.Equal("Developer runtime selector (Settings → Connection → Installation)", model.InstallationSelectedBy);
-        Assert.Equal("Unmanaged — setup changes allowed", model.InstallationAccessText);
+        Assert.Equal("Unmanaged: setup changes allowed", model.InstallationAccessText);
         Assert.Equal(TestInstallations.DeveloperHome, model.InstallationOverride);
         Assert.False(model.HasInstallationReason);
     }
@@ -109,7 +109,7 @@ public sealed class InstallationSettingsTests : IDisposable
     {
         var services = Create();
         var model = Build(services);
-        Assert.Equal("Unmanaged — setup changes allowed", model.InstallationAccessText);
+        Assert.Equal("Unmanaged: setup changes allowed", model.InstallationAccessText);
 
         UiThread.Run(() =>
         {
@@ -118,14 +118,14 @@ public sealed class InstallationSettingsTests : IDisposable
             {
                 services.Installation.Replace(TestInstallations.ManagedByConfigMode());
 
-                Assert.Equal("Managed enterprise — read only", model.InstallationAccessText);
+                Assert.Equal("Managed enterprise: read only", model.InstallationAccessText);
                 Assert.Equal(TestInstallations.ManagedReason, model.InstallationReason);
                 Assert.True(model.HasInstallationReason);
                 Assert.False(model.CanChangeAutoStart);
 
                 services.Installation.Replace(TestInstallations.UserDefault());
 
-                Assert.Equal("Unmanaged — setup changes allowed", model.InstallationAccessText);
+                Assert.Equal("Unmanaged: setup changes allowed", model.InstallationAccessText);
                 Assert.False(model.HasInstallationReason);
                 Assert.True(model.CanChangeAutoStart);
             }

@@ -171,7 +171,7 @@ internal static class AlertToastPolicy
                     return new AlertToast($"{severity} finding", TargetLine(single.Target), floor, level);
                 }
 
-                return new AlertToast("New findings", Counted(critical, high, "new ") + " — open Alerts for detail.", floor, level);
+                return new AlertToast("New findings", Counted(critical, high, "new ") + ". Open Alerts for detail.", floor, level);
         }
     }
 

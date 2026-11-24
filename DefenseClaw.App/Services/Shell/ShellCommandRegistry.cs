@@ -186,7 +186,7 @@ internal static partial class ShellCommandRegistry
             Id: "app.run-doctor",
             Title: "Run health check",
             Category: MonitorCategory,
-            Description: "Open the Overview's Doctor card. Nothing runs until you press Run doctor.",
+            Description: "Open the Overview's Doctor card. Nothing runs until you select Run doctor.",
             Shortcut: ShellShortcuts.HealthCheckText,
             Keywords: "doctor run doctor health check diagnose probe fix problems keys credentials",
             IsEnabled: true,

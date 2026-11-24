@@ -356,7 +356,7 @@ public sealed partial class RedactionFormViewModel : ObservableObject
         RedactionOperation.ApplyDefaults => "Only the global default changes. A bucket, send policy or route that names its own profile keeps it.",
         RedactionOperation.DefaultsReset => "The default profile becomes none (no redaction) again, and every signal is collected, unless a bucket says otherwise.",
         RedactionOperation.BucketReset => "The bucket follows the global defaults again.",
-        RedactionOperation.ProfileSet => "A custom profile starts from sensitive, content or strict, and an untouched control keeps its setting. The CLI refuses preserve except for metadata and identifiers; credentials must be removed or replaced whole.",
+        RedactionOperation.ProfileSet => "A custom profile starts from sensitive, content or strict, and untouched controls keep that setting. The CLI refuses preserve except for metadata and identifiers. Remove or replace credentials whole.",
         RedactionOperation.ProfileRemove => "Fails while something still uses the profile, unless you choose another profile to take over.",
         RedactionOperation.DestinationSend => "Replaces the destination's routes and any earlier send policy with this one.",
         RedactionOperation.DestinationInherit => "Removes the destination's own send policy and routes. It then takes everything it can, with the default profile.",
@@ -380,8 +380,8 @@ public sealed partial class RedactionFormViewModel : ObservableObject
             }
 
             return _destinations.Any(static d => d.IsConfigurable)
-                ? "Built-in destinations (local-sqlite and the managed enterprise one) are read-only and not listed."
-                : "No destination of your own yet. Built-in local-sqlite is read-only, so there is nothing to choose. Add a destination in Setup, then refresh.";
+                ? "Built-in destinations, local-sqlite and the managed enterprise one, are read-only and not listed."
+                : "No destination of your own yet. Add one in Setup, then select Refresh. Built-in local-sqlite is read-only.";
         }
     }
 

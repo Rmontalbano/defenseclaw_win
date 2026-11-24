@@ -58,7 +58,7 @@ public sealed class RegistryBadgeViewTests
             // The chip says where it came from and what a click does; a screen reader gets the same in words.
             var chip = (Border)VisualTreeHelper.GetParent(badge);
             Assert.Contains("“corp-skills”", (string)chip.ToolTip, StringComparison.Ordinal);
-            Assert.Contains("Click to open its entry in Registries", (string)chip.ToolTip, StringComparison.Ordinal);
+            Assert.Contains("Select to open its entry in Registries", (string)chip.ToolTip, StringComparison.Ordinal);
             Assert.Equal("Promoted by registry corp-skills. Opens its entry in Registries.", AutomationProperties.GetName(badge));
 
             // A long id is cut as the TUI cuts it; the whole of it is in the tooltip.

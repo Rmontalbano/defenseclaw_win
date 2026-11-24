@@ -601,7 +601,7 @@ public sealed class InstallationRerunTests : IDisposable
     }
 
     [Theory]
-    [InlineData("checking", "Still checking the gateway; try again in a moment.")]
+    [InlineData("checking", "Still checking the gateway. Try again in a moment.")]
     [InlineData("stopped", "The gateway is not running, so there is no sidecar to reload the policies in.")]
     [InlineData("running", null)]
     public void On_a_writable_installation_the_same_policy_reload_row_gives_the_gateways_own_reason(string state, string? reason)

@@ -13,7 +13,7 @@ namespace DefenseClaw.App.Tests.Govern;
 /// </summary>
 public sealed class ReviewRunGuardTests : IDisposable
 {
-    private const string Reason = "Changes are off: config.yaml or .env changed after this list was read. Refresh to act on current data.";
+    private const string Reason = "Changes are off: config.yaml or .env changed after this list was read. Select Refresh to act on current data.";
 
     private readonly TempDirectory _temp = new();
     private readonly AppServices _services;
@@ -89,7 +89,7 @@ public sealed class ReviewRunGuardTests : IDisposable
         Assert.Equal(CommandReviewPhase.Finished, review.Phase);
         Assert.Equal("Bad", review.ResultKey);
         Assert.StartsWith("Not run. " + Reason, review.ResultText, StringComparison.Ordinal);
-        Assert.Contains("in the Activity panel", review.ResultText, StringComparison.Ordinal);
+        Assert.Contains("in Activity", review.ResultText, StringComparison.Ordinal);
         Assert.Null(review.ResultOutput);
 
         var steps = review.CommandReview!.Steps;

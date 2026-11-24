@@ -141,7 +141,7 @@ public sealed class FirstRunViewModelTests : IDisposable
         await vm.DetectCommand.ExecuteAsync(null);
 
         Assert.Empty(vm.Detected);
-        Assert.Contains("No AI discovery scan has been recorded", vm.DetectionNote, StringComparison.Ordinal);
+        Assert.Contains("No AI discovery scan is recorded yet", vm.DetectionNote, StringComparison.Ordinal);
         Assert.True(vm.HasDetectionNote);
         Assert.True(vm.CanReview);
     }

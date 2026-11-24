@@ -94,7 +94,7 @@ public sealed class JudgeHistoryTests : IDisposable
         await vm.InitializeAsync();
 
         Assert.Equal(new[] { "j-5", "j-4", "j-3", "j-2" }, vm.Items.Select(i => i.Id).ToArray());
-        Assert.Equal("Judge responses - last 4", vm.Title);
+        Assert.Equal("Judge responses · last 4", vm.Title);
         Assert.False(vm.HasBanner);
         Assert.False(vm.IsEmpty);
 
@@ -207,7 +207,7 @@ public sealed class JudgeHistoryTests : IDisposable
         Assert.Empty(vm.Items);
         Assert.True(vm.ShowError);
         Assert.False(vm.ShowGuidance);
-        Assert.Equal("Judge responses - error", vm.Title);
+        Assert.Equal("Judge responses · error", vm.Title);
     }
 
     [Fact]

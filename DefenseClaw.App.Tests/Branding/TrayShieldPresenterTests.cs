@@ -136,9 +136,9 @@ public sealed class TrayShieldPresenterTests
         Assert.Equal(new TrayShieldChange(Icon: true, Tooltip: true), change);
         Assert.Equal(new[] { new TrayShieldKey(ShieldState.Running, 0) }, scene.Created);
         _ = Assert.Single(scene.Assigned);
-        Assert.Equal("DefenseClaw — Running", Assert.Single(scene.Tooltips));
+        Assert.Equal("DefenseClaw · Running", Assert.Single(scene.Tooltips));
         Assert.Equal(new TrayShieldKey(ShieldState.Running, 0), scene.Presenter.Key);
-        Assert.Equal("DefenseClaw — Running", scene.Presenter.Tooltip);
+        Assert.Equal("DefenseClaw · Running", scene.Presenter.Tooltip);
     }
 
     [Fact]
@@ -177,9 +177,9 @@ public sealed class TrayShieldPresenterTests
         Assert.Equal(
             new[]
             {
-                "DefenseClaw — 10 unacknowledged findings\nRunning",
-                "DefenseClaw — 11 unacknowledged findings\nRunning",
-                "DefenseClaw — 500+ unacknowledged findings\nRunning",
+                "DefenseClaw · 10 unacknowledged findings\nRunning",
+                "DefenseClaw · 11 unacknowledged findings\nRunning",
+                "DefenseClaw · 500+ unacknowledged findings\nRunning",
             },
             scene.Tooltips);
     }
@@ -291,7 +291,7 @@ public sealed class TrayShieldPresenterTests
         // The shield is still the one that was showing, so the next update retries the swap instead of believing it was made.
         Assert.Equal(new TrayShieldKey(ShieldState.Running, 0), presenter.Key);
         Assert.False(Scene.IsDisposed(assigned[0]));
-        Assert.Equal("DefenseClaw — Monitoring paused", tooltips[^1]);
+        Assert.Equal("DefenseClaw · Monitoring paused", tooltips[^1]);
 
         fail = false;
         var retry = presenter.Update(Snapshot(paused: true), counts: null, scanning: false);

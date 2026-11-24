@@ -40,5 +40,5 @@ public static class WizardReview
         SecretFieldWarnings.ForArgv(
             argv,
             "This command cannot read it from an environment variable, so it goes on the command line. To keep it off, " +
-            "enter a placeholder here and set the real value in config.yaml afterwards in the Config editor.");
+            "enter a placeholder here and set the real value later in the Config editor.");
 }

@@ -51,7 +51,7 @@ public sealed class InstallTranscriptTests : IDisposable
         Assert.True(facts.PreviousRestored);
         Assert.False(facts.RestoreIncomplete);
         Assert.Equal(
-            "The 1.0.4 gateway did not become healthy within 90 s [09:02:31Z]; restoring 1.0.3 — DefenseClaw 1.0.4 was not installed. Your previous install is back.",
+            "The 1.0.4 gateway did not become healthy within 90 s [09:02:31Z]; restoring 1.0.3 · DefenseClaw 1.0.4 was not installed. Your previous install is back.",
             facts.Reason);
         Assert.Equal(TranscriptAssetCheck.SignatureVerified, facts.AssetCheck);
         Assert.False(facts.LocalAssets);
@@ -68,7 +68,7 @@ public sealed class InstallTranscriptTests : IDisposable
             "  x DefenseClaw 1.0.4 was not installed. Your previous install is back. Log: " + Log));
 
         Assert.Equal(
-            @"Access to the path '~\.defenseclaw\venv\Lib\site-packages\x.pyd' is denied. — DefenseClaw 1.0.4 was not installed. Your previous install is back.",
+            @"Access to the path '~\.defenseclaw\venv\Lib\site-packages\x.pyd' is denied. · DefenseClaw 1.0.4 was not installed. Your previous install is back.",
             facts.Reason);
         Assert.DoesNotContain("operator", facts.Reason, StringComparison.Ordinal);
         Assert.DoesNotContain("SYNTH", facts.Reason, StringComparison.Ordinal);
@@ -209,9 +209,9 @@ public sealed class InstallTranscriptTests : IDisposable
     }
 
     [Theory]
-    [InlineData("someone else's body", "settings.json — rewritten since")]
-    [InlineData("old body", "settings.json — never applied")]
-    [InlineData("new body", "settings.json — finished; only leftovers remain")]
+    [InlineData("someone else's body", "settings.json: rewritten since")]
+    [InlineData("old body", "settings.json: never applied")]
+    [InlineData("new body", "settings.json: finished, only leftovers remain")]
     public void The_pending_write_row_blocks_and_says_what_the_hash_check_found(string live, string expected)
     {
         SeedReceipt(live);

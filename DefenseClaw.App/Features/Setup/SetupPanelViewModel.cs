@@ -1565,7 +1565,7 @@ public sealed partial class WizardCardViewModel : ObservableObject
         : BaseToolTip;
 
     private string BaseToolTip => OpensEditor && IsAvailable
-        ? CommandHint + Environment.NewLine + "Opens the list; Add opens the wizard." +
+        ? CommandHint + Environment.NewLine + "Opens the list. Add opens the wizard." +
           (InstallationBlockedReason is { } readOnly ? " Changes are off: " + readOnly : string.Empty)
         : InstallationBlockedReason is { } blocked && (IsAvailable || UnavailableOnlyForLook)
         ? CommandHint + Environment.NewLine + blocked
@@ -1693,7 +1693,7 @@ public sealed class ConnectorChipViewModel
         _selfChangeBlocked = selfChangeBlocked;
         Name = name;
         Mode = string.IsNullOrWhiteSpace(mode) ? "mode unset" : mode.Trim().ToLowerInvariant();
-        FailMode = string.IsNullOrWhiteSpace(failMode) ? "fail-mode unset" : "fail-" + failMode.Trim().ToLowerInvariant();
+        FailMode = string.IsNullOrWhiteSpace(failMode) ? "fail mode unset" : "fail-" + failMode.Trim().ToLowerInvariant();
         HasMismatch = hasMismatch;
         FromConfig = fromConfig;
     }

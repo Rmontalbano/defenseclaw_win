@@ -110,7 +110,7 @@ public sealed partial class RegistriesPanelViewModel : IAcceptsNavigation
 
     /// <summary>The TUI's empty states: an Approved tab with nothing approved, and an Entries tab with nothing cached.</summary>
     public string EmptyEntriesText => IsApprovedTab
-        ? "No entries approved yet. Select an entry on the Entries tab and choose Approve."
+        ? "No entries approved yet. Select an entry on the Entries tab and select Approve."
         : "Sync a source to populate this view.";
 
     public bool HasSelectedTabEntry => SelectedTabEntry is not null;

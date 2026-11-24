@@ -154,14 +154,14 @@ internal sealed class SelfUpdateService : IDisposable
         var notes = new List<string>();
         if (_installer.IsDevelopmentFolder)
         {
-            notes.Add("This app runs from a build folder (publish or bin); the update replaces that build.");
+            notes.Add("This app runs from a build folder (publish or bin). The update replaces that build.");
         }
 
-        notes.Add("Administrator mode keeps its own copy of the helper under Program Files. This update replaces only the helper next to the app; the Program Files copy is refreshed by the next administrator-mode restart.");
+        notes.Add("This update replaces only the helper next to the app. Administrator mode keeps its own copy under Program Files, refreshed at its next restart.");
         var (hash, problem) = await _installer.FetchExpectedHashAsync(release, cancellationToken).ConfigureAwait(false);
         if (hash is not null && release.Zip?.Digest is null)
         {
-            notes.Add("GitHub published no digest for this file; it is checked against checksums.txt only.");
+            notes.Add("GitHub published no digest for this file. It is checked against checksums.txt only.");
         }
 
         return (hash, problem, notes);
@@ -273,7 +273,7 @@ internal sealed class SelfUpdateService : IDisposable
                 Notice?.Invoke(this, $"Updated to DefenseClaw for Windows {running}.");
                 break;
             case PostUpdateOutcome.NotApplied:
-                Notice?.Invoke(this, $"The update to {result.Version} was not applied; this is still {running}.");
+                Notice?.Invoke(this, $"The update to {result.Version} was not applied. This is still {running}.");
                 break;
         }
     }

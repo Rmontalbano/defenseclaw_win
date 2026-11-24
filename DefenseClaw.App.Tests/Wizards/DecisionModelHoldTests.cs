@@ -534,12 +534,12 @@ public sealed class DecisionModelHoldTests
         var definition = Definition();
 
         var connectors = definition.Steps.Single(s => s.Id == "decision-model-connectors");
-        Assert.Contains("rules", connectors.Fields[0].Help, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("decision model", connectors.Fields[0].Help, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("LLM judge", connectors.Fields[0].Help, StringComparison.Ordinal);
 
         var token = definition.AllFields.Single(f => f.Flag == "--api-key-env");
         Assert.Equal(WizardFieldKind.EnvVarName, token.Kind);
-        Assert.Contains("defenseclaw keys set DEFENSECLAW_DECISION_MODEL_KEY", token.Help, StringComparison.Ordinal);
+        Assert.Contains("defenseclaw keys set DEFENSECLAW_DECISION_MODEL_KEY", token.Details, StringComparison.Ordinal);
     }
 
     // ------------------------------------------------------------------ the review

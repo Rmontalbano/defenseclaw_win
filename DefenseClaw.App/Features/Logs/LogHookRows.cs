@@ -46,7 +46,7 @@ internal static partial class LogHookRows
             // The headline in place of the bare action word; IsActionable is the reader's and is not touched.
             message = DisplayRedaction.Text(
                 refusal.Reason.Length > 0
-                    ? $"{e.EventName} {refusal.Headline} — {refusal.Reason}"
+                    ? $"{e.EventName} {refusal.Headline}: {refusal.Reason}"
                     : $"{e.EventName} {refusal.Headline}");
             fields.Add(new LogField("Decided by", HookFailureRow.SourceLabel));
             if (refusal.Reason.Length > 0)

@@ -684,7 +684,7 @@ public sealed partial class OverviewPanelViewModel
             var circuit = Text(item, "circuit_state");
             if (Text(item, "kind") == "otlp" && retried > 0 && circuit is "open" or "half_open")
             {
-                parts.Add($"circuit {circuit}: not sending to this collector. A standard install keeps records queued and resends when it answers; a Secure Client install may drop some");
+                parts.Add($"circuit {circuit}: not sending to this collector. A standard install queues records and resends them. A Secure Client install may drop some");
             }
         }
 

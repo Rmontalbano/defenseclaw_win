@@ -123,7 +123,7 @@ public sealed class RuleLabelAlertsTests
         var row = Runtime(",\"rule\":\"CMD-X: t\",\"decision\":\"alert\"");
 
         var newer = AlertItem.FromRuntime(row).WithHookRows(Gate109, row);
-        Assert.Contains(newer.HookRowFacts, f => f.Name == "Call outcome" && f.Value == "Ran; recorded as an alert");
+        Assert.Contains(newer.HookRowFacts, f => f.Name == "Call outcome" && f.Value == "Ran, recorded as an alert");
 
         var older = AlertItem.FromRuntime(row).WithHookRows(Gate108, row);
         Assert.DoesNotContain(older.HookRowFacts, f => f.Name == "Call outcome");

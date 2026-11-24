@@ -308,7 +308,7 @@
                                    Appearance="Primary"
                                    Content="Set up DefenseClaw"
                                    Icon="{ctl:DcSymbolIcon ShieldCheckmark24}"
-                                   AutomationProperties.HelpText="Opens guided setup. Shows the exact commands first; nothing runs until you confirm."
+                                   AutomationProperties.HelpText="Opens guided setup. Shows the exact commands first. Nothing runs until you confirm."
                                    Command="{Binding OpenFirstRunCommand}" />
                         <Border Style="{StaticResource DcCodeBlock}" VerticalAlignment="Center">
                             <TextBox Style="{StaticResource DcMonoTextBox}"

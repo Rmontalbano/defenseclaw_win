@@ -394,7 +394,7 @@ public sealed partial class GuardrailControlsViewModel : ObservableObject
 
             OnPropertyChanged(nameof(HasJudgeRows));
             var gate = judge.GateAll ? "every hook connector" : judge.Gate.Count > 0 ? string.Join(", ", judge.Gate) : "no hook connector";
-            JudgeSummary = $"The judge is {(judge.JudgeEnabled == true ? "on" : "off")}. Hook lane: {gate}. Hook timeout: {(judge.HookTimeout.Length > 0 ? judge.HookTimeout : "unknown")}.";
+            JudgeSummary = $"The judge is {(judge.JudgeEnabled == true ? "on" : "off")}. Judged connectors: {gate}. Hook timeout: {(judge.HookTimeout.Length > 0 ? judge.HookTimeout : "unknown")}.";
             JudgeKey = judge.JudgeEnabled == true && (judge.GateAll || judge.Gate.Count > 0) ? "Ok" : "Neutral";
         }
         else if (_judge is not null)

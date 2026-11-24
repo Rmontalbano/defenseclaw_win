@@ -26,9 +26,9 @@ public static class InstallScriptPlan
     [
         "New audit history: the old audit.db is kept in %USERPROFILE%\\.defenseclaw\\previous\\data and the 1.0 database starts empty.",
         "Config moves to version 9. The old file is kept as config.yaml.v8.bak and the migration is written to migration-v9.json.",
-        "The Setup install is removed; its files are kept in %USERPROFILE%\\.defenseclaw\\previous\\legacy-setup.",
-        "The CLI moves to %USERPROFILE%\\.local\\bin (added to your user PATH).",
-        "The gateway is stopped, replaced and started again. The installer restores the previous install itself if the upgrade, the migration or the health check fails.",
+        "The Setup install is removed. Its files are kept in %USERPROFILE%\\.defenseclaw\\previous\\legacy-setup.",
+        "The CLI moves to %USERPROFILE%\\.local\\bin and is added to your user PATH.",
+        "The gateway is stopped, replaced and started again. The installer restores the previous install if the upgrade, migration or health check fails.",
         "Rollback is available afterwards, except that the installer cannot restore a DefenseClaw Setup install automatically. See the Roll back note.",
     ];
 
@@ -104,11 +104,11 @@ public static class InstallScriptPlan
             0 => new InstallExitInfo(InstallOutcome.Success, "Succeeded", "Ok", $"{what} finished (exit 0).", ChangedMachine: true, OffersRollback: !rollback),
             2 => new InstallExitInfo(
                 InstallOutcome.UsageError, "Not started", "Warn",
-                "install.ps1 refused its arguments (exit 2) before it changed anything. Nothing was changed; read the console and the log.",
+                "install.ps1 refused its arguments (exit 2) before it changed anything. Nothing was changed. Read the console and the log.",
                 ChangedMachine: false, OffersRollback: false),
             1 => new InstallExitInfo(
                 InstallOutcome.FailedRestored, "Failed", "Bad",
-                $"{what} did not finish (exit 1). The installer says it restores the previous install by itself; check the install log to see what it restored.",
+                $"{what} did not finish (exit 1). The installer says it restores the previous install. Check the install log to see what it restored.",
                 ChangedMachine: true, OffersRollback: !rollback),
             3 => new InstallExitInfo(
                 InstallOutcome.InstalledNeedsAttention, "Installed, needs attention", "Warn",
@@ -124,7 +124,7 @@ public static class InstallScriptPlan
                 ChangedMachine: true, OffersRollback: !rollback),
             var other => new InstallExitInfo(
                 InstallOutcome.Failed, "Failed", "Bad",
-                $"{what} failed (exit {(other ?? 0).ToString(CultureInfo.InvariantCulture)}). The installer restores the previous install automatically when it can; check the install log to see what state it left.",
+                $"{what} failed (exit {(other ?? 0).ToString(CultureInfo.InvariantCulture)}). The installer restores the previous install when it can. The install log shows what state it left.",
                 ChangedMachine: true, OffersRollback: !rollback),
         };
     }
@@ -154,8 +154,8 @@ public static class InstallScriptPlan
     /// (scripts/install.ps1:5536 in 1.0.5), so the refusals before that, such as another install or doctor run taking over the lock, are only in its console.
     /// </summary>
     public const string NoLogNote =
-        "No install log was found for this run. install.ps1 starts its log only after it takes the install lock, so a run without one usually " +
-        "stopped before it changed anything, for example because another install or doctor run was taking over the install lock. Its console window says why.";
+        "No install log was found for this run. install.ps1 logs only after it takes the install lock, so the run most likely stopped before it changed anything, " +
+        "for example because another install or doctor run held the lock. Its console window says why.";
 
     /// <summary><c>%USERPROFILE%\.defenseclaw\logs</c> under <paramref name="dataDirectory"/>.</summary>
     public static string LogDirectory(string dataDirectory) => Path.Combine(dataDirectory, "logs");
@@ -233,7 +233,7 @@ public static class InstallScriptPlan
 
     public const string AcceptCurrentInstallHint =
         "The installer finished nothing and says to run it again with -AcceptCurrentInstall. That keeps the config and connectors as they are now instead of " +
-        "restoring the earlier install's. Use it only if you changed them on purpose, and run the command it printed in a console. This app does not add the switch.";
+        "restoring the earlier install's. Use it only if you changed them on purpose, and run the command it printed in a console.";
 
     /// <summary>
     /// The one-line hint for a reason that names an unresolved connector recovery, or that tells the operator to run the installer again with
@@ -295,13 +295,13 @@ public static class InstallScriptPlan
         {
             if (new FileInfo(path).Length > MaxMigrationFileBytes)
             {
-                return new MigrationSummary(path, null, null, 0, "migration-v9.json is larger than this app reads; open it to read it.");
+                return new MigrationSummary(path, null, null, 0, "migration-v9.json is larger than this app reads. Open it to read it.");
             }
 
             using var document = JsonDocument.Parse(File.ReadAllText(path, Encoding.UTF8), new JsonDocumentOptions { MaxDepth = 16 });
             if (document.RootElement.ValueKind != JsonValueKind.Object)
             {
-                return new MigrationSummary(path, null, null, 0, "migration-v9.json is not a JSON object; open it to read it.");
+                return new MigrationSummary(path, null, null, 0, "migration-v9.json is not a JSON object. Open it to read it.");
             }
 
             int? moved = null;
@@ -366,7 +366,7 @@ public static class InstallScriptPlan
             string text;
             if (parts.Count == 0)
             {
-                text = $"migration-v9.json has {fields} top-level field(s); open it to read them.";
+                text = $"migration-v9.json has {fields} top-level field{(fields == 1 ? string.Empty : "s")}. Open it to read {(fields == 1 ? "it" : "them")}.";
             }
             else
             {
@@ -381,7 +381,7 @@ public static class InstallScriptPlan
         }
         catch (Exception ex) when (ex is JsonException or IOException or UnauthorizedAccessException)
         {
-            return new MigrationSummary(path, null, null, 0, "migration-v9.json could not be read (" + ex.GetType().Name + "); open it to read it.");
+            return new MigrationSummary(path, null, null, 0, "migration-v9.json could not be read (" + ex.GetType().Name + "). Open it to read it.");
         }
     }
 
@@ -587,7 +587,7 @@ public static class PostUpgradeLeftovers
                 "Gateway autostart",
                 PreflightStatus.Warn,
                 $"The Windows sign-in entry \"{RunValueName}\" still points to {target}, which the upgrade removed. DefenseClaw 1.0 adds no replacement, " +
-                "so the gateway will not start when you sign in. Turn on this app's auto-start setting (Settings, Startup) to start it instead. This app does not change that registry value."));
+                "so the gateway will not start at sign-in. Turn on the auto-start setting in Settings > Startup to start it instead."));
         }
 
         if (probes.FindUninstallEntry(UninstallKeyName) is { } entry)
@@ -605,7 +605,7 @@ public static class PostUpgradeLeftovers
                       "so run setup again afterwards. 'defenseclaw init' will not set up hooks while Setup's hooks remain in the agent's settings." +
                       (coworkPluginLeft ? " " + CoworkUninstall.SentenceFor(coworkPluginRunsAfterRemoval) : string.Empty)
                     : $"Windows Settings still lists \"{name}\" and its uninstaller points to {cached}. Do not uninstall it from Windows Settings on a 1.0 machine. " +
-                      "It is the old Setup's entry. To remove DefenseClaw 1.0, use 'defenseclaw uninstall'." +
+                      "To remove DefenseClaw 1.0, use 'defenseclaw uninstall'." +
                       (coworkPluginLeft ? " " + CoworkUninstall.SentenceFor(coworkPluginRunsAfterRemoval) : string.Empty)));
         }
 
@@ -885,7 +885,7 @@ public static class InstallScriptPreflight
         var claude = running.Where(AgentProcessProbe.IsClaudeName).ToArray();
         rows.Add(claude.Length > 0
             ? new PreflightRow(ClaudeCodeId, "Claude Code", PreflightStatus.Warn,
-                "claude.exe is running (Claude Code, or the Claude desktop app, which has the same process name). Quit it first: the installer rewrites " +
+                "claude.exe is running. It may be Claude Code or the Claude desktop app, which has the same process name. Quit it first: the installer rewrites " +
                 "Claude Code's hook configuration, and a running session keeps the old hooks.")
             : new PreflightRow(ClaudeCodeId, "Claude Code", PreflightStatus.Pass, "Claude Code is not running."));
 
@@ -932,7 +932,7 @@ public static class InstallScriptPreflight
                 ? new PreflightRow(DiskId, "Disk space", PreflightStatus.Block,
                     $"{FormatBytes(free.Value)} free, but the upgrade wants {DiskFactor}x the size of the databases ({FormatBytes(databases)}), {FormatBytes(needed)}. Free some space first.")
                 : new PreflightRow(DiskId, "Disk space", PreflightStatus.Pass,
-                    $"{FormatBytes(free.Value)} free; the databases are {FormatBytes(databases)} (needs {FormatBytes(needed)})."));
+                    $"{FormatBytes(free.Value)} free. The databases are {FormatBytes(databases)} (needs {FormatBytes(needed)})."));
 
         rows.Add(verification switch
         {
@@ -1004,7 +1004,7 @@ public static class InstallScriptPreflight
         return facts is { Configured: true, V1: { } v1 }
             ? new PreflightRow(OpenCodeV1Id, "OpenCode version", PreflightStatus.Warn,
                 $"DefenseClaw guards OpenCode here, and the OpenCode on record is {v1.Version}, which is OpenCode V1. DefenseClaw {target} guards OpenCode V2 only, so its " +
-                "installer is expected to refuse this upgrade before it changes anything, and the DefenseClaw you have keeps guarding it. Install OpenCode V2 (" +
+                "installer is expected to refuse this upgrade before it changes anything, and your current DefenseClaw keeps guarding it. Install OpenCode V2 (" +
                 OpenCodeInstallEvidence.InstallV2Command + "), then upgrade. To upgrade without OpenCode instead, run 'defenseclaw setup remove opencode' first.")
             : null;
     }
@@ -1062,8 +1062,8 @@ public static class InstallScriptPreflight
             (states.Length > 0 ? states + " " : string.Empty) +
             "DefenseClaw's installer refuses to change version while they remain. " +
             (recoverConfigInstalled
-                ? "Open Overview and use \"" + ConnectorRecovery.ActionLabel + "\" (or run the command the installer names), then check again. Do not remove or move the receipts yourself."
-                : "Open Overview and use \"Clear the stuck pending write\", then check again."))
+                ? "Open Overview and use \"" + ConnectorRecovery.ActionLabel + "\" (or run the command the installer names), then select Re-check. Do not remove or move the receipts yourself."
+                : "Open Overview and use \"Clear the stuck pending write\", then select Re-check."))
         {
             ActionId = PreflightActionIds.OpenOverview,
             ActionLabel = "Open Overview",

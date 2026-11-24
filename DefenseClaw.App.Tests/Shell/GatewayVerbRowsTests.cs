@@ -137,7 +137,7 @@ public sealed class GatewayVerbRowsTests : IDisposable
     [InlineData("watchdog start", false, "background daemon")]
     [InlineData("watchdog stop", false, "Stops the running watchdog daemon")]
     [InlineData("policy reload", false, "reload its OPA policies")]
-    [InlineData("connector teardown", true, "pristine backup")]
+    [InlineData("connector teardown", true, "restores the agent's config from backup")]
     public async Task A_verb_that_changes_something_is_reviewed_first_in_the_words_of_the_gateways_help(string name, bool destructive, string words)
     {
         await _actions.RunCuratedAsync(Command(name));
@@ -161,10 +161,10 @@ public sealed class GatewayVerbRowsTests : IDisposable
         await _actions.RunCuratedAsync(Command("connector teardown"));
 
         var summary = Assert.Single(_reviews).Summary;
-        Assert.Contains("restores the agent framework's config from its pristine backup", summary, StringComparison.Ordinal);
-        Assert.Contains("removes the hook scripts", summary, StringComparison.Ordinal);
-        Assert.Contains("clears the environment shims", summary, StringComparison.Ordinal);
-        Assert.Contains("does not touch the gateway's own service, its token or the audit database", summary, StringComparison.Ordinal);
+        Assert.Contains("restores the agent's config from backup", summary, StringComparison.Ordinal);
+        Assert.Contains("removes its hook scripts", summary, StringComparison.Ordinal);
+        Assert.Contains("clears its environment shims", summary, StringComparison.Ordinal);
+        Assert.Contains("The gateway service, its token and the audit database are untouched", summary, StringComparison.Ordinal);
     }
 
     // ------------------------------------------------------------------ gating
@@ -183,7 +183,7 @@ public sealed class GatewayVerbRowsTests : IDisposable
         var reload = Assert.Single(rows, r => r.Title == "policy reload");
 
         Assert.False(reload.IsEnabled);
-        Assert.Equal("Still checking the gateway; try again in a moment.", reload.DisabledReason);
+        Assert.Equal("Still checking the gateway. Try again in a moment.", reload.DisabledReason);
 
         foreach (var name in Verbs().Select(v => (string)v[0]).Where(n => n != "policy reload"))
         {
@@ -197,7 +197,7 @@ public sealed class GatewayVerbRowsTests : IDisposable
         var reload = new[] { "policy", "reload" };
         string? Reason(GatewaySnapshot snapshot) => GatewayVerbs.Availability(reload, snapshot).Reason;
 
-        Assert.Equal("Still checking the gateway; try again in a moment.", Reason(new GatewaySnapshot()));
+        Assert.Equal("Still checking the gateway. Try again in a moment.", Reason(new GatewaySnapshot()));
         Assert.Equal("DefenseClaw is not installed on this machine.", Reason(new GatewaySnapshot { Install = InstallState.NotInstalled }));
         Assert.Equal("DefenseClaw is not initialized yet. Run 'defenseclaw init' first.", Reason(new GatewaySnapshot { Install = InstallState.InstalledNotInitialized }));
         Assert.Equal(

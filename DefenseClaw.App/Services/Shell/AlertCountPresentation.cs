@@ -83,9 +83,9 @@ internal static class AlertCountPresentation
     {
         ArgumentNullException.ThrowIfNull(snapshot);
 
-        var state = scanning && !snapshot.IsPaused ? $"Scanning — {snapshot.StateLabel}" : snapshot.StateLabel;
+        var state = scanning && !snapshot.IsPaused ? $"Scanning · {snapshot.StateLabel}" : snapshot.StateLabel;
         return counts is null
-            ? $"DefenseClaw — {state}"
-            : $"DefenseClaw — {Sentence(counts)}\n{state}";
+            ? $"DefenseClaw · {state}"
+            : $"DefenseClaw · {Sentence(counts)}\n{state}";
     }
 }

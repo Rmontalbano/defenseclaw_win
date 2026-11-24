@@ -206,7 +206,7 @@ internal sealed class AppUpdateChecker : IDisposable
                 State = AppUpdateState.DevBuild,
                 Running = shown,
                 Release = release,
-                Message = $"Development build ({shown}); latest release is {release.Version}. Development builds are not offered updates.",
+                Message = $"Development build ({shown}). Latest release is {release.Version}. Development builds are not offered updates.",
                 FromCache = fromCache,
                 LiveFailed = liveFailed,
             };

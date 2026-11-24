@@ -36,17 +36,17 @@
         <ContextMenu x:Key="SourceRowMenu">
             <MenuItem Header="Sync…"
                       Icon="{ctl:DcSymbolIcon ArrowSync24}"
-                      ToolTip="Fetch, scan and promote this source's entries."
+                      ToolTip="Fetch, scan and promote this source's entries. Nothing runs until you confirm."
                       Click="OnSyncSource" />
             <MenuItem Header="{Binding ToggleText}"
                       Icon="{ctl:DcSymbolIcon Power24}"
-                      ToolTip="Turn this source on or off."
+                      ToolTip="Turn this source on or off. Nothing runs until you confirm."
                       Click="OnToggleSource" />
             <Separator />
             <MenuItem Header="Remove…"
                       Style="{StaticResource DcDangerMenuItem}"
                       Icon="{ctl:DcSymbolIcon Delete24}"
-                      ToolTip="Delete this source, the rules it promoted and its cache."
+                      ToolTip="Delete this source, the rules it promoted and its cache. Nothing runs until you confirm."
                       Click="OnRemoveSource" />
         </ContextMenu>
 
@@ -54,13 +54,13 @@
             <MenuItem Header="Approve…"
                       Icon="{ctl:DcSymbolIcon ShieldCheckmark24}"
                       IsEnabled="{Binding CanReview}"
-                      ToolTip="Approve this entry and promote it into the allow policy."
+                      ToolTip="Approve this entry and promote it into the allow policy. Nothing runs until you confirm."
                       Click="OnApproveEntry" />
             <MenuItem Header="Reject…"
                       Style="{StaticResource DcDangerMenuItem}"
                       Icon="{ctl:DcSymbolIcon ShieldDismiss24}"
                       IsEnabled="{Binding CanReview}"
-                      ToolTip="Reject this entry so it stays blocked."
+                      ToolTip="Reject this entry so it stays blocked. Nothing runs until you confirm."
                       Click="OnRejectEntry" />
         </ContextMenu>
 
@@ -77,13 +77,13 @@
             <MenuItem Header="Approve…"
                       Icon="{ctl:DcSymbolIcon ShieldCheckmark24}"
                       IsEnabled="{Binding CanReview}"
-                      ToolTip="Approve this entry and promote it into the allow policy."
+                      ToolTip="Approve this entry and promote it into the allow policy. Nothing runs until you confirm."
                       Click="OnApproveListedEntry" />
             <MenuItem Header="Reject…"
                       Style="{StaticResource DcDangerMenuItem}"
                       Icon="{ctl:DcSymbolIcon ShieldDismiss24}"
                       IsEnabled="{Binding CanReview}"
-                      ToolTip="Reject this entry so it stays blocked."
+                      ToolTip="Reject this entry so it stays blocked. Nothing runs until you confirm."
                       Click="OnRejectListedEntry" />
             <Separator />
             <MenuItem Header="Show source"
@@ -262,7 +262,7 @@
                                 Severity="{Binding ActionSeverity}" />
 
                     <ui:InfoBar Margin="{StaticResource DcCardGap}"
-                                Title="Could not read registry sources. Changes are off until a read succeeds."
+                                Title="Could not read registry sources, so changes are off until a read succeeds"
                                 IsClosable="False"
                                 IsOpen="{Binding HasCliError}"
                                 Message="{Binding CliErrorMessage}"
@@ -296,7 +296,7 @@
                         </ui:CardExpander.Header>
                         <StackPanel>
                             <TextBlock Style="{StaticResource DcCaption}"
-                                       Text="Off by default. When on, a skill or MCP server must match a registry rule to be admitted. Turning it on before approving entries blocks everything not covered." />
+                                       Text="Off by default. When on, a skill or MCP server must match a registry rule to be admitted, so approve entries first." />
                             <WrapPanel Style="{StaticResource DcToolbarPanel}" Margin="0,10,0,0" IsEnabled="{Binding IsDataTrusted}">
                                 <TextBlock Style="{StaticResource DcToolbarLabel}" Text="{Binding SkillsRegistryText}" />
                                 <ui:Button Content="Require…"
@@ -436,7 +436,7 @@
                         <ctl:DcSymbolIcon Style="{StaticResource DcEmptyIcon}" Symbol="Database24" />
                         <TextBlock Style="{StaticResource DcEmptyTitle}" Text="No registry sources yet" />
                         <TextBlock Style="{StaticResource DcEmptyDetail}"
-                                   Text="A registry is an optional catalog of skills or MCP servers: an HTTPS manifest, smithery.ai or a git repo with defenseclaw-registry.yaml." />
+                                   Text="Add an HTTPS manifest, smithery.ai or a git repo with defenseclaw-registry.yaml as a catalog of skills or MCP servers." />
 
                         <StackPanel Margin="0,16,0,0" HorizontalAlignment="Center">
                             <TextBlock Style="{StaticResource DcCaption}" Text="1.  Add a source. Nothing is fetched yet." />

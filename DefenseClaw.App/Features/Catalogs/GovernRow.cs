@@ -260,7 +260,7 @@ public sealed partial class GovernRow : INotifyPropertyChanged
 
     /// <summary>What hovering the badge says: where the item came from, and that clicking it opens the entry.</summary>
     public string RegistryToolTip => HasRegistry
-        ? $"Promoted into the allow policy by the registry source “{DisplayNames.Visible(RegistrySource!.Trim())}”. Click to open its entry in Registries."
+        ? $"Promoted into the allow policy by the registry source “{DisplayNames.Visible(RegistrySource!.Trim())}”. Select to open its entry in Registries."
         : string.Empty;
 
     /// <summary>What a screen reader announces for the badge.</summary>

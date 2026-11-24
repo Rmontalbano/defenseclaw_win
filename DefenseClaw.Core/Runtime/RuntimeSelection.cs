@@ -195,7 +195,7 @@ public sealed partial record RuntimeSelection
 
         if (!uri.IsLoopback)
         {
-            return "The gateway address must be on this PC: 127.0.0.1, localhost or [::1]. The gateway token is sent only there.";
+            return "The gateway address must be on this machine: 127.0.0.1, localhost or [::1]. The gateway token is sent only there.";
         }
 
         if (uri.IsDefaultPort)

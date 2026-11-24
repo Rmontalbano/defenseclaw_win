@@ -127,7 +127,7 @@ public sealed class Cust379Tests
         var fields = steps.SelectMany(s => s.Fields).ToArray();
         var allow = Assert.Single(fields, f => f.Flag == "--allow-private-networks");
         Assert.Equal("Allow a private or loopback endpoint", allow.Label);
-        Assert.Contains("collector you run yourself", allow.Help, StringComparison.Ordinal);
+        Assert.Contains("collector you run", allow.Help, StringComparison.Ordinal);
         Assert.Equal(ToggleValues.Off, allow.DefaultValue);
 
         var plaintext = Assert.Single(fields, f => f.Flag == "--plaintext");

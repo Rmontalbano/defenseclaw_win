@@ -191,7 +191,7 @@ public sealed class SevenViewPolicyBackend : IPolicyBackend
     public bool TryParseDetail(string stdout, out PolicyDetail? detail, out string error)
     {
         detail = null;
-        error = "policy show --json prints a policy's summary only; the seven-view panel reads that from policy list --json.";
+        error = "policy show --json prints a policy's summary only. The seven-view panel reads that from policy list --json.";
         return false;
     }
 

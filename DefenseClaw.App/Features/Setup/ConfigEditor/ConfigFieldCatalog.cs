@@ -99,17 +99,16 @@ public static class ConfigFieldCatalog
     /// runtime's own pointer for failing closed is the strict rule pack (<c>cmd_guardrail.py</c>, <c>_PER_USER_OUTAGE_RULE</c>).
     /// </summary>
     private const string HookFailModeReasonFollowsTier =
-        "Not edited here. This runtime ignores a saved per-user value. During a gateway outage the policy tier decides: a strict rule pack fails closed, " +
-        "the default and permissive packs fail open. To fail closed, run " + HookFailModeRule.StrictPackCommand + ".";
+        "Not edited here. This runtime ignores a saved per-user value. While the gateway is down, the policy tier decides: strict blocks, the others allow with a warning. " +
+        "To block, run " + HookFailModeRule.StrictPackCommand + ".";
 
     /// <summary>
     /// The same field on a per-user 1.0.5 runtime (CUST-397): a saved value wins over the policy tier, which decides only when nothing is saved
     /// (<c>_PER_USER_OUTAGE_RULE</c> at tag 1.0.5; <c>config.py</c> <c>outage_block_hint</c>).
     /// </summary>
     private const string HookFailModeReasonSavedWins =
-        "Not edited here. Change it on the Setup panel (Guardrail) or with defenseclaw guardrail fail-mode, which also update the hook registration. " +
-        "While the gateway is down, a saved value decides (the connector's, else the global one), and with none saved, the policy tier decides: " +
-        "a strict rule pack blocks, the default and permissive packs allow the call with a warning.";
+        "Not edited here. Use Setup > Guardrail or defenseclaw guardrail fail-mode. While the gateway is down, a saved value decides, the connector's before the global one. " +
+        "With none saved, the policy tier decides: strict blocks, the others allow with a warning.";
 
     private static string? HookFailModeReasonFor(ConfigChoiceProfile profile) =>
         profile.SavedFailModeWins ? HookFailModeReasonSavedWins : profile.SavedFailModeIgnored ? HookFailModeReasonFollowsTier : HookFailModeReason;
@@ -179,7 +178,7 @@ public static class ConfigFieldCatalog
         "Needs a base URL, at most 32 fields. Releases before 1.0.8 refuse it, so unset it before downgrading.";
 
     private const string MiddlewareRetiredReason =
-        "Retired in 1.0.8 and has no effect. config set refuses it. Remove it from config.yaml; files that still have it load.";
+        "Retired in 1.0.8 and has no effect. config set refuses it. Remove it from config.yaml. Files that still have it load.";
 
     /// <summary>Every connector name the profile's runtime knows, in the order its pickers show them (<c>CONNECTORS</c>).</summary>
     public static IReadOnlyList<string> AllConnectors(ConfigChoiceProfile profile)
@@ -361,7 +360,7 @@ public static class ConfigFieldCatalog
         Add("llm.provider", new Entry(_ => "LLM provider family.", LlmProvidersFor, HintSuffixFor: CompatibleProviderNote));
         Hint("llm.model", "Model identifier.");
         Hint("llm.api_key_env", "Env var NAME holding the unified key.");
-        Hint("llm.api_key", "Inline key; prefer API Key Env.");
+        Hint("llm.api_key", "Inline key. Prefer API Key Env.");
         Hint("llm.base_url", "Override provider base URL.");
         Hint("llm.timeout", "Per-request timeout in seconds.");
         Hint("llm.max_retries", "Retries with exponential backoff.");
@@ -457,7 +456,7 @@ public static class ConfigFieldCatalog
         // ---- Guardrail, one connector's overrides: _per_connector_guardrail_fields, setup.py:5688-5834
         Add("guardrail.connectors.*.mode", new Entry(c => $"Per-connector mode for {c[0]} (blank inherits the global mode).", _ => new[] { "observe", "action" }));
         Add("guardrail.connectors.*.rule_pack_dir", new Entry(c => $"Per-connector rule pack for {c[0]} (blank inherits the global pack)."));
-        Add("guardrail.connectors.*.enabled", new Entry(c => $"Per-connector guardrail switch for {c[0]} (off tears down its hooks; on by default)."));
+        Add("guardrail.connectors.*.enabled", new Entry(c => $"Per-connector guardrail switch for {c[0]} (off tears down its hooks, on by default)."));
         Add("guardrail.connectors.*.hook_fail_mode", new Entry(_ => string.Empty, ReadOnlyReasonFor: HookFailModeReasonFor));
         Add("guardrail.connectors.*.hilt.enabled", new Entry(c => $"Ask before supported high-risk actions for {c[0]}."));
         Add("guardrail.connectors.*.hilt.min_severity", new Entry(c => $"Minimum severity for {c[0]} approval prompts.", _ => new[] { "HIGH", "MEDIUM", "LOW", "CRITICAL" }, HintSuffix104: SeverityAnyCase));
@@ -545,7 +544,7 @@ public static class ConfigFieldCatalog
 
         // ---- Keys of 1.0.4 (config.py, schemas/config/v8): shown only for a runtime that has them (Since104). CUST-377.
         Add("openshell.trusted_ca_bundle", new Entry(
-            _ => "PEM file of extra CA certificates sandboxes trust. Absolute or ~/ path; blank for none. Applies to images built while set.",
+            _ => "PEM file of extra CA certificates sandboxes trust. Absolute or ~/ path, blank for none. Applies to images built while set.",
             Since104: true));
         Add("scanners.mcp_scanner.unverified_server", new Entry(
             _ => "For an MCP server that could not be verified: warn adds it with a warning and audit record, block refuses it. Blank is warn on a per-user host.",

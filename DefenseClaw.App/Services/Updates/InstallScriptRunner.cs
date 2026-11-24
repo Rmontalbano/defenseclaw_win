@@ -233,7 +233,7 @@ public sealed class InstallScriptRunner
                     executable,
                     argv,
                     (request.Rollback ? "Rolling back" : "Upgrading to " + request.Version) +
-                    ": install.ps1 runs in its own console window. Its prompts and output are there; its transcript goes to ~\\.defenseclaw\\logs.");
+                    ": install.ps1 runs in its own console window. Its prompts and output are there. Its transcript goes to ~\\.defenseclaw\\logs.");
             }
             catch (SecretInArgumentException ex)
             {
@@ -250,7 +250,7 @@ public sealed class InstallScriptRunner
                 }
                 catch (Exception ex) when (ex is Win32Exception or InvalidOperationException or IOException)
                 {
-                    _cli.CompleteExternalRun(invocation, null, "not started - " + ex.Message, null);
+                    _cli.CompleteExternalRun(invocation, null, "not started: " + ex.Message, null);
                     return new InstallScriptRunResult
                     {
                         Rollback = request.Rollback,

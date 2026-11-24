@@ -278,7 +278,7 @@ public sealed class AiDiscoveryUsagePanelTests
             Assert.Contains("Counts are from the signals", vm.HeaderNote, StringComparison.Ordinal);
 
             // And Sources says what was read from where.
-            var source = Assert.Single(vm.Sources, s => s.Label == "Gateway — GET /api/v1/ai-usage");
+            var source = Assert.Single(vm.Sources, s => s.Label == "Gateway: GET /api/v1/ai-usage");
             Assert.True(source.Available);
             Assert.Equal(
                 "13 signals from the gateway. 10 model signals gained an owner, relevance, confidence or lineage. Online model lookup is off.",
@@ -350,7 +350,7 @@ public sealed class AiDiscoveryUsagePanelTests
             Assert.Equal(before.Take(7), after.Take(7));
             var sourceLines = after[7].Split('|');
             Assert.Equal(before[7], string.Join("|", sourceLines.Take(sourceLines.Length - 1)));
-            Assert.StartsWith("Gateway — GET /api/v1/ai-usage=11 signals from the gateway. No new model data.", sourceLines[^1], StringComparison.Ordinal);
+            Assert.StartsWith("Gateway: GET /api/v1/ai-usage=11 signals from the gateway. No new model data.", sourceLines[^1], StringComparison.Ordinal);
 
             // The lists were not rebuilt: a card the operator had open is the same card.
             Assert.True(cardsBefore.SequenceEqual(vm.CardsView.Cast<DiscoveryComponentCard>(), ReferenceEqualityComparer.Instance));
@@ -376,7 +376,7 @@ public sealed class AiDiscoveryUsagePanelTests
         using var classified = OpenNewer();
         classified.OnUi(() =>
         {
-            Assert.StartsWith("Cuts on the Confidence column:", classified.ViewModel.ConfidenceFilterHelp, StringComparison.Ordinal);
+            Assert.StartsWith("Cuts on the Confidence column,", classified.ViewModel.ConfidenceFilterHelp, StringComparison.Ordinal);
             Assert.Equal("Set the filters back to all and the list back to the recommended models.", classified.ViewModel.ResetFiltersHelp);
         });
     }
@@ -396,7 +396,7 @@ public sealed class AiDiscoveryUsagePanelTests
             Assert.Equal(before, Models(vm));
             Assert.DoesNotContain(vm.HeaderChips, c => c.IsDiagnostic);
 
-            var source = Assert.Single(vm.Sources, s => s.Label == "Gateway — GET /api/v1/ai-usage");
+            var source = Assert.Single(vm.Sources, s => s.Label == "Gateway: GET /api/v1/ai-usage");
             Assert.True(source.Available);
             Assert.Equal("The gateway reports AI discovery off. Nothing to add.", source.Detail);
         });
@@ -436,7 +436,7 @@ public sealed class AiDiscoveryUsagePanelTests
             Assert.Equal(before, Models(vm));
             Assert.DoesNotContain(vm.HeaderChips, c => c.IsDiagnostic);
 
-            var source = Assert.Single(vm.Sources, s => s.Label == "Gateway — GET /api/v1/ai-usage");
+            var source = Assert.Single(vm.Sources, s => s.Label == "Gateway: GET /api/v1/ai-usage");
             Assert.False(source.Available);
             Assert.Equal(read.Message, source.Detail);
             Assert.Equal("Warn", source.AvailabilityKey);

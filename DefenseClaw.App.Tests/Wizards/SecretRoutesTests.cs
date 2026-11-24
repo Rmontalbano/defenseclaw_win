@@ -131,7 +131,7 @@ public class SecretRoutesTests
         Assert.NotNull(route);
         Assert.Null(route.EnvName(new WizardValues()));
         Assert.Equal("shhh", route.Purpose);
-        Assert.Contains("never does", route.IfMissing, StringComparison.Ordinal);
+        Assert.Contains("does not pass secrets that way", route.IfMissing, StringComparison.Ordinal);
     }
 
     [Fact]

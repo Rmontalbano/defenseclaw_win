@@ -130,7 +130,7 @@ public sealed class PolicyModelTests
         var detail = model.Detail("posture", "global");
 
         Assert.Equal("Posture \u00B7 global", detail.Title);
-        Assert.Equal("The global default logs only; in action mode it would block CRITICAL and alert on MEDIUM+.", detail.Lines[0]);
+        Assert.Equal("The global default logs only. In action mode it would block CRITICAL and alert on MEDIUM+.", detail.Lines[0]);
         Assert.Contains("Tool calls (observe, global mode):", detail.Lines);
         Assert.Contains("  CRITICAL  log (would block)", detail.Lines);
         Assert.Contains("Levels from the default pack.", detail.Lines);

@@ -126,7 +126,7 @@ public static class AcpGuardDiscovery
         var loaded = profiles.IsOk ? profiles.Value : null;
         var profileNote = loaded switch
         {
-            { Profiles.Count: > 0 } => "Profiles are the ones the running gateway has loaded. Choose Another profile to give this pair its own.",
+            { Profiles.Count: > 0 } => "Profiles are the ones the running gateway has loaded. Select Another profile to give this pair its own.",
             { } => "The running gateway has no profiles yet, so setup creates the one you name.",
             _ when profiles.Status == AcpReadStatus.Unsupported => "Profiles: this gateway does not list them, so type the name (the CLI's default is \"default\").",
             _ => "Profiles: not read from the gateway (" + profiles.Message.TrimEnd('.') + "), so type the name (the CLI's default is \"default\").",

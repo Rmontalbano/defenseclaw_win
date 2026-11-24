@@ -77,8 +77,8 @@ public sealed partial class McpsPanelViewModel : GovernPanelViewModelBase
     protected override string BuildEmptyTitle(string scope) => $"No MCP servers configured for {scope}";
 
     protected override string BuildEmptyDetail(string scope) =>
-        "For Claude Code, DefenseClaw 0.8.10 reads mcpServers in settings.json. Servers added with 'claude mcp add' " +
-        "(stored in ~\\.claude.json) are not listed. Add MCP server registers one and scans it first.";
+        "DefenseClaw 0.8.10 reads Claude Code's mcpServers in settings.json. " +
+        "Servers added with 'claude mcp add' in ~\\.claude.json are not listed.";
 
     protected override GovernRow? ParseRow(JsonElement item, string? groupConnector)
     {
@@ -199,7 +199,7 @@ public sealed partial class McpsPanelViewModel : GovernPanelViewModelBase
         // 'mcp set' refuses both and neither: a mixed entry would scan one thing and run another.
         if (command.Length == 0 && url.Length == 0)
         {
-            SetFormError = "Enter either a command (local server) or a URL (remote server).";
+            SetFormError = "Enter a command for a local server or a URL for a remote server.";
             return;
         }
 
@@ -293,7 +293,7 @@ public sealed partial class McpsPanelViewModel : GovernPanelViewModelBase
         var notes = new List<string>();
         notes.Add(SetSkipScan
             ? "The security scan is skipped, so the server is added unchecked."
-            : "DefenseClaw starts the server (runs the command or connects to the URL) to scan it, and refuses it on HIGH or CRITICAL findings.");
+            : "DefenseClaw starts the server to scan it, by running the command or connecting to the URL, and refuses it on HIGH or CRITICAL findings.");
         if (envPairs.Count > 0)
         {
             notes.Add("Environment values are on the command line: shown here and in Activity, and visible to other processes on this machine. Do not put secrets in them.");
@@ -327,12 +327,12 @@ public sealed partial class McpsPanelViewModel : GovernPanelViewModelBase
         "environment the connector starts the server from (for example a Windows user variable), or enter a reference to a variable.";
 
     private const string UrlSecretAdvice =
-        "'mcp set' stores the URL as typed in the connector's MCP config. Use an address without the credential, " +
-        "or a server that reads its token from its own environment.";
+        "'mcp set' saves the URL as typed in the MCP config. Use one without the credential, " +
+        "or a server that reads its token from the environment.";
 
     private const string ArgsSecretAdvice =
-        "'mcp set' stores the arguments as typed in the connector's MCP config. Use a server " +
-        "that reads the value from an environment variable it already has.";
+        "'mcp set' saves the arguments as typed in the MCP config. Use a server " +
+        "that reads the value from an environment variable.";
 
     /// <summary>
     /// One argument per line becomes a JSON array (<c>--args</c> accepts a JSON array or a comma list; the array

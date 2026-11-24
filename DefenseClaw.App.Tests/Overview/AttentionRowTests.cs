@@ -205,7 +205,7 @@ public sealed class AttentionRowTests : IDisposable
     }
 
     [Theory]
-    [InlineData(AppGatewayState.Degraded, "The gateway answered, but not cleanly", "Medium", null)]
+    [InlineData(AppGatewayState.Degraded, "The gateway's answer was not clean", "Medium", null)]
     [InlineData(AppGatewayState.NotInstalled, "DefenseClaw was not found", "Critical", null)]
     [InlineData(AppGatewayState.NotInitialized, "Installed, but never initialized", "Medium", "defenseclaw init")]
     public void Each_bad_state_has_its_own_severity_and_command(AppGatewayState state, string title, string severity, string? command)
@@ -363,7 +363,7 @@ public sealed class AttentionRowTests : IDisposable
                 "2 CRITICAL alerts in the last poll",
                 "claudecode: observe mode with a fail-closed hook",
                 "1 HIGH finding in the last 25 alerts",
-                "The gateway answered, but not cleanly",
+                "The gateway's answer was not clean",
             },
             vm.Attention.Select(r => r.Title).ToArray());
         Assert.DoesNotContain(vm.Attention, r => r.Title == "Nothing needs attention");

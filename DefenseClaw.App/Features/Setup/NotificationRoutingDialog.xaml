@@ -150,7 +150,7 @@
                                                ToolTipService.ShowOnDisabled="True"
                                                ToolTip="{Binding MasterTip}"
                                                AutomationProperties.Name="{Binding MasterButtonText, StringFormat='Desktop notifications: {0}'}"
-                                               AutomationProperties.HelpText="Shows the command first. It is the one the Overview notifications button runs." />
+                                               AutomationProperties.HelpText="Nothing runs until you confirm. It is the command the Overview notifications button runs." />
                                 </Grid>
                             </Border>
 

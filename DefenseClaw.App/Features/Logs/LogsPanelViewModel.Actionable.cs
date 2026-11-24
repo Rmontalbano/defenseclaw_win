@@ -85,7 +85,7 @@ public sealed partial class LogsPanelViewModel
     /// <summary>What the switch says when pointed at: what the view shows, or why it is paused.</summary>
     public string ActionableToolTip => ActionableSuspendedBy is { } why
         ? $"Actionable only is paused while {why}. Clear that filter to resume it."
-        : "Shows HIGH, CRITICAL and ERROR events and any that blocked, denied, rejected, quarantined or failed, as the TUI does. " +
+        : "Shows HIGH, CRITICAL and ERROR events, and events that blocked, denied, rejected, quarantined or failed. " +
           "Turn off to see every event.";
 
     /// <summary>The state the switch, its tooltip and the chip depend on changed (a filter, the stream, the choice itself).</summary>

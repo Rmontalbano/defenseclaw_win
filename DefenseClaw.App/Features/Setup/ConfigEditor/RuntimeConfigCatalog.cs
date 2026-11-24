@@ -64,7 +64,7 @@ public sealed partial class RuntimeConfigCatalog
     public const string Sentinel = "DCCATALOG:";
 
     /// <summary>What the observability section's status row says: the dump does not read the gateway's plan, so its default text ("loading …") would never change.</summary>
-    internal const string ObservabilityNote = "not read by this editor; manage destinations with defenseclaw setup observability";
+    internal const string ObservabilityNote = "not read by this editor. Manage destinations with defenseclaw setup observability";
 
     /// <summary>
     /// The dump, run as <c>python -I -B -c &lt;this&gt;</c> (<see cref="RuntimeCatalogLoader"/>). It reads config.yaml through the runtime's own loader and writes

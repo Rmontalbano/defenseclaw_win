@@ -479,7 +479,7 @@ public sealed class RedactionArgvTests
         Assert.Empty(RedactionArgv.Problems(RedactionOperation.BucketSet, new() { Bucket = "model.io", CollectTraces = false }));
 
         // profile set: built-ins are not editable, a new one needs a base, the vocabulary is closed
-        Assert.Contains("A built-in profile cannot be edited: give the custom profile a name of its own.", RedactionArgv.Problems(RedactionOperation.ProfileSet, new() { ProfileName = "strict", Extends = "content" }));
+        Assert.Contains("A built-in profile cannot be edited. Give the custom profile a new name.", RedactionArgv.Problems(RedactionOperation.ProfileSet, new() { ProfileName = "strict", Extends = "content" }));
         Assert.Contains("Choose the built-in profile the new profile starts from.", RedactionArgv.Problems(RedactionOperation.ProfileSet, new() { ProfileName = "mine", IsNewProfile = true, Detectors = ["pii"] }));
         Assert.Empty(RedactionArgv.Problems(RedactionOperation.ProfileSet, new() { ProfileName = "mine", IsNewProfile = false, Detectors = ["pii"] })); // an existing profile keeps its base
         Assert.Contains("A custom profile starts from sensitive, content or strict.", RedactionArgv.Problems(RedactionOperation.ProfileSet, new() { ProfileName = "mine", Extends = "none" }));

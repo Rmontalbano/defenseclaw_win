@@ -147,9 +147,9 @@
                     <ComboBox Width="130"
                               ItemsSource="{Binding Presets}"
                               SelectedItem="{Binding SelectedPreset, Mode=TwoWay}"
-                              ToolTip="Saved filter. no-noise hides heartbeats and quiet INFO, LOW and MEDIUM rows. important keeps errors, verdicts and lifecycle. Others keep one topic. E: errors only, W: warnings and above."
+                              ToolTip="Saved filter. no-noise hides heartbeats and quiet rows. important keeps errors, verdicts and lifecycle events. E shows errors only. W shows warnings and up."
                               AutomationProperties.Name="Preset"
-                              AutomationProperties.HelpText="Which rows the list keeps. Outside a text box, E shows only errors and W shows warnings and above. Press again to show all." />
+                              AutomationProperties.HelpText="Which rows the list keeps. Outside a text box, E shows only errors and W shows warnings and above. Select again to show all." />
                 </StackPanel>
 
                 <StackPanel Orientation="Horizontal">
@@ -193,7 +193,7 @@
                                  ToolTip="{Binding ActionableToolTip}"
                                  ToolTipService.ShowOnDisabled="True"
                                  AutomationProperties.Name="Actionable only"
-                                 AutomationProperties.HelpText="Events only. Shows HIGH, CRITICAL and ERROR events and any that blocked, denied, rejected, quarantined or failed, as the TUI does. Paused while a search, preset or other filter is on." />
+                                 AutomationProperties.HelpText="Events only. Shows HIGH, CRITICAL and ERROR events, and events that blocked, denied, rejected, quarantined or failed. Paused while any filter is set." />
 
                 <Border Style="{StaticResource DcChip}"
                         Margin="0,0,12,8"

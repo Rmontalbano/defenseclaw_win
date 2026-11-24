@@ -48,7 +48,7 @@
                            SearchWidth="240"
                            SearchPlaceholder="Filter policies…"
                            SearchAutomationName="Filter policies"
-                           SearchHelpText="Matches name, description and kind. Shortcut Ctrl+F; Esc clears it.">
+                           SearchHelpText="Matches name, description and kind. Shortcut Ctrl+F. Esc clears it.">
             <ctl:DcPageToolbar.Actions>
                 <StackPanel Style="{StaticResource DcToolbarActions}">
                     <ui:Button Icon="{ctl:DcSymbolIcon Add24}"
@@ -391,7 +391,7 @@
                                     <ComboBox ItemsSource="{x:Static vm:PolicyFormViewModel.SwitchChoices}" DisplayMemberPath="Label" SelectedValuePath="Value"
                                               SelectedValue="{Binding Form.AllowListBypass}" AutomationProperties.Name="Allow-listed items skip the scan" />
                                 </StackPanel>
-                                <TextBlock Style="{StaticResource DcFieldLabel}" Margin="0,4,0,4" Text="Action for findings (block quarantines and blocks install; warn and allow only report)" />
+                                <TextBlock Style="{StaticResource DcFieldLabel}" Margin="0,4,0,4" Text="Action for findings: block quarantines and blocks install, warn and allow only report" />
                                 <WrapPanel>
                                     <StackPanel Margin="0,0,12,8">
                                         <TextBlock Style="{StaticResource DcFieldLabel}" Text="CRITICAL" />
@@ -439,17 +439,17 @@
                                     <ComboBox ItemsSource="{x:Static vm:PolicyFormViewModel.SeverityChoices}" DisplayMemberPath="Label" SelectedValuePath="Value"
                                               SelectedValue="{Binding Form.Severity}" AutomationProperties.Name="Severity" />
                                 </StackPanel>
-                                <CheckBox Margin="0,0,0,8" Content="Remove this override (revert to the global action)"
+                                <CheckBox Margin="0,0,0,8" Content="Remove this override and revert to the global action"
                                           Visibility="{Binding Form.IsScannerSection, Converter={StaticResource BoolToVisibility}}"
                                           IsChecked="{Binding Form.RemoveOverride}" AutomationProperties.Name="Remove the override" />
                                 <StackPanel Visibility="{Binding Form.ShowActionFields, Converter={StaticResource BoolToVisibility}}">
                                     <StackPanel Style="{StaticResource DcField}">
-                                        <TextBlock Style="{StaticResource DcFieldLabel}" Text="Runtime (disable: the item cannot run)" />
+                                        <TextBlock Style="{StaticResource DcFieldLabel}" Text="Runtime: disable means the item cannot run" />
                                         <ComboBox ItemsSource="{x:Static vm:PolicyFormViewModel.RuntimeChoices}" DisplayMemberPath="Label" SelectedValuePath="Value"
                                                   SelectedValue="{Binding Form.Runtime}" AutomationProperties.Name="Runtime action" />
                                     </StackPanel>
                                     <StackPanel Style="{StaticResource DcField}">
-                                        <TextBlock Style="{StaticResource DcFieldLabel}" Text="File (quarantine: move it aside)" />
+                                        <TextBlock Style="{StaticResource DcFieldLabel}" Text="File: quarantine moves it aside" />
                                         <ComboBox ItemsSource="{x:Static vm:PolicyFormViewModel.FileChoices}" DisplayMemberPath="Label" SelectedValuePath="Value"
                                                   SelectedValue="{Binding Form.File}" AutomationProperties.Name="File action" />
                                     </StackPanel>
@@ -462,7 +462,7 @@
 
                                 <StackPanel Visibility="{Binding Form.IsGuardrailSection, Converter={StaticResource BoolToVisibility}}">
                                     <StackPanel Style="{StaticResource DcField}">
-                                        <TextBlock Style="{StaticResource DcFieldLabel}" Text="Block threshold (findings at or above this rank are blocked)" />
+                                        <TextBlock Style="{StaticResource DcFieldLabel}" Text="Block threshold: findings at or above this rank are blocked" />
                                         <ComboBox ItemsSource="{x:Static vm:PolicyFormViewModel.ThresholdChoices}" DisplayMemberPath="Label" SelectedValuePath="Value"
                                                   SelectedValue="{Binding Form.BlockThreshold}" AutomationProperties.Name="Block threshold" />
                                     </StackPanel>
@@ -476,19 +476,19 @@
                                         <ComboBox ItemsSource="{x:Static vm:PolicyFormViewModel.TrustChoices}" DisplayMemberPath="Label" SelectedValuePath="Value"
                                                   SelectedValue="{Binding Form.TrustLevel}" AutomationProperties.Name="Cisco trust level" />
                                     </StackPanel>
-                                    <TextBlock Style="{StaticResource DcFieldLabel}" Text="Add a pattern (category, then the pattern)" />
+                                    <TextBlock Style="{StaticResource DcFieldLabel}" Text="Add a pattern: category, then the pattern" />
                                     <Grid Margin="0,2,0,8">
                                         <Grid.ColumnDefinitions><ColumnDefinition Width="140" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
                                         <ui:TextBox PlaceholderText="category" Margin="0,0,8,0" Text="{Binding Form.AddPatternCategory, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.Name="Category of the pattern to add" />
                                         <ui:TextBox Grid.Column="1" PlaceholderText="pattern" Text="{Binding Form.AddPattern, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.Name="Pattern to add" />
                                     </Grid>
-                                    <TextBlock Style="{StaticResource DcFieldLabel}" Text="Remove a pattern (category, then the pattern)" />
+                                    <TextBlock Style="{StaticResource DcFieldLabel}" Text="Remove a pattern: category, then the pattern" />
                                     <Grid Margin="0,2,0,8">
                                         <Grid.ColumnDefinitions><ColumnDefinition Width="140" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
                                         <ui:TextBox PlaceholderText="category" Margin="0,0,8,0" Text="{Binding Form.RemovePatternCategory, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.Name="Category of the pattern to remove" />
                                         <ui:TextBox Grid.Column="1" PlaceholderText="pattern" Text="{Binding Form.RemovePattern, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.Name="Pattern to remove" />
                                     </Grid>
-                                    <TextBlock Style="{StaticResource DcFieldLabel}" Text="Set a severity mapping (category, then severity)" />
+                                    <TextBlock Style="{StaticResource DcFieldLabel}" Text="Set a severity mapping: category, then severity" />
                                     <Grid Margin="0,2,0,8">
                                         <Grid.ColumnDefinitions><ColumnDefinition Width="140" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
                                         <ui:TextBox PlaceholderText="category" Margin="0,0,8,0" Text="{Binding Form.MappingCategory, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.Name="Category of the severity mapping" />
@@ -512,7 +512,7 @@
                                         <ui:TextBox Text="{Binding Form.RemoveDomain, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.Name="Domain to remove" />
                                     </StackPanel>
                                     <StackPanel Style="{StaticResource DcField}">
-                                        <TextBlock Style="{StaticResource DcFieldLabel}" Text="Block a destination (IP or host)" />
+                                        <TextBlock Style="{StaticResource DcFieldLabel}" Text="Block a destination by IP or host" />
                                         <ui:TextBox Text="{Binding Form.AddBlocked, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.Name="Destination to block" />
                                     </StackPanel>
                                     <StackPanel Style="{StaticResource DcField}">

@@ -58,7 +58,7 @@ public static partial class WizardStepFactory
 
         foreach (var command in help.Commands)
         {
-            var label = command.Summary.Length > 0 ? $"{command.Name} — {command.Summary}" : command.Name;
+            var label = command.Summary.Length > 0 ? $"{command.Name}: {command.Summary}" : command.Name;
             choices.Add(new WizardChoice(command.Name, label));
         }
 

@@ -425,7 +425,7 @@ public sealed class UpgradeRunner
         Summary = "Aborted: the release tag is not a version number.",
         ErrorMessage =
             $"The release tag \"{(version.Length > 40 ? version[..40] + "…" : version)}\" is not a plain version (digits and dots, an optional v and an " +
-            "optional -suffix), so no download URL was built from it. Nothing was requested and nothing was written to disk.",
+            "optional -suffix), so no download URL was built. Nothing was requested or written to disk.",
     };
 
     /// <summary>Release-asset URL for <paramref name="assetName"/> at <paramref name="version"/>. Throws <see cref="ArgumentException"/> for a version that fails <see cref="IsValidReleaseVersion"/>.</summary>
@@ -533,7 +533,7 @@ public sealed class UpgradeRunner
                 (runtimePresent
                     ? $"The managed runtime is under {runtimeDirectory}, where a native Setup install puts it. "
                     : $"A native Setup install puts the managed runtime under {runtimeDirectory}. ") +
-                "On this layout use the Setup exe.",
+                "On this layout use the Setup installer. 0.8.10's script matches 0.8.9's, so a newer release does not fix it.",
         };
     }
 
@@ -1287,7 +1287,7 @@ public sealed class UpgradeRunner
         if (asset.Channel == UpgradeChannel.InstallScript)
         {
             // install.ps1 asks its questions in a console of its own, which this runner's piped process cannot give it: InstallScriptRunner starts it.
-            return new UpgradeRunResult { FailureReason = "install.ps1 is started by the install.ps1 workflow (a console window of its own), not by this runner." };
+            return new UpgradeRunResult { FailureReason = "install.ps1 is started by the install.ps1 workflow in a console window, not by this runner." };
         }
 
         var noun = asset.Channel == UpgradeChannel.SetupInstaller ? "installer" : "script";

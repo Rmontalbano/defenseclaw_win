@@ -240,19 +240,19 @@ public sealed record RuntimeMonitoringState(
         "With DNS capture on, it also reads the DNS Client operational log, event 3008, to name the peer. Otherwise peers are named by reverse DNS.";
 
     public const string RecordsC =
-        "Process creation, privileged logons and account events from the Windows Security event log. Signals are raised only when an AI agent is in the process lineage." +
-        "File read and write events are not covered: they need an audit rule on each file.";
+        "Process creation, privileged logons and account events from the Windows Security event log. Signals are raised only when an AI agent is in the process lineage. " +
+        "File read and write events need an audit rule on each file and are not covered.";
 
     public const string PrivacyAB =
         "Findings go to the local audit store and the observability destinations you configured. Command lines are classified as content and pass through each " +
         "destination's redaction profile. Environment variable values are never read.";
 
     public const string PrivacyC =
-        "Reads other programs' process creation records, including command lines when Windows is set to include them. The Security log is sensitive. " +
-        "The gateway reads it on this PC and handles it like the other planes' data. Environment variable values are never read.";
+        "Reads other programs' process creation records, including command lines when Windows includes them. " +
+        "The gateway reads the Security log on this machine and handles it like the other planes' data. Environment variable values are never read.";
 
     public const string PrivacyDns =
-        "DNS capture records the domains this PC resolved, locally, to name egress peers.";
+        "DNS capture records the domains this machine resolved, locally, to name egress peers.";
 
     /// <summary>The compact state for the Overview: <c>on · A running · B running · C off</c>.</summary>
     public string Summary
@@ -352,7 +352,7 @@ public sealed record RuntimeMonitoringState(
         else if (id == "c" && !config.PlaneSelected("c"))
         {
             configText = config.HostPlaneListedWithoutOptIn
-                ? "Off: C is listed in planes but enable_host_plane is false; the opt-in is the second gate."
+                ? "Off: C is listed in planes but enable_host_plane is false. The opt-in is the second gate."
                 : "Off: Plane C is an explicit opt-in (enable_host_plane) and has not been enabled.";
         }
         else
@@ -453,7 +453,7 @@ public sealed record RuntimeMonitoringState(
         if (mechanism.Contains("dns capture unavailable", StringComparison.OrdinalIgnoreCase))
         {
             return new(
-                "DNS capture is on but the gateway says it is unavailable. The DNS Client operational log is off by default. Enable it in an elevated prompt: wevtutil sl Microsoft-Windows-DNS-Client/Operational /e:true",
+                "DNS capture is on but unavailable. Enable the DNS Client log in an elevated prompt with wevtutil sl Microsoft-Windows-DNS-Client/Operational /e:true",
                 RuntimeRequirementState.NotMet);
         }
 
@@ -517,7 +517,7 @@ public static class RuntimeMonitoringPlan
         {
             changes.Add(new(wanted.Enabled
                 ? "Runtime monitoring: off → on (planes A and B)."
-                : "Runtime monitoring: on → off (every plane stops; recorded findings are kept)."));
+                : "Runtime monitoring: on → off. Every plane stops and recorded findings are kept."));
         }
 
         if (wanted.Enabled)
@@ -526,7 +526,7 @@ public static class RuntimeMonitoringPlan
             if (wanted.HostPlane != currentC)
             {
                 changes.Add(new(wanted.HostPlane
-                    ? "Plane C (agent actions): off → on. Needs an elevated gateway and the audit policy. Until then it reports itself blind."
+                    ? "Plane C (agent actions): off → on. Needs an elevated gateway and the audit policy. Until then it reports no coverage."
                     : "Plane C (agent actions): on → off."));
             }
 

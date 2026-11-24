@@ -57,7 +57,7 @@ public static partial class HookJudgeFallback
     {
         "timeout" => "The judge did not answer in time, or no judge slot was free (guardrail.judge.max_parallel). The rules decided this call.",
         "error" => "The judge call failed (provider error or empty answer). The rules decided this call.",
-        "late" => "The judge answered too late. The rules decided this call; the verdict is recorded when it arrives.",
+        "late" => "The judge answered too late. The rules decided this call. The verdict is recorded when it arrives.",
         "busy" => "The hook-lane judge was at capacity. The rules decided this call.",
         "budget" => "The hook's judge time budget was used up. The rules decided this call.",
         _ => $"The judge gave no verdict ({reason}). The rules decided this call.",

@@ -224,14 +224,14 @@ public class UpdateLinkSafetyTests
         var setup = UpdatesWindowViewModel.BuildSetupCommand(Asset("DefenseClawSetup.exe", url));
         var script = UpdatesWindowViewModel.BuildUpgradeScriptCommand(Asset("defenseclaw-upgrade.ps1", url));
 
-        Assert.Equal("No Setup exe asset was found on this release.", setup);
+        Assert.Equal("No Setup installer asset was found on this release.", setup);
         Assert.Equal("No defenseclaw-upgrade.ps1 asset was found on this release.", script);
     }
 
     [Fact]
     public void No_asset_at_all_is_the_same_message()
     {
-        Assert.Equal("No Setup exe asset was found on this release.", UpdatesWindowViewModel.BuildSetupCommand(null));
+        Assert.Equal("No Setup installer asset was found on this release.", UpdatesWindowViewModel.BuildSetupCommand(null));
         Assert.Equal("No defenseclaw-upgrade.ps1 asset was found on this release.", UpdatesWindowViewModel.BuildUpgradeScriptCommand(null));
     }
 

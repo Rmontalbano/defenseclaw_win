@@ -22,7 +22,7 @@ public sealed class AgentUpdatedSingleConnectorTests : IDisposable
     private const string CodexError =
         "connector codex setup failed: the Codex executable changed since setup (a Codex update does this); run: defenseclaw setup codex --yes";
 
-    private const string UpdatedTitle = "Codex updated itself; DefenseClaw is not checking it";
+    private const string UpdatedTitle = "Codex updated itself. DefenseClaw is not checking it";
 
     private readonly TempDirectory _temp = new();
     private AppServices? _services;
@@ -106,7 +106,7 @@ public sealed class AgentUpdatedSingleConnectorTests : IDisposable
         vm.Apply(Snapshot(ErrorGuardrail("connector amp setup failed: the Amp executable changed since setup (a Amp update does this); run: defenseclaw setup amp --yes")));
 
         var row = Assert.Single(vm.Attention, IsSelfUpdateRow);
-        Assert.Equal("Amp updated itself; DefenseClaw is not checking it", row.Title);
+        Assert.Equal("Amp updated itself. DefenseClaw is not checking it", row.Title);
         Assert.Equal("Critical", row.SeverityKey);
         Assert.Equal("defenseclaw setup amp --yes", row.Command);
         Assert.Equal(0, row.Actions.Count);

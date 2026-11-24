@@ -89,7 +89,7 @@
                         <ctl:DcCardHeader Symbol="ArrowDownload24" Tint="Amber" Content="Install the DefenseClaw runtime" />
                         <TextBlock Style="{StaticResource DcTextSecondary}"
                                    TextWrapping="Wrap"
-                                   Text="No defenseclaw command was found. The Updates window downloads the Setup installer, checks its SHA-256 against checksums.txt, shows the exact command and then runs it. When it finishes, press Check again." />
+                                   Text="No defenseclaw command was found. Install it from the Updates window, which checks its SHA-256 against checksums.txt. Then select Check again." />
                         <StackPanel Style="{StaticResource DcActionBar}" Margin="0,12,0,0">
                             <ui:Button Appearance="Primary"
                                        Content="Open the installer"
@@ -121,7 +121,7 @@
                         <TextBlock Style="{StaticResource DcCaption}"
                                    Margin="0,6,0,0"
                                    TextWrapping="Wrap"
-                                   Text="Detect reads the gateway's last AI discovery scan (ai_discovery_state.json). It executes nothing and runs only when you press it." />
+                                   Text="Detect reads the gateway's last AI discovery scan (ai_discovery_state.json). It runs only when you select it." />
                         <TextBlock Style="{StaticResource DcBody}"
                                    Margin="0,8,0,0"
                                    TextWrapping="Wrap"
@@ -238,7 +238,7 @@
                                                  AutomationProperties.Name="Block calls during a gateway outage"
                                                  AutomationProperties.HelpText="Adds a separate, reviewed step after setup: defenseclaw guardrail use-pack strict." />
                                 <TextBlock Style="{StaticResource DcCaption}" TextWrapping="Wrap"
-                                           Text="On this runtime the rule pack decides. While the gateway is not running, the default pack allows a call with a warning and strict blocks it. Every other failure blocks." />
+                                           Text="While the gateway is down, the default rule pack allows calls with a warning and strict blocks them. Other failures block." />
                             </StackPanel>
 
                             <TextBlock Grid.Row="3" Style="{StaticResource DcFieldLabelInline}" VerticalAlignment="Center" Text="LLM judge" />

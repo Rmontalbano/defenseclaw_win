@@ -84,7 +84,7 @@ public sealed partial class AiRuntimePanelViewModel
     {
         AiRuntimePrerequisitesState.Loading => "Asking the runtime what each plane needs…",
         AiRuntimePrerequisitesState.NotSupported => "This runtime has no 'agent discovery runtime permissions' command.",
-        AiRuntimePrerequisitesState.Unavailable => "The permissions check did not complete" + (PrerequisitesProblem.Length > 0 ? ": " + PrerequisitesProblem : "."),
+        AiRuntimePrerequisitesState.Unavailable => "The permissions check did not complete" + (PrerequisitesProblem.Length > 0 ? ": " + PrerequisitesProblem.TrimEnd('.') : string.Empty) + ". Treat every grant as missing.",
         AiRuntimePrerequisitesState.NotRead => "Not read yet.",
         _ => string.Empty,
     };
@@ -95,7 +95,7 @@ public sealed partial class AiRuntimePanelViewModel
     public bool HasGuidanceOs => GuidanceOs.Length > 0;
 
     public string GuidanceOsNote => HasGuidanceOs
-        ? $"This guidance is for {GuidanceOs}, where the runtime runs. It does not apply to this PC."
+        ? $"This guidance is for {GuidanceOs}, where the runtime runs. It does not apply to this machine."
         : string.Empty;
 
     /// <summary>Every copy-only command line of every open grant, one per line.</summary>

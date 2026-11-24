@@ -361,7 +361,7 @@ public sealed class PolicyModelViewTests
                 Assert.Equal(Visibility.Visible, ((FrameworkElement)view.FindName("ClassicHost")).Visibility);
 
                 var toolbar = Assert.Single(VisualTree.Descendants<DcPageToolbar>(view));
-                Assert.Equal("4 policies - active: default", toolbar.Caption);
+                Assert.Equal("4 policies · active: default", toolbar.Caption);
                 var grid = Assert.Single(VisualTree.Descendants<Wpf.Ui.Controls.DataGrid>(view));
                 Assert.Equal(new[] { "Active", "Name", "Kind", "Description" }, grid.Columns.Select(c => c.Header?.ToString()).ToArray());
                 Assert.Equal(4, grid.Items.Count);

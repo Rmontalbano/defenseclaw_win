@@ -445,7 +445,7 @@ public sealed class InstallationShellTests : IDisposable
         Assert.True(review.IsFinished);
         Assert.Equal("Bad", review.ResultKey);
         Assert.Equal("Refused: not started", review.CommandReview.Steps[0].StatusText);
-        Assert.Equal("Not run. " + TestInstallations.ManagedReason + " Nothing was changed. The refusal is in the Activity panel.", review.ResultText);
+        Assert.Equal("Not run. " + TestInstallations.ManagedReason + " Nothing was changed. The refusal is in Activity.", review.ResultText);
 
         // The refusal is the one Activity entry every refusal is: "refused", no exit code, the command that was not started.
         var recorded = Assert.Single(services.Cli.Activity);

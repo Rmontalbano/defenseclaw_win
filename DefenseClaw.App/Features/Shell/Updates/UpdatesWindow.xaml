@@ -58,17 +58,17 @@
             where the operator learns why. Collapsed (zero height) the rest of the time.
         -->
         <StackPanel Grid.Row="1">
-            <ui:InfoBar Title="Upgrade in progress. This window stays open until it finishes."
+            <ui:InfoBar Title="Upgrade in progress"
                         Margin="24,4,24,0"
                         IsClosable="False"
                         IsOpen="{Binding Upgrade.IsCloseBlocked, Mode=OneWay}"
                         Message="{Binding Upgrade.CloseBlockedNotice, Mode=OneWay}"
                         Severity="Warning" />
-            <ui:InfoBar Title="install.ps1 is running. This window stays open until it finishes."
+            <ui:InfoBar Title="install.ps1 is running"
                         Margin="24,4,24,0"
                         IsClosable="False"
                         IsOpen="{Binding InstallScript.IsRunning, Mode=OneWay}"
-                        Message="The installer runs in its own console window. Closing this window would lose the result panel."
+                        Message="This window stays open until it finishes. The installer runs in its own console window and carries on either way. Closing this window would lose the result panel."
                         Severity="Warning" />
         </StackPanel>
 
@@ -92,7 +92,7 @@
                             Margin="{StaticResource DcCardGap}"
                             IsClosable="False"
                             IsOpen="True"
-                            Message="Checking is read-only. The upgrade card downloads the release installer and compares its SHA-256 with checksums.txt, whose sigstore signature is verified when cosign is installed. It runs only after you confirm the command. Copyable commands are further down."
+                            Message="Checking is read-only. The upgrade card compares the installer's SHA-256 with checksums.txt, and verifies the sigstore signature of checksums.txt when cosign is installed. It runs only after you confirm."
                             Severity="Informational" />
 
                 <!-- Version comparison -->
@@ -490,7 +490,7 @@
                             </Grid>
                         </Border>
 
-                        <ui:InfoBar Title="Verification failed. Nothing was staged."
+                        <ui:InfoBar Title="Verification failed and nothing was staged"
                                     Margin="0,0,0,12"
                                     IsClosable="False"
                                     IsOpen="{Binding HasStagingError, Mode=OneWay}"
@@ -561,7 +561,7 @@
                                                HorizontalAlignment="Center"
                                                VerticalAlignment="Center"
                                                Style="{StaticResource DcEmptyDetail}"
-                                               Text="No output yet. Output appears here as it arrives. The command is also in the Activity panel."
+                                               Text="No output yet. Output appears here as it arrives. The command is also in Activity."
                                                IsHitTestVisible="False"
                                                Visibility="{Binding HasOutput, Converter={StaticResource InverseBoolToVisibility}}" />
                                 </Grid>

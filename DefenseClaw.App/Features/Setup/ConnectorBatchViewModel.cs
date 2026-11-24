@@ -279,7 +279,7 @@ public sealed partial class ConnectorBatchViewModel : SetupDialogViewModel
         _listed = null;
         if (!result.Succeeded)
         {
-            return "The options of setup could not be read (" + result.Error + "). Press Refresh to try again.";
+            return "The options of setup could not be read (" + result.Error + "). Select Refresh to try again.";
         }
 
         var help = SetupHelpParser.Parse(result.Text, commandDepth: 1);
@@ -462,12 +462,12 @@ public sealed partial class ConnectorBatchViewModel : SetupDialogViewModel
 
             if (Extra == BatchExtra.Detected && !IsListed("--detected"))
             {
-                return "setup does not list --detected.";
+                return "This DefenseClaw's setup does not list --detected.";
             }
 
             if (Extra == BatchExtra.All && !IsListed("--all"))
             {
-                return "setup does not list --all.";
+                return "This DefenseClaw's setup does not list --all.";
             }
 
             return HasChanges ? null : "Nothing to apply. The ticked connectors are already configured in this mode.";
@@ -476,7 +476,7 @@ public sealed partial class ConnectorBatchViewModel : SetupDialogViewModel
 
     public bool ReviewBlocked => ReviewBlockedReason is not null;
 
-    public string ReviewTip => ReviewBlockedReason ?? "Shows the command first. Nothing runs until you confirm.";
+    public string ReviewTip => ReviewBlockedReason ?? "Nothing runs until you confirm.";
 
     // ------------------------------------------------------------------ the plan
 

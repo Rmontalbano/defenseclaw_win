@@ -328,7 +328,7 @@ public static class SecretRoutes
                 {
                     Purpose = field.Label,
                     EnvName = _ => null,
-                    IfMissing = "The CLI expects this secret on its command line, which this app never does.",
+                    IfMissing = "The CLI expects this secret on its command line. The app does not pass secrets that way.",
                 };
         }
     }

@@ -266,7 +266,7 @@ public static class ProtectedFileWatchFacts
     /// Shown only on a runtime with <see cref="DefenseClaw.Core.Runtime.RuntimeCapability.ShellProtectedFileFloor"/>.
     /// </summary>
     public const string ShellFloorCoverage =
-        "A shell command that writes ~\\.ssh\\authorized_keys, a shell startup file or a Git hook is at least an alert in every rule pack. " +
-        "Changes to DefenseClaw's own files are blocked in every pack. In action mode, an agent edit that turns DefenseClaw's hooks off is blocked. " +
-        "A shell write to those settings is an alert, blocked in the strict pack.";
+        "A shell command that writes ~\\.ssh\\authorized_keys, a shell startup file or a Git hook is at least an alert in every rule pack.\n" +
+        "DefenseClaw's own files are blocked in every pack.\n" +
+        "In action mode, an agent edit that turns DefenseClaw's hooks off is blocked. A shell write to those settings is an alert, blocked in the strict pack.";
 }

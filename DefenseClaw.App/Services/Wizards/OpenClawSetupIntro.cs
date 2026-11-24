@@ -56,8 +56,8 @@ public static class OpenClawSetupIntro
                 "Optional check to run yourself in a terminal: " + PreflightCommand +
                 ". It prints \"openclaw preflight: ok\", or the reason setup would stop.",
             },
-            WillDo = "Registers the DefenseClaw plugin with OpenClaw and sets openclaw as the guarded connector. OpenClaw's own gateway must restart to load the plugin. Setup's --restart, on by default, restarts it along with DefenseClaw's gateway. " +
-                     "Until it restarts, OpenClaw is not guarded. The last page shows the exact command first.",
+            WillDo = "Registers the DefenseClaw plugin with OpenClaw and sets openclaw as the guarded connector. OpenClaw's gateway must restart to load it, which --restart (on by default) does. " +
+                     "Until then OpenClaw is not guarded.",
         };
 
         var intro = new WizardStep

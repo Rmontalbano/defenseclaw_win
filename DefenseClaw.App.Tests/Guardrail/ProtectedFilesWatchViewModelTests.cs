@@ -88,7 +88,7 @@ public sealed class ProtectedFilesWatchViewModelTests : IDisposable
 
         // The 1.0.6 text is word for word what it was.
         Assert.EndsWith("Shell startup files and autostart entries are watched on Linux and macOS only.", vm.WatchedText, StringComparison.Ordinal);
-        Assert.Equal("The gateway checks a short list of files every 2 seconds while it runs. The watch blocks nothing and reports a change after it happens.", vm.Summary);
+        Assert.Equal("The gateway watches a short list of files every 2 seconds while it runs. The watch blocks nothing and reports a change after it happens.", vm.Summary);
         Assert.DoesNotContain("authorized_keys, a shell startup file", vm.WatchedText, StringComparison.Ordinal);
     }
 

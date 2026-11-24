@@ -66,8 +66,7 @@ internal static class ConnectorRecovery
     /// the receipts. Neither the help nor the installer gives another step, so none is invented here.
     /// </summary>
     public const string KeptSentence =
-        "If a config cannot be finished, the .defenseclaw-cas-v2-* receipts stay in the data folder and the upgrade stays refused. " +
-        "The installer and help give no other step.";
+        "If a config cannot be finished, the .defenseclaw-cas-v2-* receipts stay in the data folder and the upgrade stays refused.";
 
     public const string FailureText =
         "If it fails, its output says \"recovery files are kept in <folder>\" and names each config it could not finish. " + KeptSentence;
@@ -92,7 +91,7 @@ internal static class ConnectorRecovery
 
     /// <summary>The pre-flight sentence for receipts the app does not list as a pending write.</summary>
     public static string ReceiptsOnlyStep(string dataDirectory) =>
-        "Run " + CommandText(dataDirectory) + " in PowerShell or a Command Prompt, then check again. Do not remove or move the files yourself." +
+        "Run " + CommandText(dataDirectory) + " in PowerShell or a Command Prompt, then select Re-check. Do not remove or move the files yourself." +
         (PathReadSpecially(dataDirectory)
             ? " The folder name has a $, backtick or %, which the shell may read specially. Check that the command prints this folder."
             : string.Empty);

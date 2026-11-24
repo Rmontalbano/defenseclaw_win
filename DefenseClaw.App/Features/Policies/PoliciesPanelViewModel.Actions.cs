@@ -118,9 +118,9 @@ public sealed partial class PoliciesPanelViewModel
 
     public string ActivateTip => ActivateBlockedReason ?? "Validates the policies, then shows what activating this one changes.";
 
-    public string EditTip => EditBlockedReason ?? "Edit one section: severity actions, scanner overrides, guardrail or firewall. The command is shown first.";
+    public string EditTip => EditBlockedReason ?? "Edit one section: severity actions, scanner overrides, guardrail or firewall. Nothing runs until you confirm.";
 
-    public string DeleteTip => DeleteBlockedReason ?? "Delete this custom policy. The command is shown first.";
+    public string DeleteTip => DeleteBlockedReason ?? "Delete this custom policy. Nothing runs until you confirm.";
 
     public string CreateTip => CreateBlockedReason ?? "Create a custom policy, optionally from a built-in preset. It stays inactive until activated.";
 
@@ -349,7 +349,7 @@ public sealed partial class PoliciesPanelViewModel
 
         Review.Open(
             heading: $"Activate policy '{row.Name}'?",
-            explanation: $"Applies '{row.Name}' to config.yaml and syncs the OPA data.json. Cisco AI Defense and webhook settings in the file apply too, but policy show does not list them. {effect}",
+            explanation: $"Applies '{row.Name}' to config.yaml and syncs data.json. Cisco AI Defense and webhook settings in the file apply too, though policy show omits them. {effect}",
             steps: new[] { new DiscoverStep(_backend.ActivateArgv(row.Name), $"Activate policy {row.Name}") },
             onFinished: result => AfterChangeAsync(result, $"Activated '{row.Name}'."),
             primaryText: "Activate policy",
@@ -568,7 +568,7 @@ public sealed partial class PoliciesPanelViewModel
         }
         else
         {
-            ShowNotice("The command did not finish", "The review dialog and the Activity panel show its output. The list is read again.", InfoBarSeverity.Warning);
+            ShowNotice("The command did not finish", "The review dialog and Activity show its output. The list is read again.", InfoBarSeverity.Warning);
         }
     }
 

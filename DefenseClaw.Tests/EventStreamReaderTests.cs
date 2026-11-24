@@ -134,7 +134,7 @@ public sealed class EventStreamReaderTests : IDisposable
 
         Assert.Equal("block", row.Action);
         Assert.Equal("verdict", row.EventType);
-        Assert.Equal("guardrail.evaluated block — matched a rule", row.Message);
+        Assert.Equal("guardrail.evaluated block: matched a rule", row.Message);
         Assert.Equal("claudecode", row.Connector);
         Assert.Equal(new DateTimeOffset(2026, 10, 1, 12, 1, 0, TimeSpan.Zero), row.Timestamp);
         Assert.Contains("\"body\"", row.RawJson, StringComparison.Ordinal);
@@ -163,7 +163,7 @@ public sealed class EventStreamReaderTests : IDisposable
         var row = (await Reader().ReadAsync(EventStreamKind.Verdicts)).Rows.Single();
 
         Assert.Equal("install-blocked", row.Action);
-        Assert.Equal("enforcement.applied install-blocked — type=skill reason=scanner-error", row.Message);
+        Assert.Equal("enforcement.applied install-blocked: type=skill reason=scanner-error", row.Message);
     }
 
     [Fact]

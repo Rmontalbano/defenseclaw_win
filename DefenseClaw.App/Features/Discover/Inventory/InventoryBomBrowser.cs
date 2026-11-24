@@ -757,7 +757,7 @@ public sealed partial class InventoryBomBrowser : ObservableObject
         if (several)
         {
             rows.Add(("Source", $"All {connectors.Count} connectors: {string.Join(", ", connectors.Select(c => OverviewPanelViewModel.FriendlyConnectorName(c.Name)))}"));
-            rows.Add(("Home / Config", "per connector (choose one in the connector scope)"));
+            rows.Add(("Home / Config", "per connector. Choose one in the connector scope"));
         }
         else
         {
@@ -912,7 +912,7 @@ public sealed partial class InventoryBomBrowser : ObservableObject
         {
             foreach (var error in connector.Errors)
             {
-                notes.Add(($"{connector.Name}: command failed", error.Command.Length > 0 ? $"{error.Command} - {error.Message}" : error.Message));
+                notes.Add(($"{connector.Name}: command failed", error.Command.Length > 0 ? $"{error.Command}: {error.Message}" : error.Message));
             }
 
             if (connector.ErrorCount > connector.Errors.Count)
@@ -925,7 +925,7 @@ public sealed partial class InventoryBomBrowser : ObservableObject
                 var label = string.Equals(limitation.Status, "unsupported", StringComparison.OrdinalIgnoreCase)
                     ? "Not supported"
                     : string.Equals(limitation.Status, "unverified", StringComparison.OrdinalIgnoreCase) ? "Partly checked" : limitation.Status;
-                notes.Add(($"{connector.Name}: {label}", $"{limitation.Category} - {limitation.Reason}"));
+                notes.Add(($"{connector.Name}: {label}", $"{limitation.Category}: {limitation.Reason}"));
             }
 
             foreach (var kind in InventoryBomKinds.All)

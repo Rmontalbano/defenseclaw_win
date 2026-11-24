@@ -274,7 +274,7 @@ public sealed class SetupResourceChangeTests : IDisposable
         await vm.ActivateRowCommand.ExecuteAsync(null);
 
         Assert.Equal("Nothing was sent", vm.NoticeTitle);
-        Assert.Contains("Press Test", vm.NoticeMessage, StringComparison.Ordinal);
+        Assert.Contains("Select Test", vm.NoticeMessage, StringComparison.Ordinal);
         Assert.Single(cli.Ran);
     }
 
@@ -321,7 +321,7 @@ public sealed class SetupResourceChangeTests : IDisposable
         Assert.False(vm.CanTest);
         Assert.Contains("mandatory", vm.DisableTip, StringComparison.Ordinal);
         Assert.Contains("mandatory", vm.RemoveTip, StringComparison.Ordinal);
-        Assert.Contains("stores or serves events on this PC", vm.TestTip, StringComparison.Ordinal);
+        Assert.Contains("stores or serves events on this machine", vm.TestTip, StringComparison.Ordinal);
 
         // Pressed anyway, nothing opens.
         vm.RemoveCommand.Execute(null);

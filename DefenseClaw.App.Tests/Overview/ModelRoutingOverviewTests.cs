@@ -334,7 +334,7 @@ public sealed class ModelRoutingOverviewTests : IDisposable
         await vm.RefreshModelUsageAsync(force: true, CancellationToken.None);
 
         var row = Row(vm, "Tokenomics")!;
-        Assert.Equal("on in config.yaml, gateway reports usage store off", row.Value);
+        Assert.Equal("on in config.yaml. The gateway reports the usage store off.", row.Value);
         Assert.Equal("Neutral", row.ToneKey);
     }
 
@@ -378,7 +378,7 @@ public sealed class ModelRoutingOverviewTests : IDisposable
         vm.Apply(Snapshot(Health(DisabledRouting)));
         await vm.RefreshModelUsageAsync(force: true, CancellationToken.None);
 
-        Assert.Equal("on, local usage store off, no usage kept", Row(vm, "Tokenomics")!.Value);
+        Assert.Equal("on. The local usage store is off, so no usage is kept.", Row(vm, "Tokenomics")!.Value);
         Assert.Equal(0, stub.Calls);
     }
 

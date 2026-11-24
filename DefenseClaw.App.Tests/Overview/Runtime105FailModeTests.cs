@@ -180,7 +180,7 @@ public sealed class Runtime105FailModeTests : IDisposable
         foreach (var field in new[] { current!, global! })
         {
             Assert.Contains("a saved value decides", field.ReadOnlyReason, StringComparison.Ordinal);
-            Assert.Contains("with none saved, the policy tier decides", field.ReadOnlyReason, StringComparison.Ordinal);
+            Assert.Contains("With none saved, the policy tier decides", field.ReadOnlyReason, StringComparison.Ordinal);
             Assert.Contains("defenseclaw guardrail fail-mode", field.ReadOnlyReason, StringComparison.Ordinal);
             Assert.DoesNotContain("does not apply", field.ReadOnlyReason, StringComparison.Ordinal);
         }

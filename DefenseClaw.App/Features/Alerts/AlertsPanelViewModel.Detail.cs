@@ -312,7 +312,7 @@ public sealed partial class AlertsPanelViewModel
         {
             IsSeverityReview = false;
             ReviewHeading = $"{(dismissing ? "Dismiss" : "Acknowledge")} {total} {setName} {(ids.Count == 1 ? "alert" : "alerts")}";
-            ReviewIntro = "Applies only to the alerts named by id in the command below. The preview below is a dry run and changes nothing."
+            ReviewIntro = "Applies only to the alerts named by id in the command below. The preview below is a dry run."
                 + (skipped > 0 ? $" {skipped} {setName} gateway-only {(skipped == 1 ? "row has" : "rows have")} no audit id and {(skipped == 1 ? "is" : "are")} left out." : string.Empty);
             CommandNote = "This command runs when you confirm. --yes is the CLI's confirmation for more than one id.";
             SetChunkText();

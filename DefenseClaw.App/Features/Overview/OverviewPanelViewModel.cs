@@ -543,7 +543,7 @@ public sealed partial class OverviewPanelViewModel : PanelViewModelBase
         DoctorIsEmpty = false;
         DoctorIsStale = stale;
         DoctorAsOfText = snapshot.CapturedAt is { } at
-            ? $"as of {FormatCapturedAt(at)} - {Relative(at)}"
+            ? $"as of {FormatCapturedAt(at)} · {Relative(at)}"
             : "capture time unknown";
 
         DoctorSummary =
@@ -742,7 +742,7 @@ public sealed partial class OverviewPanelViewModel : PanelViewModelBase
             case AppGatewayState.Degraded:
                 rows.Add(new AttentionRow
                 {
-                    Title = "The gateway answered, but not cleanly",
+                    Title = "The gateway's answer was not clean",
                     Detail = snapshot.Detail,
                     SeverityKey = "Medium",
                 });
@@ -904,7 +904,7 @@ public sealed partial class OverviewPanelViewModel : PanelViewModelBase
                 rows.Add(new AttentionRow
                 {
                     Title = "Nothing needs attention",
-                    Detail = "The gateway is healthy, with no critical alerts and no fail-mode mismatch.",
+                    Detail = "The gateway is healthy, with no critical alerts and no fail mode mismatch.",
                     SeverityKey = "Ok",
                 });
             }
@@ -1193,7 +1193,7 @@ public sealed partial class OverviewPanelViewModel : PanelViewModelBase
             var drift = runtime is not null && settings is not null &&
                         (!Equal(runtime.GuardrailMode, settings.Mode) ||
                          !Equal(runtime.HookFailMode, settings.HookFailMode))
-                ? $"config.yaml says mode {settings.Mode ?? "—"} / fail-mode {settings.HookFailMode ?? "—"}"
+                ? $"config.yaml says mode {settings.Mode ?? "—"} / fail mode {settings.HookFailMode ?? "—"}"
                 : string.Empty;
             if (hookMode is not null && settings?.HookFailMode is { Length: > 0 } configuredFail && !Equal(hookMode, configuredFail))
             {
@@ -1203,7 +1203,7 @@ public sealed partial class OverviewPanelViewModel : PanelViewModelBase
 
             if (reported?.FailMode is { HasDrift: true, Drift.Count: > 0 } failDrift)
             {
-                var sources = "fail-mode drift: " + string.Join(", ", failDrift.Drift);
+                var sources = "fail mode drift: " + string.Join(", ", failDrift.Drift);
                 drift = drift.Length > 0 ? drift + " · " + sources : sources;
             }
 
@@ -1443,7 +1443,7 @@ public sealed partial class OverviewPanelViewModel : PanelViewModelBase
     {
         GatewayStatus.NotConnected => "The enforcement subsystem is not connected on this install.",
         GatewayStatus.Unauthorized =>
-            $"/enforce needs a bearer token; none was found via {Services.Token.VariableName}.",
+            $"/enforce needs a bearer token. None was found via {Services.Token.VariableName}.",
         GatewayStatus.Unreachable => "The gateway is not answering, so enforcement lists cannot be read.",
         _ => message ?? "The gateway did not return an enforcement list.",
     };
@@ -1567,8 +1567,14 @@ public sealed record AttentionRow
 
     public string Detail { get; init; } = string.Empty;
 
-    /// <summary>Reference text behind <see cref="Detail"/> that is needed only now and then (the runtime's own rule sentence): the detail's tooltip and help text.</summary>
+    /// <summary>
+    /// Reference text behind <see cref="Detail"/> that is needed only now and then (the runtime's own rule sentence): shown on screen under a collapsed,
+    /// keyboard-reachable expander labelled <see cref="ReferenceLabel"/>, and as the detail's help text.
+    /// </summary>
     public string Reference { get; init; } = string.Empty;
+
+    /// <summary>The header of the expander that holds <see cref="Reference"/>.</summary>
+    public string ReferenceLabel { get; init; } = "Details";
 
     /// <summary>True when <see cref="Reference"/> has something to show.</summary>
     public bool HasReference => Reference.Length > 0;
@@ -1819,7 +1825,7 @@ public sealed partial class ConnectorRow : ObservableObject
         $"Connector {Name}",
         StateText,
         $"mode {Mode}",
-        $"fail-mode {FailMode}",
+        $"fail mode {FailMode}",
         HasWarning ? WarningText : string.Empty,
         Counters);
 }

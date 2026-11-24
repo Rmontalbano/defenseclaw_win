@@ -100,7 +100,7 @@ public sealed class InstallationContextTests
                 .WithFixture(UserConfig, "user-config.yaml"),
             InstallationSource.EnvironmentConfig, InstallationAccess.InvalidReadOnly,
             InstallationMachine.DefaultHome, UserConfig, PinnedConfig: UserConfig,
-            Reason: "DEFENSECLAW_CONFIG is set and the developer runtime selector names a different folder; remove one of them."),
+            Reason: "DEFENSECLAW_CONFIG is set and the developer runtime selector names a different folder. Remove one of them."),
 
         ["a Cisco Secure Client managed layout is the managed installation"] = new(
             () => new InstallationMachine().WithSecureClientLayout(),
@@ -127,19 +127,19 @@ public sealed class InstallationContextTests
             () => new InstallationMachine().WithSecureClientLayout().WithEnvironment("DEFENSECLAW_HOME", Home).WithFixture(Home + @"\config.yaml", "user-config.yaml"),
             InstallationSource.EnvironmentHome, InstallationAccess.InvalidReadOnly,
             Home, Home + @"\config.yaml", PinnedHome: Home,
-            Reason: "A managed (enterprise) DefenseClaw installation is present on this PC and conflicts with the selected non-managed installation."),
+            Reason: "A managed (enterprise) DefenseClaw installation is present on this machine and conflicts with the selected non-managed installation."),
 
         ["a managed layout and a non-managed DEFENSECLAW_CONFIG conflict"] = new(
             () => new InstallationMachine().WithSecureClientLayout().WithEnvironment("DEFENSECLAW_CONFIG", UserConfig).WithFixture(UserConfig, "user-config.yaml"),
             InstallationSource.EnvironmentConfig, InstallationAccess.InvalidReadOnly,
             InstallationMachine.DefaultHome, UserConfig, PinnedConfig: UserConfig,
-            Reason: "A managed (enterprise) DefenseClaw installation is present on this PC and conflicts with the selected non-managed installation."),
+            Reason: "A managed (enterprise) DefenseClaw installation is present on this machine and conflicts with the selected non-managed installation."),
 
         ["a managed layout and a developer selector conflict"] = new(
             () => new InstallationMachine { Runtime = RuntimeSelection.ForCli(DevCli, DevHome, null) }.WithSecureClientLayout(),
             InstallationSource.AppOverride, InstallationAccess.InvalidReadOnly,
             DevHome, DevHome + @"\config.yaml", PinnedHome: DevHome,
-            Reason: "A managed (enterprise) DefenseClaw installation is present on this PC and conflicts with the selected non-managed installation."),
+            Reason: "A managed (enterprise) DefenseClaw installation is present on this machine and conflicts with the selected non-managed installation."),
 
         ["DEFENSECLAW_CONFIG naming the managed config selects the managed installation and its runtime home"] = new(
             () => new InstallationMachine().WithSecureClientLayout().WithEnvironment("DEFENSECLAW_CONFIG", SecureConfig),
@@ -159,7 +159,7 @@ public sealed class InstallationContextTests
             InstallationSource.ManagedLayout, InstallationAccess.InvalidReadOnly,
             InstallationMachine.SecureClientState + @"\runtime", SecureConfig,
             PinnedHome: InstallationMachine.SecureClientState + @"\runtime", PinnedConfig: SecureConfig,
-            Reason: "Both a Cisco Secure Client and a standalone managed DefenseClaw installation are present; DefenseClaw supports only one at a time."),
+            Reason: "Both a Cisco Secure Client and a standalone managed DefenseClaw installation are present. DefenseClaw supports only one at a time."),
 
         ["the install root alone is evidence, and a config nobody can read says so"] = new(
             () => new InstallationMachine().WithFile(InstallationMachine.SecureClientInstall + @"\bin\defenseclaw.exe", "MZ"),
@@ -385,19 +385,19 @@ public sealed class InstallationContextTests
     public void The_labels_name_the_source_and_the_access()
     {
         Assert.Equal("User default", UserMachine().Resolve().SourceLabel);
-        Assert.Equal("Unmanaged — setup changes allowed", UserMachine().Resolve().AccessLabel);
+        Assert.Equal("Unmanaged: setup changes allowed", UserMachine().Resolve().AccessLabel);
         Assert.Equal("DEFENSECLAW_HOME", new InstallationMachine().WithEnvironment("DEFENSECLAW_HOME", Home).Resolve().SourceLabel);
         Assert.Equal("DEFENSECLAW_CONFIG", new InstallationMachine().WithEnvironment("DEFENSECLAW_CONFIG", UserConfig).WithFixture(UserConfig, "user-config.yaml").Resolve().SourceLabel);
         Assert.StartsWith("Developer runtime selector", new InstallationMachine { Runtime = RuntimeSelection.ForCli(DevCli, DevHome, null) }.Resolve().SourceLabel, StringComparison.Ordinal);
 
         var secure = new InstallationMachine().WithSecureClientLayout().Resolve();
         Assert.Equal("Managed installation (Cisco Secure Client)", secure.SourceLabel);
-        Assert.Equal("Managed enterprise — read only", secure.AccessLabel);
+        Assert.Equal("Managed enterprise: read only", secure.AccessLabel);
         Assert.Equal("Managed installation (standalone)", new InstallationMachine().WithStandaloneLayout().Resolve().SourceLabel);
 
         var invalid = new InstallationMachine().WithEnvironment("DEFENSECLAW_HOME", "relative").Resolve();
-        Assert.Equal("Invalid installation selection — read only", invalid.AccessLabel);
-        Assert.Equal("DEFENSECLAW_HOME · Invalid installation selection — read only", invalid.Describe());
+        Assert.Equal("Invalid installation selection: read only", invalid.AccessLabel);
+        Assert.Equal("DEFENSECLAW_HOME · Invalid installation selection: read only", invalid.Describe());
     }
 
     [Fact]

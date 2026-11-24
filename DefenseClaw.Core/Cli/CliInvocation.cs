@@ -526,9 +526,8 @@ public sealed class CliInvocation
         new(
             at,
             CliStream.Notice,
-            $"[output truncated] {droppedLines} earlier line(s) dropped — DefenseClaw for Windows retains at " +
-            $"most {_maxLines} lines / {_maxBytes / 1024} KiB of output per invocation. " +
-            "The exit code and failure reason below are unaffected.");
+            $"[output truncated] {droppedLines} earlier {(droppedLines == 1 ? "line" : "lines")} dropped. DefenseClaw for Windows retains at " +
+            $"most {_maxLines} lines / {_maxBytes / 1024} KiB of output per invocation.");
 
     /// <summary>Approximate retained cost of a line: the text itself as UTF-16, plus fixed overhead.</summary>
     private static long CostOf(CliOutputLine line) =>

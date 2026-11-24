@@ -499,7 +499,7 @@ public sealed partial class CredentialsViewModel
         var unseen = stored.Where(o => Rows.FirstOrDefault(r => r.EnvName == o.Name) is { Row.IsSet: false }).Select(o => o.Name).ToArray();
         if (unseen.Length > 0)
         {
-            Note = $"The CLI finished, but {string.Join(", ", unseen)} still reads unset. Refresh, or check ~/.defenseclaw/.env.";
+            Note = $"The CLI finished, but {string.Join(", ", unseen)} still reads unset. Select Refresh, or check ~/.defenseclaw/.env.";
             NoteKey = "Warn";
             return;
         }

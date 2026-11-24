@@ -517,10 +517,10 @@ public sealed partial class DiscoverActionReview : ObservableObject
         var report = PlanReport.Describe(outcomes);
         ResultKey = succeeded ? "Ok" : "Bad";
         ResultText = report.Length > 0
-            ? (succeeded ? "Done. " : "Did not finish. ") + report + " Full output is in the Activity panel."
+            ? (succeeded ? "Done. " : "Did not finish. ") + report + " Full output is in Activity."
             : succeeded
-                ? "Done. Full output is in the Activity panel."
-                : "Did not finish. Later steps were not run. Full output is in the Activity panel.";
+                ? "Done. Full output is in Activity."
+                : "Did not finish. Later steps were not run. Full output is in Activity.";
         ResultOutput = output.Length == 0 ? null : output.ToString().TrimEnd();
 
         var callback = _onFinished;
@@ -558,7 +558,7 @@ public sealed partial class DiscoverActionReview : ObservableObject
 
         _onFinished = null;
         ResultKey = "Bad";
-        ResultText = "Not run. " + reason + " Nothing was changed. The refusal is in the Activity panel.";
+        ResultText = "Not run. " + reason + " Nothing was changed. The refusal is in Activity.";
         ResultOutput = null;
         IsFinished = true;
     }
@@ -589,7 +589,7 @@ public sealed partial class DiscoverActionReview : ObservableObject
         var skipped = Math.Max(0, total - tail.Count);
         if (skipped > 0)
         {
-            builder.AppendLine($"… {skipped} earlier line(s) omitted; see Activity.");
+            builder.AppendLine($"… {skipped} earlier {(skipped == 1 ? "line" : "lines")} omitted. See Activity.");
         }
 
         foreach (var line in tail)

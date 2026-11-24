@@ -256,7 +256,7 @@ public sealed class RegistryEntryRow
     {
         get
         {
-            var lines = new List<string> { WorstSeverity is { } worst ? $"{FindingsBadgeText} — worst severity {worst}" : FindingsBadgeText };
+            var lines = new List<string> { WorstSeverity is { } worst ? $"{FindingsBadgeText}, worst severity {worst}" : FindingsBadgeText };
 
             foreach (var finding in FindingLines)
             {

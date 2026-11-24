@@ -80,9 +80,9 @@ public static partial class WizardBaseline
             return definition.With(
                 definition.Steps,
                 string.Empty,
-                "config.yaml could not be read, so this wizard cannot see the connector's current mode or fail-mode. " +
+                "config.yaml could not be read, so this wizard cannot see the connector's current mode or fail mode. " +
                 "The CLI resets --mode to observe when it is not given, which would downgrade a connector in action mode. " +
-                "Fix the config first in Setup → Config editor, or set every field deliberately.");
+                "Fix the config first in Setup → Config editor, or set every field yourself.");
         }
 
         var key = Normalize(definition.Target);

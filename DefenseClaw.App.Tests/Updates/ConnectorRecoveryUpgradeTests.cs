@@ -116,7 +116,6 @@ public sealed class ConnectorRecoveryUpgradeTests : IDisposable
         Assert.Contains("Do not remove or move the receipts yourself.", hint, StringComparison.Ordinal);
         Assert.Contains(".defenseclaw-cas-v2-* receipts stay in the data folder", hint, StringComparison.Ordinal);
         Assert.Contains("the upgrade stays refused", hint, StringComparison.Ordinal);
-        Assert.Contains("give no other step", hint, StringComparison.Ordinal);
         Assert.DoesNotContain("close the agent", hint, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("move aside", hint, StringComparison.OrdinalIgnoreCase);
     }
@@ -171,7 +170,7 @@ public sealed class ConnectorRecoveryUpgradeTests : IDisposable
         var row = Evaluate(new Probes { HasPending = true }, "1.0.9", "1.0.8").Rows.Single(r => r.Id == InstallScriptPreflight.PendingWritesId);
 
         Assert.Equal(PreflightStatus.Block, row.Status);
-        Assert.EndsWith("DefenseClaw's installer refuses to change version while they remain. Open Overview and use \"Clear the stuck pending write\", then check again.", row.Reason, StringComparison.Ordinal);
+        Assert.EndsWith("DefenseClaw's installer refuses to change version while they remain. Open Overview and use \"Clear the stuck pending write\", then select Re-check.", row.Reason, StringComparison.Ordinal);
         Assert.Equal(PreflightActionIds.OpenOverview, row.ActionId);
     }
 

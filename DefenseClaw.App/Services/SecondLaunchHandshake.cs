@@ -59,7 +59,7 @@ public sealed class SecondLaunchHandshake
         SecondLaunchOutcome.NoChannel =>
             "DefenseClaw for Windows did not start because something already holds its single-instance lock, and this launch could not reach it. " +
             "If DefenseClaw is running with administrator rights, close it from its tray icon (or Task Manager) and start it again. " +
-            "If it is not running, another program is holding the lock; end that program, then start DefenseClaw again.",
+            "If it is not running, another program is holding the lock. End that program, then start DefenseClaw again.",
         _ =>
             "DefenseClaw for Windows did not start because a process already holds its single-instance lock and did not answer when asked to show its window. " +
             "That is either a DefenseClaw that is not responding or a different program using the same name. " +

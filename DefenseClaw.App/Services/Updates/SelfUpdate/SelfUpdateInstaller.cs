@@ -186,7 +186,7 @@ internal sealed class SelfUpdateInstaller
         var notes = new List<string>();
         if (IsDevelopmentFolder)
         {
-            notes.Add("This app runs from a build folder (publish or bin); the update replaces that build.");
+            notes.Add("This app runs from a build folder (publish or bin). The update replaces that build.");
         }
 
         var directory = Path.Combine(StagingRoot, release.Version.ToString());
@@ -213,7 +213,7 @@ internal sealed class SelfUpdateInstaller
 
         if (release.Zip!.Digest is null)
         {
-            notes.Add("GitHub published no digest for the zip; it was checked against checksums.txt only.");
+            notes.Add("GitHub published no digest for the zip. It was checked against checksums.txt only.");
         }
 
         var zipPath = Path.Combine(directory, zipAsset.Name);
@@ -409,7 +409,7 @@ internal sealed class SelfUpdateInstaller
                     total += read;
                     if (total > maxBytes)
                     {
-                        return (null, total, $"{name} is larger than the {ReadLimits.Describe(maxBytes)} limit for an update; the download was stopped.");
+                        return (null, total, $"{name} is larger than the {ReadLimits.Describe(maxBytes)} limit for an update. The download was stopped.");
                     }
 
                     hash.TransformBlock(buffer, 0, read, null, 0);

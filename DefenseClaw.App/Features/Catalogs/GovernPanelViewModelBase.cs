@@ -380,7 +380,7 @@ public abstract partial class GovernPanelViewModelBase : PanelViewModelBase, IGo
     /// <summary>Why Scan cannot run (the scanner is not installed); null when it can. Shown inline, not only in a tooltip.</summary>
     public string? ScanUnavailableReason =>
         ScannerExecutable is { } exe && _scannerFound == false
-            ? $"Scan is unavailable: {exe} was not found on this machine. Install it and press Refresh."
+            ? $"Scan is unavailable: {exe} was not found on this machine. Install it and select Refresh."
             : null;
 
     public bool HasScanUnavailableReason => ScanUnavailableReason is not null;
@@ -1172,7 +1172,7 @@ public abstract partial class GovernPanelViewModelBase : PanelViewModelBase, IGo
         var argv = BuildArgv(Noun, InfoVerb, options, row.Name);
 
         // The card's heading shows the name of an item that came from outside: its control and format characters are spelled out.
-        var title = $"defenseclaw {Noun} {InfoVerb} — {DisplayNames.Visible(row.Name)}";
+        var title = $"defenseclaw {Noun} {InfoVerb} · {DisplayNames.Visible(row.Name)}";
 
         // Info for a name the CLI would rewrite is info about some other item.
         if (RefuseExpandingTarget(argv))
@@ -1368,7 +1368,7 @@ public abstract partial class GovernPanelViewModelBase : PanelViewModelBase, IGo
             {
                 ShowResult(
                     "Command failed",
-                    $"{Summarize(invocation)} The list was not re-read. Press Refresh to see the current state. Full output is in Activity.",
+                    $"{Summarize(invocation)} The list was not re-read. Select Refresh to see the current state. Full output is in Activity.",
                     InfoBarSeverity.Error);
             }
         }

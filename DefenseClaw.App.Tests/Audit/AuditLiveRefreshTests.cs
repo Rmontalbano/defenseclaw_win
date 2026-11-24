@@ -467,7 +467,7 @@ public sealed class AuditLiveRefreshTests : IDisposable
         Assert.Equal(1, calls);
         Assert.True(panel.HasLiveNote);
         Assert.Contains("Live refresh paused (the disk is busy)", panel.LiveNote, StringComparison.Ordinal);
-        Assert.Contains("retrying in 5 s", panel.LiveNote, StringComparison.Ordinal);
+        Assert.Contains("Retrying in 5 s", panel.LiveNote, StringComparison.Ordinal);
         Assert.True(rows.SequenceEqual(panel.Rows));
 
         // Backing off: ticks inside the wait do not even sample.
@@ -480,13 +480,13 @@ public sealed class AuditLiveRefreshTests : IDisposable
         _clock.Advance(TimeSpan.FromSeconds(2));
         await panel.PollLiveAsync();
         Assert.Equal(2, calls);
-        Assert.Contains("retrying in 10 s", panel.LiveNote, StringComparison.Ordinal);
+        Assert.Contains("Retrying in 10 s", panel.LiveNote, StringComparison.Ordinal);
 
         foreach (var expected in new[] { "20 s", "40 s", "60 s", "60 s" })
         {
             _clock.Advance(TimeSpan.FromSeconds(61));
             await panel.PollLiveAsync();
-            Assert.Contains("retrying in " + expected, panel.LiveNote, StringComparison.Ordinal);
+            Assert.Contains("Retrying in " + expected, panel.LiveNote, StringComparison.Ordinal);
         }
 
         // The disk comes back: the poll after the wait works, merges what arrived meanwhile, and the note is gone.

@@ -60,7 +60,7 @@ public sealed partial class TrustedPathsViewModel : SetupResourceViewModel
     public override string Title => "Trusted binary locations";
 
     public override string Subtitle =>
-        "Folders DefenseClaw may run connector programs from. Trust only folders you control. Built-in folders are protected.";
+        "Folders DefenseClaw may run connector programs from. Anything in a trusted folder can be run.";
 
     public override string Singular => "trusted folder";
 
@@ -80,12 +80,12 @@ public sealed partial class TrustedPathsViewModel : SetupResourceViewModel
     public override string FailedTitle => "Could not read the trusted-path allow-list";
 
     public override string FailedDetail =>
-        "The allow-list is unknown and may hold folders not shown here. Nothing can be changed until it is read.";
+        "The allow-list could not be read and may hold folders not shown here. Nothing can be changed until it is read.";
 
     protected override string TipFor(SetupVerb verb) => verb switch
     {
-        SetupVerb.Add => "Opens the setup wizard to type the folder to trust. The command is shown first.",
-        SetupVerb.Remove => "Stop trusting this folder. The command is shown first.",
+        SetupVerb.Add => "Opens the setup wizard to type the folder to trust. Nothing runs until you confirm.",
+        SetupVerb.Remove => "Stop trusting this folder. Nothing runs until you confirm.",
         _ => string.Empty,
     };
 
@@ -178,7 +178,7 @@ public sealed partial class TrustedPathsViewModel : SetupResourceViewModel
             row,
             argv,
             $"Stop trusting “{row.Title}”?",
-            $"Takes this folder out of the allow-list ({p.Source}). Connector programs in it are no longer discovered or checked, and action-mode setup for them stops until you trust it again.",
+            $"Takes this folder out of the allow-list ({p.Source}). Connector programs in it are no longer found, and action-mode setup for them stops until you trust it again.",
             "Remove folder",
             CommandTier.Destructive,
             ChangeTimeout,

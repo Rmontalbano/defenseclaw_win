@@ -606,7 +606,7 @@ public class WizardGuideViewModelTests
         using var scene = new Scene(new FakeProbe());
         scene.Probe.Answer(new DockerStatus(
             DockerState.ComposeMissing,
-            "Docker Compose v2 is not available (docker compose version failed). Install or enable the Compose plugin; Docker Desktop includes it.",
+            "Docker Compose v2 is not available (docker compose version failed). Install or enable the Compose plugin. Docker Desktop includes it.",
             Array.Empty<string>()));
 
         UiThread.WaitFor(() => !scene.Card("logs").IsChecking, "the probe answer");

@@ -282,7 +282,7 @@ public sealed partial class AiDiscoveryPanelViewModel
     /// had; where the column can show a model's own confidence it says which number the cut is made on.
     /// </summary>
     public string ConfidenceFilterHelp => HasRecommendedScope
-        ? "Cuts on the Confidence column: the model's own confidence when the runtime reports one, else the strongest detection score among its signals. All models are listed until you set a cut."
+        ? "Cuts on the Confidence column, which is the runtime's score or else the strongest signal. All models are listed until you set a cut."
         : "Cuts on the strongest detection score among the model's signals. All models are listed until you set a cut.";
 
     /// <summary>The screen-reader help of Reset filters: with the recommended view on offer, resetting also puts the list back to it.</summary>
@@ -550,7 +550,7 @@ public sealed partial class AiDiscoveryPanelViewModel
         IReadOnlyList<DiscoverySignalRecord> signals,
         CancellationToken cancellationToken)
     {
-        const string label = "Confidence bands — inventory.db (ai_confidence_snapshots, latest scan)";
+        const string label = "Confidence bands: inventory.db (ai_confidence_snapshots, latest scan)";
 
         if (!signals.Any(static s => s.Component is not null && s.IdentityBand is null && s.PresenceBand is null) || !Services.Inventory.Exists)
         {
@@ -712,7 +712,7 @@ public sealed partial class AiDiscoveryPanelViewModel
 
     private static DiscoverySourceInfo DescribeUsage(AiUsageRead read, int enriched)
     {
-        const string label = "Gateway — GET /api/v1/ai-usage";
+        const string label = "Gateway: GET /api/v1/ai-usage";
 
         if (read.Snapshot is not { } snapshot)
         {

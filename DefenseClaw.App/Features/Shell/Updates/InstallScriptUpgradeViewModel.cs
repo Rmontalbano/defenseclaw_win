@@ -802,7 +802,7 @@ public sealed partial class InstallScriptUpgradeViewModel : ObservableObject, ID
             var invocation = await _services.Cli.RunGatewayAsync(GatewayControl.Argv(GatewayAction.Start)).ConfigureAwait(true);
             GatewayText = invocation.Succeeded
                 ? "Gateway start requested. Checking its health…"
-                : "The gateway did not start. See the Activity panel.";
+                : "The gateway did not start. See Activity.";
         }
         catch (CliNotFoundException ex)
         {

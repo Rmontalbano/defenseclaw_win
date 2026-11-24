@@ -89,8 +89,8 @@ public sealed partial class OverviewPanelViewModel
             rows.Add(new AttentionRow
             {
                 Title = $"{repair.Agent} hooks need to be set up again",
-                Detail = $"{repair.Agent} still uses the older PowerShell EncodedCommand hook. If the launcher cannot start, it exits 0 in Constrained " +
-                         $"Language mode and calls go through unchecked. Setup replaces it and restarts the gateway. Quit {repair.Agent} first. {shown}{ran}",
+                Detail = $"{repair.Agent} still uses the older PowerShell EncodedCommand hook. If the launcher cannot start, it exits 0 in Constrained Language mode and calls go through unchecked. " +
+                         $"Quit {repair.Agent}, then re-run setup. It restarts the gateway. {shown}{ran}",
                 SeverityKey = "High",
                 Actions = new AttentionActions(new[]
                 {

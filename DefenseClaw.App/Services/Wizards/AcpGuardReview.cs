@@ -55,8 +55,8 @@ public static class AcpGuardReview
         {
             warnings.Add(new CommandReviewWarning(
                 ActionModeTitle,
-                "Action mode blocks any prompt, agent output, permission, file or terminal step that policy denies, and refuses a step it cannot check. " +
-                "A blocked prompt ends that turn. Try observe mode first." + (managed ? " The central profile must already be in action mode, or the CLI refuses." : string.Empty)));
+                "Action mode blocks any prompt, agent output, permission, file or terminal step that policy denies or cannot check, and a blocked prompt ends that turn. " +
+                "Try observe mode first." + (managed ? " The central profile must already be in action mode, or the CLI refuses." : string.Empty)));
         }
 
         var file = client switch
@@ -69,7 +69,7 @@ public static class AcpGuardReview
             EditorFileTitle,
             "Writes a DefenseClaw entry for " + (agent.Length > 0 ? agent : "the agent") + " into " + file + ", and " +
             (managed ? "a contract lock beside the administrator's token" : "a private token and a contract lock in the data directory's acp folder") +
-            ". A failed write rolls all of it back."));
+            ". A failed write rolls all of it back. No administrator rights are needed."));
 
         if (managed)
         {

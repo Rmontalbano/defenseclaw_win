@@ -208,7 +208,7 @@ public sealed class SelfUpdateServiceTests : IDisposable
         Assert.Null(problem);
         Assert.Equal(SelfUpdateKit.Sha(SelfUpdateKit.GoodZip()), sha);
         Assert.Equal([SelfUpdateKit.AssetUrl("1.2.0", "checksums.txt")], github.Urls);
-        Assert.Contains(notes, n => n.Contains("administrator-mode restart"));
+        Assert.Contains(notes, n => n.Contains("Administrator mode keeps its own copy"));
     }
 
     // ------------------------------------------------------------------ after the restart

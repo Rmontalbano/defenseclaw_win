@@ -123,6 +123,9 @@ public sealed partial class WizardField
     /// <summary>A copy that is (or is no longer) required.</summary>
     public WizardField WithRequired(bool required) => Edit(d => d.IsRequired = required);
 
+    /// <summary>A copy that keeps its help line and carries the rest of the help as <see cref="Details"/> (tooltip).</summary>
+    public WizardField WithDetails(string details) => Edit(d => d.Details = details);
+
     /// <summary>A copy with different words and, for a text box, a different placeholder.</summary>
     public WizardField WithHelp(string help, string? placeholder = null) => Edit(d =>
     {
@@ -174,6 +177,7 @@ public sealed partial class WizardField
             Flag = f.Flag;
             NegativeFlag = f.NegativeFlag;
             Help = f.Help;
+            Details = f.Details;
             Choices = f.Choices;
             DefaultValue = f.DefaultValue;
             BaselineValue = f.BaselineValue;
@@ -206,6 +210,8 @@ public sealed partial class WizardField
         public string? NegativeFlag { get; set; }
 
         public string Help { get; set; }
+
+        public string Details { get; set; }
 
         public IReadOnlyList<WizardChoice> Choices { get; set; }
 
@@ -253,6 +259,7 @@ public sealed partial class WizardField
             Flag = Flag,
             NegativeFlag = NegativeFlag,
             Help = Help,
+            Details = Details,
             Choices = Choices,
             DefaultValue = DefaultValue,
             BaselineValue = BaselineValue,

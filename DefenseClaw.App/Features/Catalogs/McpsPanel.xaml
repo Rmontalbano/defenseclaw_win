@@ -49,7 +49,7 @@
                            SearchText="{Binding FilterText}"
                            SearchPlaceholder="Filter MCP servers…"
                            SearchAutomationName="Filter MCP servers"
-                           SearchHelpText="Matches name, transport, command, URL, connector, state and registry. Shortcut Ctrl+F; Esc clears it.">
+                           SearchHelpText="Matches name, transport, command, URL, connector, state and registry. Shortcut Ctrl+F. Esc clears it.">
             <ctl:DcPageToolbar.Leading>
                 <ui:ProgressRing Width="16"
                                  Height="16"
@@ -132,7 +132,7 @@
                         <StackPanel>
                             <ctl:DcCardHeader Symbol="PlugConnected24" Section="Govern" Content="Add or update an MCP server" />
                             <TextBlock Style="{StaticResource DcCaption}"
-                                       Text="Runs 'defenseclaw mcp set' for the toolbar's connector; 'All configured connectors' writes to every one. Give a command or a URL, not both. You review the command first." />
+                                       Text="Runs 'defenseclaw mcp set' for the toolbar's connector. Give either a command or a URL." />
 
                             <WrapPanel Margin="0,12,0,0">
                                 <StackPanel Width="280" Margin="0,0,12,8">
@@ -149,17 +149,17 @@
                                               AutomationProperties.HelpText="stdio runs a local command, sse connects to a URL. Leave it on infer to send no --transport." />
                                 </StackPanel>
                                 <StackPanel Width="280" Margin="0,0,12,8">
-                                    <TextBlock Style="{StaticResource DcFieldLabel}" Text="Command (local server, e.g. npx or uvx)" />
+                                    <TextBlock Style="{StaticResource DcFieldLabel}" Text="Command for a local server, e.g. npx or uvx" />
                                     <ui:TextBox Text="{Binding SetCommand, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                                                 AutomationProperties.Name="Command" />
                                 </StackPanel>
                                 <StackPanel Width="280" Margin="0,0,12,8">
-                                    <TextBlock Style="{StaticResource DcFieldLabel}" Text="URL (remote server, http or https)" />
+                                    <TextBlock Style="{StaticResource DcFieldLabel}" Text="URL of a remote server, http or https" />
                                     <ui:TextBox Text="{Binding SetUrl, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                                                 AutomationProperties.Name="URL" />
                                 </StackPanel>
                                 <StackPanel Width="280" Margin="0,0,12,8">
-                                    <TextBlock Style="{StaticResource DcFieldLabel}" Text="Arguments (one per line, or a JSON array)" />
+                                    <TextBlock Style="{StaticResource DcFieldLabel}" Text="Arguments, one per line or as a JSON array" />
                                     <ui:TextBox AcceptsReturn="True"
                                                 MinLines="3"
                                                 MaxLines="6"
@@ -171,7 +171,7 @@
                                                 AutomationProperties.HelpText="One argument per line, sent as a JSON array, so commas inside an argument are safe. Only for a command." />
                                 </StackPanel>
                                 <StackPanel Width="280" Margin="0,0,12,8">
-                                    <TextBlock Style="{StaticResource DcFieldLabel}" Text="Environment (one KEY=VAL per line)" />
+                                    <TextBlock Style="{StaticResource DcFieldLabel}" Text="Environment, one KEY=VAL per line" />
                                     <ui:TextBox AcceptsReturn="True"
                                                 MinLines="3"
                                                 MaxLines="6"
@@ -185,10 +185,10 @@
                             </WrapPanel>
 
                             <TextBlock Style="{StaticResource DcCaption}"
-                                       Text="Environment values are visible in the review, in Activity and to other processes on this machine. Do not put secrets here." />
+                                       Text="Environment values show in the review and Activity and to other processes on this machine. Do not put secrets here." />
 
                             <CheckBox Margin="0,8,0,0"
-                                      Content="Skip the security scan (the server is added unchecked)"
+                                      Content="Skip the security scan. The server is added unchecked."
                                       IsChecked="{Binding SetSkipScan, Mode=TwoWay}" />
 
                             <TextBlock Style="{StaticResource DcToneText}"
@@ -267,7 +267,7 @@
                         <ctl:DcSymbolIcon Style="{StaticResource DcEmptyIcon}" Symbol="ErrorCircle24" />
                         <TextBlock Style="{StaticResource DcEmptyTitle}" Text="{Binding ErrorTitle}" />
                         <TextBlock Style="{StaticResource DcEmptyDetail}" Text="{Binding ErrorMessage}" />
-                        <TextBlock Style="{StaticResource DcEmptyDetail}" Text="Press Refresh to try again. The command and its output are in Activity." />
+                        <TextBlock Style="{StaticResource DcEmptyDetail}" Text="Select Refresh to try again. The command and its output are in Activity." />
                     </StackPanel>
                 </Border>
 

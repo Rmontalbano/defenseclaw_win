@@ -281,7 +281,7 @@ public sealed class OverviewConfigurationTests : IDisposable
         Assert.Equal("closed", claude.FailMode);
         Assert.True(claude.HasWarning);
         Assert.True(claude.HasNotes);
-        Assert.Contains("fail-mode drift: registration-stale, windows-sidecar-closed", claude.Drift, StringComparison.Ordinal);
+        Assert.Contains("fail mode drift: registration-stale, windows-sidecar-closed", claude.Drift, StringComparison.Ordinal);
         Assert.False(vm.ConnectorRows.Single(r => r.Name == "hermes").HasNotes);
     }
 

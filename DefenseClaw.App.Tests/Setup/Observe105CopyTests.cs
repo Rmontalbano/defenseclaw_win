@@ -126,7 +126,7 @@ public sealed class Observe105CopyTests
 
         var card = EnterpriseCard(help);
 
-        Assert.Contains("Sends one live HEC probe to your endpoint first", card.WillDo, StringComparison.Ordinal);
+        Assert.Contains("only if one live HEC probe to your endpoint succeeds", card.WillDo, StringComparison.Ordinal);
         Assert.Contains("A failed probe saves nothing and the command exits 1", card.WillDo, StringComparison.Ordinal);
         Assert.Contains("Skip test", card.WillDo, StringComparison.Ordinal);
         Assert.DoesNotContain("best-effort", card.WillDo, StringComparison.Ordinal);

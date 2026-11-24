@@ -169,7 +169,7 @@ public partial class DcCommandOutput : UserControl
         }
 
         var hidden = start.ToString("N0", CultureInfo.CurrentCulture);
-        return $"… {hidden} earlier characters are not shown (the Activity panel keeps the whole run) …{Environment.NewLine}" + text[start..];
+        return $"… {hidden} earlier characters are not shown (Activity keeps the whole run) …{Environment.NewLine}" + text[start..];
     }
 
     private void ShowCopiedNote()

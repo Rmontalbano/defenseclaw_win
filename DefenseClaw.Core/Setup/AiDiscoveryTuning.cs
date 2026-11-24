@@ -186,7 +186,7 @@ public static class AiDiscoveryTuning
 
         if (settings.ScanRoots.Count == 0)
         {
-            problems["scan_roots"] = "Give at least one folder to scan (~ is your home folder). With none, a scan has nothing to look at.";
+            problems["scan_roots"] = "Give at least one folder to scan. ~ is your home folder. With none, a scan has nothing to look at.";
         }
         else if (settings.ScanRoots.FirstOrDefault(static r => r.Contains(',', StringComparison.Ordinal)) is { } comma)
         {

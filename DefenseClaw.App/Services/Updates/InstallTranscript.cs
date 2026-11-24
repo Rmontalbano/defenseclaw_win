@@ -335,7 +335,7 @@ public static partial class InstallTranscript
         {
             var cause = lines.Take(firstWrapper).LastOrDefault(l => !Wrapper.IsMatch(l));
             var outcome = lines.Last(l => Wrapper.IsMatch(l));
-            reason = cause is null ? outcome : string.Equals(cause, outcome, StringComparison.Ordinal) ? cause : cause + " — " + outcome;
+            reason = cause is null ? outcome : string.Equals(cause, outcome, StringComparison.Ordinal) ? cause : cause + " · " + outcome;
         }
 
         return Cap(reason);

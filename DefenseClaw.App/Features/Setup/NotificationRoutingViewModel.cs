@@ -101,7 +101,7 @@ public sealed partial class NotificationRoutingViewModel : SetupDialogViewModel
     /// the Overview's switch uses (<see cref="NotificationSwitch.Explanation"/>).
     /// </summary>
     public const string TrayNote =
-        "Gateway desktop notifications for blocked tool calls, would-block verdicts and pending approvals. Tray alerts are a separate setting (Settings, Notifications).";
+        "Gateway desktop notifications for blocked calls, would-block verdicts and approvals. Tray alerts are in Settings, Notifications.";
 
     private readonly List<NotificationChange> _pending = new();
     private IReadOnlyList<NotificationChange> _planChanges = Array.Empty<NotificationChange>();
@@ -275,14 +275,14 @@ public sealed partial class NotificationRoutingViewModel : SetupDialogViewModel
         _listedSlots = null;
         if (!result.Succeeded)
         {
-            return "The options of setup notifications-set could not be read (" + result.Error + "). Press Refresh to try again.";
+            return "The options of setup notifications-set could not be read (" + result.Error + "). Select Refresh to try again.";
         }
 
         var help = SetupHelpParser.Parse(result.Text);
         var slots = help.FirstChoices();
         if (slots.Count == 0)
         {
-            return "setup notifications-set lists no settings, so nothing can be changed here. Press Refresh to read it again.";
+            return "setup notifications-set lists no settings, so nothing can be changed here. Select Refresh to read it again.";
         }
 
         _listedSlots = new HashSet<string>(slots, StringComparer.Ordinal);

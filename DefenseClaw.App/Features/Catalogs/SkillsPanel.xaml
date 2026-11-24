@@ -50,7 +50,7 @@
                            SearchText="{Binding FilterText}"
                            SearchPlaceholder="Filter skills…"
                            SearchAutomationName="Filter skills"
-                           SearchHelpText="Matches name, description, connector, state, scan result and registry. Shortcut Ctrl+F; Esc clears it.">
+                           SearchHelpText="Matches name, description, connector, state, scan result and registry. Shortcut Ctrl+F. Esc clears it.">
             <ctl:DcPageToolbar.Leading>
                 <ui:ProgressRing Width="16"
                                  Height="16"
@@ -140,7 +140,7 @@
                         <StackPanel>
                             <ctl:DcCardHeader Symbol="ArrowDownload24" Section="Govern" Content="Install a skill" />
                             <TextBlock Style="{StaticResource DcCaption}"
-                                       Text="Runs 'defenseclaw skill install' for the toolbar's connector; 'All configured connectors' installs into every one. You review the command first." />
+                                       Text="Runs 'defenseclaw skill install' for the toolbar's connector. All configured connectors installs into every one." />
 
                             <StackPanel Margin="0,12,0,8">
                                 <TextBlock Style="{StaticResource DcFieldLabel}" Text="ClawHub skill name" />
@@ -230,7 +230,7 @@
                         <ctl:DcSymbolIcon Style="{StaticResource DcEmptyIcon}" Symbol="ErrorCircle24" />
                         <TextBlock Style="{StaticResource DcEmptyTitle}" Text="{Binding ErrorTitle}" />
                         <TextBlock Style="{StaticResource DcEmptyDetail}" Text="{Binding ErrorMessage}" />
-                        <TextBlock Style="{StaticResource DcEmptyDetail}" Text="Press Refresh to try again. The command and its output are in Activity." />
+                        <TextBlock Style="{StaticResource DcEmptyDetail}" Text="Select Refresh to try again. The command and its output are in Activity." />
                     </StackPanel>
                 </Border>
 

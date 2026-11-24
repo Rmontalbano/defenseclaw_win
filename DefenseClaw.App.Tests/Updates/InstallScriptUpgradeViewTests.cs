@@ -982,7 +982,7 @@ public sealed partial class InstallScriptUpgradeViewTests : IDisposable
             using var host = Page(new InstallScriptUpgradeCard { DataContext = rig.Vm }, width, height, out var scroll);
             ScrollTo(host, scroll, e => e is TextBlock { Text: "Pending config writes" });
             RenderTo.Png(host, $"cust359-preflight-{size}-{mode.ToLowerInvariant()}");
-            Assert.Contains(VisibleTexts(host), t => t.Contains("settings.json — rewritten since", StringComparison.Ordinal));
+            Assert.Contains(VisibleTexts(host), t => t.Contains("settings.json: rewritten since", StringComparison.Ordinal));
             Assert.Contains("Open Overview", ButtonTexts(host));
         });
 

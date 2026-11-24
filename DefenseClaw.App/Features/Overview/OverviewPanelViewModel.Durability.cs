@@ -104,7 +104,7 @@ public sealed partial class OverviewPanelViewModel
 
         Review.Open(
             "Re-select Codex?",
-            $"Runs Codex setup again so DefenseClaw finds the installed Codex and registers its hooks. " +
+            $"Runs Codex setup again so DefenseClaw registers its hooks. " +
             $"Mode {mode} (from {source}) is passed because setup without it has switched Codex from observe to action. " +
             "Quit Codex first.",
             new[]
@@ -173,7 +173,7 @@ public sealed partial class OverviewPanelViewModel
             warnings.Add(new CommandReviewWarning(
                 "Not every pending write could be verified",
                 "The hash check could not tell whether this write finished, never applied or was rewritten (" + CasWriteText.UnverifiedReasons(pending) + "). " +
-                "Check the target and staging files listed below for anything you need before moving them; Put back undoes the move."));
+                "Check the target and staging files listed below for anything you need before moving them. Put back undoes the move."));
         }
 
         return warnings;
@@ -200,7 +200,7 @@ public sealed partial class OverviewPanelViewModel
         Review.Open(
             "Put the moved files back?",
             $"Moves the {quarantine.Files.ToString(System.Globalization.CultureInfo.CurrentCulture)} file{(quarantine.Files == 1 ? string.Empty : "s")} listed in {Path.Combine(quarantine.Directory, CasQuarantine.ManifestName)} " +
-            "back to their original paths if they are unchanged (SHA-256) and the path is free. This restores the stuck pending write.",
+            "back to their original paths if they are unchanged (SHA-256) and the path is free.",
             new[]
             {
                 new DiscoverStep(

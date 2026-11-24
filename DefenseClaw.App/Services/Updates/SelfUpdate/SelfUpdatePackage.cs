@@ -110,7 +110,7 @@ internal static class SelfUpdatePackage
             using var archive = ZipFile.OpenRead(zipPath);
             if (archive.Entries.Count != 2)
             {
-                return $"The zip has {archive.Entries.Count} entries; it must hold exactly {AppExeName} and {HelperExeName}.";
+                return $"The zip has {archive.Entries.Count} entries. It must hold exactly {AppExeName} and {HelperExeName}.";
             }
 
             var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -119,7 +119,7 @@ internal static class SelfUpdatePackage
                 var name = entry.FullName;
                 if (name.Contains('/') || name.Contains('\\') || name.Contains(':') || name.Contains("..", StringComparison.Ordinal))
                 {
-                    return $"The zip has an entry with a path ('{Shown(name)}'); only files at the root are allowed.";
+                    return $"The zip has an entry with a path ('{Shown(name)}'). Only files at the root are allowed.";
                 }
 
                 var cap = name.Equals(AppExeName, StringComparison.Ordinal) ? limits.AppExeBytes
@@ -127,7 +127,7 @@ internal static class SelfUpdatePackage
                     : -1;
                 if (cap < 0)
                 {
-                    return $"The zip has an unexpected entry '{Shown(name)}'; it must hold exactly {AppExeName} and {HelperExeName}.";
+                    return $"The zip has an unexpected entry '{Shown(name)}'. It must hold exactly {AppExeName} and {HelperExeName}.";
                 }
 
                 if (!seen.Add(name))
@@ -171,7 +171,7 @@ internal static class SelfUpdatePackage
                 };
                 if (fileName is null)
                 {
-                    return $"The zip has an unexpected entry '{Shown(entry.FullName)}'; it must hold exactly {AppExeName} and {HelperExeName}.";
+                    return $"The zip has an unexpected entry '{Shown(entry.FullName)}'. It must hold exactly {AppExeName} and {HelperExeName}.";
                 }
 
                 var target = Path.GetFullPath(Path.Combine(root, fileName));

@@ -244,7 +244,7 @@ public sealed class InstallationViewTests
         UiThread.Run(() =>
         {
             Assert.True(Shows(Row(screen.Page, "Selected by"), "User default"));
-            Assert.True(Shows(Row(screen.Page, "Access"), "Unmanaged — setup changes allowed"));
+            Assert.True(Shows(Row(screen.Page, "Access"), "Unmanaged: setup changes allowed"));
             Assert.True(Shows(Row(screen.Page, "Override"), "None (automatic)"));
 
             var model = (SettingsPanelViewModel)screen.Page.DataContext;
@@ -261,7 +261,7 @@ public sealed class InstallationViewTests
         UiThread.Run(() =>
         {
             Assert.True(Shows(Row(screen.Page, "Selected by"), "Managed installation (Cisco Secure Client)"));
-            Assert.True(Shows(Row(screen.Page, "Access"), "Managed enterprise — read only"));
+            Assert.True(Shows(Row(screen.Page, "Access"), "Managed enterprise: read only"));
             Assert.True(Shows(Row(screen.Page, "Access"), TestInstallations.ManagedReason), "the reason is the caption under Access");
             Assert.True(Shows(Row(screen.Page, "Override"), "None (automatic)"));
 
@@ -284,7 +284,7 @@ public sealed class InstallationViewTests
         UiThread.Run(() =>
         {
             Assert.True(Shows(Row(screen.Page, "Selected by"), "DEFENSECLAW_HOME"));
-            Assert.True(Shows(Row(screen.Page, "Access"), "Invalid installation selection — read only"));
+            Assert.True(Shows(Row(screen.Page, "Access"), "Invalid installation selection: read only"));
             var model = (SettingsPanelViewModel)screen.Page.DataContext;
             Assert.True(Shows(Row(screen.Page, "Access"), model.InstallationReason));
             Assert.Contains("absolute path", model.InstallationReason, StringComparison.Ordinal);

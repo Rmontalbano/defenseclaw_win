@@ -93,7 +93,7 @@ public sealed class CatalogTrust
     /// list was read. Refresh to act on current data.</c> (the Policies model panel's wording, in the same form as the other reasons).
     /// </summary>
     public static string ConfigChangedReason(string readClause = ListRead) =>
-        $"Changes are off: config.yaml or .env changed after {readClause}. Refresh to act on current data.";
+        $"Changes are off: config.yaml or .env changed after {readClause}. Select Refresh to act on current data.";
 
     private enum Kind
     {
@@ -158,14 +158,14 @@ public sealed class CatalogTrust
                     return "Changes are off until the first read finishes.";
 
                 case Kind.Partial:
-                    return "Changes are off: discovery was incomplete and entries may be missing. Fix the source named in the warning, then refresh.";
+                    return "Changes are off: discovery was incomplete and entries may be missing. Fix the source named in the warning, then select Refresh.";
 
                 case Kind.Failed:
-                    return "Changes are off: the last read failed, so these rows may be out of date. Refresh to read them again.";
+                    return "Changes are off: the last read failed, so these rows may be out of date. Select Refresh to read them again.";
 
                 default:
                     var minutes = Math.Max(1, (int)Math.Round(_readAt.Elapsed(_time).TotalMinutes));
-                    return $"Changes are off: this list was read about {minutes} minute{(minutes == 1 ? string.Empty : "s")} ago. Refresh to act on current data.";
+                    return $"Changes are off: this list was read about {minutes} minute{(minutes == 1 ? string.Empty : "s")} ago. Select Refresh to act on current data.";
             }
         }
     }

@@ -116,7 +116,7 @@ public static class AuditPersistenceCheck
             {
                 return new AuditPersistence(
                     AuditPersistenceState.NoNewRow,
-                    "audit.db has no event since the gateway started at " + Clock(since) + ", not even its start record.");
+                    "audit.db has no event since the gateway started at " + Clock(since) + ". Even its start record is missing.");
             }
 
             var action = reader.IsDBNull(0) ? null : reader.GetString(0);
@@ -138,7 +138,7 @@ public static class AuditPersistenceCheck
             return new AuditPersistence(
                 AuditPersistenceState.Busy,
                 $"audit.db was busy for more than {Math.Max(1, busyTimeoutSeconds).ToString(CultureInfo.InvariantCulture)} s, so the newest events were not checked. " +
-                "Retention cleanup can hold it that long. Refresh to check again.");
+                "Retention cleanup can hold it that long. Select Refresh to check again.");
         }
         catch (SqliteException ex) when (ex.Message.Contains("no such table", StringComparison.OrdinalIgnoreCase))
         {

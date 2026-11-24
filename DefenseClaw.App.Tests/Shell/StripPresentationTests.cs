@@ -43,7 +43,7 @@ public sealed class StripPresentationTests
         Assert.Equal("Guardrail: last seen running, monitoring paused", StripPresentation.SubsystemName("Guardrail", "running", paused: true));
 
         var live = StripPresentation.SubsystemDetail("Watchdog", "running", "2 skill dirs, 2 plugin dirs · since Jul 28 12:13", paused: false);
-        Assert.Equal("Watchdog: running. 2 skill dirs, 2 plugin dirs · since Jul 28 12:13. From the gateway's /health, as on the Overview's Services card.", live);
+        Assert.Equal("Watchdog: running. 2 skill dirs, 2 plugin dirs · since Jul 28 12:13. From the gateway's /health.", live);
 
         var paused = StripPresentation.SubsystemDetail("Watchdog", "running", string.Empty, paused: true);
         Assert.Equal("Watchdog: running. Monitoring is paused. This is the last reading.", paused);

@@ -241,10 +241,10 @@ public sealed class DiscoveryComponentCard
 
     public string EvidenceSummary => EvidenceCount == 0
         ? "No evidence recorded for this component."
-        : $"{EvidenceCount} evidence entr{(EvidenceCount == 1 ? "y" : "ies")}: hashed fingerprints (type, quality, match kind). File paths are not kept.";
+        : $"{EvidenceCount} evidence entr{(EvidenceCount == 1 ? "y" : "ies")}: hashed fingerprints by type, quality and match kind. File paths are not kept.";
 
     public string HeaderDisplay =>
-        $"{Vendor} · {Product}  —  {(HasState ? State + (HasMixedStates ? $" ({StateTally})" : string.Empty) + ", " : string.Empty)}{ConfidenceDisplay} confidence, {Signals.Count} signal{(Signals.Count == 1 ? string.Empty : "s")}";
+        $"{Vendor} · {Product} · {(HasState ? State + (HasMixedStates ? $" ({StateTally})" : string.Empty) + ", " : string.Empty)}{ConfidenceDisplay} confidence, {Signals.Count} signal{(Signals.Count == 1 ? string.Empty : "s")}";
 
     /// <summary>Tone key for the confidence badge: green from 80 %, amber from 50 %, otherwise neutral (a low score is not an alarm).</summary>
     public string ConfidenceKey => MaxConfidence >= 0.8 ? "Ok" : MaxConfidence >= 0.5 ? "Warn" : "Neutral";
@@ -288,7 +288,7 @@ public sealed record DiscoveryScanEvent(
         $"{SignalsTotal?.ToString(CultureInfo.InvariantCulture) ?? "?"} signals " +
         $"({ActiveSignals?.ToString(CultureInfo.InvariantCulture) ?? "?"} active, " +
         $"+{NewSignals?.ToString(CultureInfo.InvariantCulture) ?? "0"}/-{GoneSignals?.ToString(CultureInfo.InvariantCulture) ?? "0"}) " +
-        $"via {Source ?? "unknown"} in {DurationMs?.ToString(CultureInfo.InvariantCulture) ?? "?"} ms — {Result ?? "?"}";
+        $"via {Source ?? "unknown"} in {DurationMs?.ToString(CultureInfo.InvariantCulture) ?? "?"} ms · {Result ?? "?"}";
 
     public override string ToString() => $"Scan at {TimestampDisplay}: {Summary}";
 }
@@ -552,7 +552,7 @@ public sealed partial class AiDiscoveryPanelViewModel : PanelViewModelBase, IAcc
             "Run an AI discovery scan?",
             "Asks the gateway to scan this machine for AI tools now. The result goes to ai_discovery_state.json and " +
             "inventory.db, and is recorded as an ai.discovery audit event.\n\n" +
-            "Fails with HTTP 503 or \"sidecar unavailable\" if the gateway is down or AI discovery is off. " +
+            "Fails with HTTP 503 or \"sidecar unavailable\" if the gateway is not running or AI discovery is off. " +
             "The connector table under Sources is not refreshed.",
             new[]
             {
@@ -811,7 +811,7 @@ public sealed partial class AiDiscoveryPanelViewModel : PanelViewModelBase, IAcc
 
                 var updatedAt = GetTimestamp(root, "updated_at");
                 var source = new DiscoverySourceInfo(
-                    "Signal cache — ai_discovery_state.json",
+                    "Signal cache: ai_discovery_state.json",
                     $"{signals.Count} signals",
                     updatedAt,
                     Available: true);
@@ -822,12 +822,12 @@ public sealed partial class AiDiscoveryPanelViewModel : PanelViewModelBase, IAcc
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
         {
             // Fall through to the inventory.db fallback below.
-            var (fallback, fallbackSource) = await LoadSignalsFromInventoryAsync(cancellationToken, $"ai_discovery_state.json unreadable ({ex.Message}); falling back to inventory.db.")
+            var (fallback, fallbackSource) = await LoadSignalsFromInventoryAsync(cancellationToken, $"ai_discovery_state.json unreadable ({ex.Message}). Falling back to inventory.db.")
                 .ConfigureAwait(true);
             return (fallback, fallbackSource with { Faulted = true });
         }
 
-        return await LoadSignalsFromInventoryAsync(cancellationToken, "ai_discovery_state.json not found; falling back to inventory.db.")
+        return await LoadSignalsFromInventoryAsync(cancellationToken, "ai_discovery_state.json not found. Falling back to inventory.db.")
             .ConfigureAwait(true);
     }
 
@@ -868,7 +868,7 @@ public sealed partial class AiDiscoveryPanelViewModel : PanelViewModelBase, IAcc
                   $": {scan.Source}, {scan.Result}.";
 
             return (signals, new DiscoverySourceInfo(
-                "Signal cache — inventory.db (ai_signals, latest scan, fallback)",
+                "Signal cache: inventory.db (ai_signals, latest scan, fallback)",
                 detail,
                 scan?.ScannedAt,
                 Available: signals.Count > 0));
@@ -887,7 +887,7 @@ public sealed partial class AiDiscoveryPanelViewModel : PanelViewModelBase, IAcc
         {
             if (!Services.Audit.Exists)
             {
-                Sources.Add(new DiscoverySourceInfo("Audit trail — ai.discovery bucket", "audit.db not found.", null, Available: false));
+                Sources.Add(new DiscoverySourceInfo("Audit trail: ai.discovery bucket", "audit.db not found.", null, Available: false));
                 return;
             }
 
@@ -917,14 +917,14 @@ public sealed partial class AiDiscoveryPanelViewModel : PanelViewModelBase, IAcc
             }
 
             Sources.Add(new DiscoverySourceInfo(
-                $"Audit trail — {AuditBucket} bucket",
+                $"Audit trail: {AuditBucket} bucket",
                 $"{ScanHistory.Count} recent scan event{(ScanHistory.Count == 1 ? string.Empty : "s")}",
                 ScanHistory.Count > 0 ? ScanHistory[0].Timestamp : null,
                 Available: ScanHistory.Count > 0));
         }
         catch (Exception ex) when (ex is IOException or SqliteException)
         {
-            Sources.Add(new DiscoverySourceInfo($"Audit trail — {AuditBucket} bucket", $"Could not read audit.db: {ex.Message}", null, Available: false));
+            Sources.Add(new DiscoverySourceInfo($"Audit trail: {AuditBucket} bucket", $"Could not read audit.db: {ex.Message}", null, Available: false));
         }
     }
 
@@ -941,7 +941,7 @@ public sealed partial class AiDiscoveryPanelViewModel : PanelViewModelBase, IAcc
         {
             if (!File.Exists(path))
             {
-                Sources.Add(new DiscoverySourceInfo("Connector discovery — agent_discovery.json", "File not found.", null, Available: false));
+                Sources.Add(new DiscoverySourceInfo("Connector discovery: agent_discovery.json", "File not found.", null, Available: false));
                 return;
             }
 
@@ -980,14 +980,14 @@ public sealed partial class AiDiscoveryPanelViewModel : PanelViewModelBase, IAcc
             var scannedAt = GetTimestamp(root, "scanned_at");
             var installedCount = ConnectorDiscovery.Count(a => a.Installed);
             Sources.Add(new DiscoverySourceInfo(
-                "Connector discovery — agent_discovery.json",
+                "Connector discovery: agent_discovery.json",
                 $"{ConnectorDiscovery.Count} known connectors, {installedCount} installed",
                 scannedAt,
                 Available: true));
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
         {
-            Sources.Add(new DiscoverySourceInfo("Connector discovery — agent_discovery.json", $"Could not read: {ex.Message}", null, Available: false));
+            Sources.Add(new DiscoverySourceInfo("Connector discovery: agent_discovery.json", $"Could not read: {ex.Message}", null, Available: false));
         }
     }
 
@@ -1000,7 +1000,7 @@ public sealed partial class AiDiscoveryPanelViewModel : PanelViewModelBase, IAcc
         {
             if (selectionPath is null || !File.Exists(selectionPath))
             {
-                Sources.Add(new DiscoverySourceInfo("Connector selection — agent_selection.json", "File not found.", null, Available: false));
+                Sources.Add(new DiscoverySourceInfo("Connector selection: agent_selection.json", "File not found.", null, Available: false));
                 return;
             }
 
@@ -1025,7 +1025,7 @@ public sealed partial class AiDiscoveryPanelViewModel : PanelViewModelBase, IAcc
 
             var updatedAt = GetTimestamp(root, "updated_at");
             Sources.Add(new DiscoverySourceInfo(
-                "Connector selection — agent_selection.json",
+                "Connector selection: agent_selection.json",
                 _selectionsAll.Count == 0
                     ? "No connector currently selected."
                     : $"{_selectionsAll.Count} selection{(_selectionsAll.Count == 1 ? string.Empty : "s")}: " +
@@ -1035,7 +1035,7 @@ public sealed partial class AiDiscoveryPanelViewModel : PanelViewModelBase, IAcc
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
         {
-            Sources.Add(new DiscoverySourceInfo("Connector selection — agent_selection.json", $"Could not read: {ex.Message}", null, Available: false));
+            Sources.Add(new DiscoverySourceInfo("Connector selection: agent_selection.json", $"Could not read: {ex.Message}", null, Available: false));
         }
         finally
         {

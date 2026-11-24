@@ -60,7 +60,7 @@ public sealed partial class RedactionViewModel
     public string ChangesBlockedReason =>
         !IsSupported ? UnsupportedMessage
         : _services.Installation.BlockedReason is { } installation ? installation
-        : !StatusIsCurrent ? "Changes are off until the redaction policy has been read. Refresh, then try again."
+        : !StatusIsCurrent ? "Changes are off until the redaction policy has been read. Select Refresh, then try again."
         : string.Empty;
 
     /// <summary>Why every apply is off because the installation is managed or invalid (a read and a preview still work); null while it may be changed.</summary>

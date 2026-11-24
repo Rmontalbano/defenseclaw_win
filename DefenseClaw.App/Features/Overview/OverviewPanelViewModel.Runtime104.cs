@@ -133,7 +133,7 @@ public sealed partial class OverviewPanelViewModel
             rows.Add(new AttentionRow
             {
                 Title = $"{left.Label} was removed; {left.Items.Count.ToString(CultureInfo.CurrentCulture)} leftover{(left.Items.Count == 1 ? string.Empty : "s")} to remove by hand",
-                Detail = $"{left.Label} support was removed in DefenseClaw 1.0.4. Remove what it left by hand. " +
+                Detail = $"{left.Label} support was removed in DefenseClaw 1.0.4. " +
                          string.Join(" ", steps),
                 SeverityKey = "High",
             });
@@ -165,7 +165,7 @@ public sealed partial class OverviewPanelViewModel
         {
             Title = InterruptedInstallTitle,
             Detail = $"Agent hooks are blocking until the lock is cleared. The lock is {found.Path}.{holder} " +
-                     "Run the installer again to clear it.",
+                     "Run the installer again and let it finish to clear it.",
             SeverityKey = "High",
             Actions = new AttentionActions(new[]
             {
@@ -233,6 +233,7 @@ public sealed partial class OverviewPanelViewModel
                     Detail = "Observe mode, but the strict rule pack makes a gateway outage block the agent. " +
                              "Use the default or permissive rule pack, or move to enforce.",
                     Reference = HookFailModeRule.PerUserOutageRule,
+                    ReferenceLabel = "Outage behaviour",
                     SeverityKey = "High",
                 });
             }
@@ -241,9 +242,10 @@ public sealed partial class OverviewPanelViewModel
                 rows.Add(new AttentionRow
                 {
                     Title = $"{name}: hook_fail_mode: closed is not applied",
-                    Detail = $"config.yaml saves hook_fail_mode: closed for {name}, but this runtime ignores a saved per-user fail mode. " +
+                    Detail = $"config.yaml saves hook_fail_mode: closed for {name}, which this runtime ignores. " +
                              "To fail closed during an outage, use the strict rule pack.",
                     Reference = HookFailModeRule.PerUserOutageRule,
+                    ReferenceLabel = "Outage behaviour",
                     SeverityKey = "Medium",
                     Command = HookFailModeRule.StrictPackCommand,
                 });

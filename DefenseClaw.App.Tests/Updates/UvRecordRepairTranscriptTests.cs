@@ -46,7 +46,7 @@ public sealed class UvRecordRepairTranscriptTests
         var refusal = Assert.IsType<InstallerRefusal>(facts.Refusal);
         Assert.Equal(InstallerRefusalKind.UvCacheDamaged, refusal.Kind);
         Assert.Equal(
-            @"The Python packages litellm, tiktoken in the staging environment still differ from their wheels after a fresh download; delete the uv cache C:\synthetic\uvcache. Nothing was changed.",
+            @"The Python packages litellm, tiktoken in the staging environment still differ from their wheels after a fresh download. Delete the uv cache C:\synthetic\uvcache. Nothing was changed.",
             refusal.Reason);
         Assert.Equal(refusal.Reason, facts.Reason);
         Assert.Equal(@"Delete the uv cache folder C:\synthetic\uvcache, then upgrade again. uv downloads the packages again on the next run.", refusal.NextStep);
@@ -95,7 +95,7 @@ public sealed class UvRecordRepairTranscriptTests
         var refusal = Assert.IsType<InstallerRefusal>(facts.Refusal);
         Assert.Equal(InstallerRefusalKind.NothingChanged, refusal.Kind);
         Assert.StartsWith("Could not check the Python packages in the staging environment", refusal.Reason, StringComparison.Ordinal);
-        Assert.EndsWith("(exit 2) — Could not install the DefenseClaw 1.0.10 Python package; nothing was changed", refusal.Reason, StringComparison.Ordinal);
+        Assert.EndsWith("(exit 2) · Could not install the DefenseClaw 1.0.10 Python package; nothing was changed", refusal.Reason, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -107,7 +107,7 @@ public sealed class UvRecordRepairTranscriptTests
 
             var refusal = Assert.IsType<InstallerRefusal>(facts.Refusal);
             Assert.Equal(InstallerRefusalKind.UvCacheDamaged, refusal.Kind);
-            Assert.Contains("delete the uv cache folder named in the install log. Nothing was changed.", refusal.Reason, StringComparison.Ordinal);
+            Assert.Contains("Delete the uv cache folder named in the install log. Nothing was changed.", refusal.Reason, StringComparison.Ordinal);
             Assert.Equal("Delete the uv cache folder named in the install log, then upgrade again. uv downloads the packages again on the next run.", refusal.NextStep);
             Assert.DoesNotContain(new string('d', 50), refusal.Reason + refusal.NextStep, StringComparison.Ordinal);
         }
@@ -139,7 +139,7 @@ public sealed class UvRecordRepairTranscriptTests
         Assert.Equal(InstallerRefusalKind.NothingChanged, refusal.Kind);
         Assert.Equal(InstallTranscript.GenericNextStep, refusal.NextStep);
         Assert.Equal(
-            "Could not check the Python packages in the staging environment against their wheels (exit 2) — Could not install the DefenseClaw 1.0.10 Python package; nothing was changed",
+            "Could not check the Python packages in the staging environment against their wheels (exit 2) · Could not install the DefenseClaw 1.0.10 Python package; nothing was changed",
             refusal.Reason);
         Assert.Equal(refusal.Reason, facts.Reason);
     }
@@ -166,7 +166,7 @@ public sealed class UvRecordRepairTranscriptTests
         Assert.Null(facts.Refusal);
         Assert.True(facts.PreviousRestored);
         Assert.StartsWith(
-            @"The Python packages litellm in the final environment still differ from their wheels after a fresh download; delete the uv cache C:\synthetic\uvcache and run the installer again — ",
+            @"The Python packages litellm in the final environment still differ from their wheels after a fresh download; delete the uv cache C:\synthetic\uvcache and run the installer again · ",
             facts.Reason,
             StringComparison.Ordinal);
     }

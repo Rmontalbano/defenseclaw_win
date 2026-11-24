@@ -379,8 +379,8 @@ public sealed partial class UpgradeSectionViewModel : ObservableObject, IDisposa
     public string ResolverPlan => IsInstallerChannel
         ? "1. The download's SHA-256 is compared with its entry in checksums.txt from the same release. It must also be at least " +
           "50 MB, because the placeholder stubs have their hashes listed there. " + SignatureStepSentence + "\n" +
-          "2. Runs the Setup exe with /quiet /norestart INSTALLSCOPE=user. It stops the gateway, installs in user scope " +
-          "and restarts the gateway. The exe is not Authenticode-signed.\n" +
+          "2. Runs the Setup installer with /quiet /norestart INSTALLSCOPE=user. It stops the gateway, installs in user scope " +
+          "and restarts the gateway. The installer is not Authenticode-signed.\n" +
           "3. %USERPROFILE%\\.defenseclaw is kept: config.yaml, the environment file, audit.db and inventory.db."
         : "1. The script's SHA-256 is compared with its entry in checksums.txt from the same release. " + SignatureStepSentence + " " +
           "The script then verifies the signed release contract with cosign before changing anything.\n" +
@@ -390,7 +390,7 @@ public sealed partial class UpgradeSectionViewModel : ObservableObject, IDisposa
 
     /// <summary>What recovery looks like if the selected channel does not finish cleanly.</summary>
     public string RollbackStory => IsInstallerChannel
-        ? "There is no automatic rollback. To recover, run the previous release's Setup exe again. " +
+        ? "There is no automatic rollback. To recover, run the previous release's Setup installer again. " +
           "Back up %USERPROFILE%\\.defenseclaw first. Expect the tray shield to go gray and a \"Gateway lost\" toast " +
           "while the installer stops the gateway."
         : "If a phase fails, the resolver rolls back to the installed version. " +
@@ -443,7 +443,7 @@ public sealed partial class UpgradeSectionViewModel : ObservableObject, IDisposa
 
     public string StaleAssumptionsWarning =>
         "Restart DefenseClaw for Windows after the upgrade finishes. Until then it assumes the old version's " +
-        "panel layouts, CLI flags and health fields.";
+        "panel layouts and CLI flags.";
 
     /// <summary>True while this section, or anything else in the app, has a subprocess in flight.</summary>
     public bool IsBusy => IsStaging || IsRunning || CliInFlightCount > 0;
@@ -463,7 +463,7 @@ public sealed partial class UpgradeSectionViewModel : ObservableObject, IDisposa
     /// </summary>
     public string CloseBlockedNotice =>
         (_closeRefused ? "That close was ignored. " : string.Empty) +
-        $"The {RanNoun} is running. Stopping it partway can leave DefenseClaw half-replaced, so this window stays open " +
+        $"The {RanNoun} is running. Stopping it partway can leave an incomplete install, so this window stays open " +
         "until it finishes. If you must leave, quit from the tray. The install keeps running.";
 
     /// <summary>
@@ -542,7 +542,7 @@ public sealed partial class UpgradeSectionViewModel : ObservableObject, IDisposa
             {
                 VersionConfirmation =
                     $"Was {before}. The installed version could not be read because the gateway is not " +
-                    "answering. Start it and press \"Check again\".";
+                    "answering. Start it and select Check again.";
             }
             else if (string.Equals(Bare(now), Bare(before), StringComparison.OrdinalIgnoreCase))
             {
@@ -570,8 +570,8 @@ public sealed partial class UpgradeSectionViewModel : ObservableObject, IDisposa
 
         ChecksumsSourceNote = report.SignatureFilesPublished
             ? "Compared against checksums.txt from the same release. cosign verifies its sigstore signature when cosign is installed."
-            : "Compared against checksums.txt from the same release. The release publishes no complete sigstore signature for " +
-              "that file, so this is an integrity check only.";
+            : "Compared against checksums.txt from the same release. It has no complete sigstore signature " +
+              "for that file, so this is an integrity check only.";
     }
 
     /// <summary>
@@ -667,8 +667,8 @@ public sealed partial class UpgradeSectionViewModel : ObservableObject, IDisposa
             CosignLabel = "cosign missing";
             CosignBadgeKey = "Warn";
             CosignDetail =
-                "cosign was not found. It is optional here, but without it the sigstore signature on checksums.txt is NOT verified. " +
-                "To verify it, run winget install Sigstore.Cosign and press Re-check.";
+                "cosign was not found, so the sigstore signature on checksums.txt is NOT verified. It is optional on this channel. " +
+                "To verify it, run winget install Sigstore.Cosign and select Re-check.";
             return;
         }
 
@@ -796,7 +796,7 @@ public sealed partial class UpgradeSectionViewModel : ObservableObject, IDisposa
         var percent = (int)Math.Clamp(bytesRead * 100.0 / total, 0, 100);
         return string.Create(
             CultureInfo.CurrentCulture,
-            $"{percent}% — {bytesRead / Megabyte:0.#} MB of {total / Megabyte:0.#} MB");
+            $"{percent}% · {bytesRead / Megabyte:0.#} MB of {total / Megabyte:0.#} MB");
     }
 
     /// <summary>Opens the confirm overlay. Still nothing has run.</summary>
@@ -895,8 +895,8 @@ public sealed partial class UpgradeSectionViewModel : ObservableObject, IDisposa
 
         ResultMessage = _ranChannel == UpgradeChannel.SetupInstaller
             ? "The installer is running. The tray shield goes gray and a \"Gateway lost\" toast appears while it stops the gateway. " +
-              "The console may stay nearly empty. The command and exit code are in the Activity panel."
-            : "The resolver is running. Its output appears below and in the Activity panel.";
+              "See Activity for the result."
+            : "The resolver is running. Its output appears below and in Activity.";
 
         ExitBadgeText = "running";
         ExitBadgeKey = "Neutral";
@@ -928,8 +928,8 @@ public sealed partial class UpgradeSectionViewModel : ObservableObject, IDisposa
             // worded so as not to claim the install stopped, which nothing here can know.
             ExitBadgeText = "interrupted";
             ExitBadgeKey = "Warn";
-            ResultMessage = $"The {RanNoun} run was interrupted before it reported an outcome and may " +
-                            "still be running. Check the Activity panel, then run 'defenseclaw --version' in a " +
+            ResultMessage = $"The {RanNoun} run was interrupted and may " +
+                            "still be running. Check Activity, then run 'defenseclaw --version' in a " +
                             "terminal before starting it again.";
             ShowRollbackGuidance = true;
         }
@@ -1007,7 +1007,7 @@ public sealed partial class UpgradeSectionViewModel : ObservableObject, IDisposa
             HasVersionConfirmation = true;
             VersionConfirmation = string.IsNullOrWhiteSpace(running)
                 ? "The gateway is not answering yet, so the new version could not be read from /health. " +
-                  "Wait a moment and press \"Check again\"."
+                  "Wait a moment and select Check again."
                 : $"{_versionBeforeUpgrade ?? "unknown"}  →  {running}";
 
             ResultMessage = $"The {RanNoun} exited 0. " + StaleAssumptionsWarning;
@@ -1020,7 +1020,7 @@ public sealed partial class UpgradeSectionViewModel : ObservableObject, IDisposa
         ExitBadgeKey = "Bad";
         ShowRollbackGuidance = true;
         ResultMessage =
-            $"The {RanNoun} exited {code}. The output is above and the command is in the Activity panel.";
+            $"The {RanNoun} exited {code}. The output is above and the command is in Activity.";
     }
 
     /// <summary>

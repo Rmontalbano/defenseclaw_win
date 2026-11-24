@@ -49,7 +49,7 @@ public sealed partial class WizardViewModel
         {
             EnvironmentNotes.Add(
                 $"{field.InAppEnvName}=•••: {field.CredentialPurpose}, supplied to the command as an environment variable " +
-                "(value masked, this run only, not on the command line)." +
+                "for this run only. The value is masked and not on the command line." +
                 (field.PersistSentence.Length > 0 ? " " + field.PersistSentence : string.Empty));
         }
 

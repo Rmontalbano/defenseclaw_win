@@ -303,7 +303,7 @@ public partial class MainWindow : FluentWindow, IDashboardWindow
             reason = string.Concat(reason.AsSpan(0, 300), "…");
         }
 
-        var line = $"{e.Panel.Title} — {e.Exception.GetType().Name}: {reason}";
+        var line = $"{e.Panel.Title} · {e.Exception.GetType().Name}: {reason}";
         var existing = _panelFaults.FindIndex(fault => string.Equals(fault.PanelId, e.Panel.Id, StringComparison.Ordinal));
         if (existing >= 0)
         {
@@ -317,7 +317,7 @@ public partial class MainWindow : FluentWindow, IDashboardWindow
         PanelFaultBar.Message =
             string.Join(Environment.NewLine, _panelFaults.Select(fault => fault.Line)) +
             Environment.NewLine +
-            "The affected panel may stay empty or on “Loading…”; the rest of the dashboard is unaffected.";
+            "The affected panel may stay empty or on “Loading…”. The rest of the dashboard is unaffected.";
         PanelFaultBar.IsOpen = true;
     }
 
@@ -437,7 +437,7 @@ public partial class MainWindow : FluentWindow, IDashboardWindow
             _tray.Notify(
                 "DefenseClaw is still running",
                 "The dashboard closed to the tray and keeps watching the gateway. " +
-                "Right-click the shield and pick Exit to quit for real.");
+                "Right-click the shield and select Exit to quit for real.");
         }
     }
 
@@ -590,7 +590,7 @@ public partial class MainWindow : FluentWindow, IDashboardWindow
             Content = panel.Tag is { } tag ? SidebarTag.Content(panel.Title, tag) : panel.Title,
             Icon = new SymbolIcon { Symbol = panel.Icon },
             TargetPageType = panel.ViewType,
-            ToolTip = panel.Tag is { } described ? $"{toolTip} — {described.Description}" : toolTip,
+            ToolTip = panel.Tag is { } described ? $"{toolTip} · {described.Description}" : toolTip,
             Height = 34,
             MinHeight = 34,
             Margin = new Thickness(0, 0, 0, 1),
@@ -1107,7 +1107,7 @@ public partial class MainWindow : FluentWindow, IDashboardWindow
         AutomationProperties.SetName(ThemeToggleButton, verb);
         AutomationProperties.SetHelpText(
             ThemeToggleButton,
-            "Changes between light and dark. If the app was following Windows, it stops following until you choose System again in Appearance.");
+            "Changes between light and dark. If the app was following Windows, it stops following until you select System again in Appearance.");
     }
 
     private void OnThemeToggleClick(object sender, RoutedEventArgs e) => _appearance?.ToggleLightDark();

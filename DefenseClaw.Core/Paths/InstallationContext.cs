@@ -228,9 +228,9 @@ public sealed record InstallationContext
     /// <summary>What the Installation block shows after "Access".</summary>
     public string AccessLabel => Access switch
     {
-        InstallationAccess.ManagedReadOnly => "Managed enterprise — read only",
-        InstallationAccess.InvalidReadOnly => "Invalid installation selection — read only",
-        _ => "Unmanaged — setup changes allowed",
+        InstallationAccess.ManagedReadOnly => "Managed enterprise: read only",
+        InstallationAccess.InvalidReadOnly => "Invalid installation selection: read only",
+        _ => "Unmanaged: setup changes allowed",
     };
 
     /// <summary>One line: "User default · Unmanaged — setup changes allowed".</summary>
@@ -277,7 +277,7 @@ public sealed record InstallationContext
         var layout = layouts.Count == 1 ? layouts[0] : null;
         if (layouts.Count > 1)
         {
-            invalid = "Both a Cisco Secure Client and a standalone managed DefenseClaw installation are present; DefenseClaw supports only one at a time.";
+            invalid = "Both a Cisco Secure Client and a standalone managed DefenseClaw installation are present. DefenseClaw supports only one at a time.";
         }
 
         var rawConfig = NonBlank(environment(ConfigVariable));
@@ -331,7 +331,7 @@ public sealed record InstallationContext
             if (developerFolder is not null &&
                 (!SamePath(home, developerFolder) || !SamePath(config, Path.Combine(developerFolder, "config.yaml"))))
             {
-                invalid ??= $"{ConfigVariable} is set and the developer runtime selector names a different folder; remove one of them.";
+                invalid ??= $"{ConfigVariable} is set and the developer runtime selector names a different folder. Remove one of them.";
             }
         }
         else if (developerFolder is not null)
@@ -422,7 +422,7 @@ public sealed record InstallationContext
         if (layoutPresent && source != InstallationSource.ManagedLayout && !configIsManagedFile &&
             (configMode != ManagedEnterprise || (pinnedMode is not null && pinnedMode != ManagedEnterprise)))
         {
-            invalid ??= "A managed (enterprise) DefenseClaw installation is present on this PC and conflicts with the selected non-managed installation.";
+            invalid ??= "A managed (enterprise) DefenseClaw installation is present on this machine and conflicts with the selected non-managed installation.";
         }
 
         var managed = source == InstallationSource.ManagedLayout || configIsManagedFile || layoutPresent ||

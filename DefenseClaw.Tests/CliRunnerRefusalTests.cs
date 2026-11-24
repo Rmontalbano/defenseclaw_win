@@ -8,7 +8,7 @@ namespace DefenseClaw.Tests;
 /// <summary><see cref="CliRunner.RecordRefusal"/> (CUST-312): the Activity entry for a command this app confirmed and then declined to start.</summary>
 public sealed class CliRunnerRefusalTests
 {
-    private const string Reason = "Changes are off: config.yaml or .env changed after this list was read. Refresh to act on current data.";
+    private const string Reason = "Changes are off: config.yaml or .env changed after this list was read. Select Refresh to act on current data.";
 
     private static CliRunner Runner(string dataDirectory) =>
         new(new DefenseClawPaths(

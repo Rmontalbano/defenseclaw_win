@@ -425,7 +425,7 @@ public sealed partial class AuditPanelViewModel
             var total = totalRead is null ? (int?)null : await totalRead;
             ExportNote = actionable
                 ? page.HasMore
-                    ? $"Exported {written} actionable events from the newest {ExportCap.ToString("N0", CultureInfo.CurrentCulture)} read (the cap) to {path}."
+                    ? $"Exported {written} actionable events from the newest {ExportCap.ToString("N0", CultureInfo.CurrentCulture)} read to {path}."
                     : $"Exported {written} actionable events to {path}."
                 : page.HasMore || (total is { } t && t > events.Count)
                     ? total is { } all

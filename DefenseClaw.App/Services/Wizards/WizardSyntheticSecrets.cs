@@ -30,12 +30,12 @@ public static class WizardSyntheticSecrets
     public const string PersistLabel = "Save the key to DefenseClaw's .env";
 
     private const string PersistHelp =
-        "Copies the key into ~/.defenseclaw/.env with --persist-api-key. Off is the CLI's default, and the key is then used for this run only, " +
-        "so trace export cannot authenticate later unless the key is stored another way. This app turns it on when you type a key " +
-        "above. Turn it off to use that key once. Leave it off when the key is already stored and you typed nothing.";
+        "Copies the key into ~/.defenseclaw/.env with --persist-api-key. Off is the CLI default and uses the key for this run only, " +
+        "so trace export cannot authenticate later unless the key is stored another way. It turns on when you type a key above. " +
+        "Leave it off when the key is already stored.";
 
     private const string KeyHelp =
-        "Galileo authenticates trace export with this key. The CLI reads it from the GALILEO_API_KEY variable in this " +
+        "The CLI reads the key from the GALILEO_API_KEY variable in this " +
         "app's environment or in ~/.defenseclaw/.env, and has no flag for it. Leave this blank if a key " +
         "is already stored.";
 

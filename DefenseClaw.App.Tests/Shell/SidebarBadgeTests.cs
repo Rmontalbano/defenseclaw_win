@@ -71,11 +71,11 @@ public sealed class AlertCountPresentationTests
     {
         var running = new GatewaySnapshot { State = AppGatewayState.Running };
 
-        Assert.Equal("DefenseClaw — 441 unacknowledged findings\nRunning", AlertCountPresentation.TrayTooltip(running, Counts(441)));
-        Assert.Equal("DefenseClaw — 500+ unacknowledged findings\nRunning", AlertCountPresentation.TrayTooltip(running, Counts(500, hasMore: true)));
-        Assert.Equal("DefenseClaw — no unacknowledged findings\nRunning", AlertCountPresentation.TrayTooltip(running, Counts(0)));
-        Assert.Equal("DefenseClaw — Running", AlertCountPresentation.TrayTooltip(running, counts: null));
-        Assert.Equal("DefenseClaw — 3 unacknowledged findings\nGateway stopped", AlertCountPresentation.TrayTooltip(new GatewaySnapshot { State = AppGatewayState.GatewayStopped }, Counts(3)));
+        Assert.Equal("DefenseClaw · 441 unacknowledged findings\nRunning", AlertCountPresentation.TrayTooltip(running, Counts(441)));
+        Assert.Equal("DefenseClaw · 500+ unacknowledged findings\nRunning", AlertCountPresentation.TrayTooltip(running, Counts(500, hasMore: true)));
+        Assert.Equal("DefenseClaw · no unacknowledged findings\nRunning", AlertCountPresentation.TrayTooltip(running, Counts(0)));
+        Assert.Equal("DefenseClaw · Running", AlertCountPresentation.TrayTooltip(running, counts: null));
+        Assert.Equal("DefenseClaw · 3 unacknowledged findings\nGateway stopped", AlertCountPresentation.TrayTooltip(new GatewaySnapshot { State = AppGatewayState.GatewayStopped }, Counts(3)));
     }
 
     [Fact]
@@ -381,7 +381,7 @@ public sealed class SidebarBadgeViewTests
             Assert.True(badge.ActualWidth > 0 && badge.ActualHeight > 0);
 
             Assert.Equal("Alerts, 441 unacknowledged findings", AutomationProperties.GetName(sidebar.Alerts));
-            Assert.Equal("Alerts (Ctrl+2) — 441 unacknowledged findings", sidebar.Alerts.ToolTip);
+            Assert.Equal("Alerts (Ctrl+2) · 441 unacknowledged findings", sidebar.Alerts.ToolTip);
             Assert.Equal("Alerts, 441 unacknowledged findings", UIElementAutomationPeer.CreatePeerForElement(sidebar.Alerts).GetName());
 
             sidebar.Host.Png("sidebar-badge-count");

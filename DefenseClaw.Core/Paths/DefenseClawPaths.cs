@@ -491,13 +491,13 @@ public sealed class DefenseClawPaths
 
         if (name.Length == 0)
         {
-            return "Choose the defenseclaw.exe file itself, not a folder.";
+            return "Choose the defenseclaw.exe file, not a folder.";
         }
 
         // Lookup only ever picks "defenseclaw.exe", so an extensionless "defenseclaw" would be a choice the lookup never makes: refused, with the reason.
         if (string.Equals(name, CliExecutableName, StringComparison.OrdinalIgnoreCase))
         {
-            return "The file must be named defenseclaw.exe, with the .exe extension (a name without it is not accepted).";
+            return "The file must be named defenseclaw.exe, with the .exe extension.";
         }
 
         if (!string.Equals(name, CliExecutableName + ".exe", StringComparison.OrdinalIgnoreCase))
@@ -891,7 +891,7 @@ public sealed class DefenseClawPaths
             TryFullPath(dataDir, out var dataFull) &&
             !string.Equals(dataFull, path, StringComparison.OrdinalIgnoreCase))
         {
-            var ignored = $"{DataDirVariableName} is also set ({dataFull}); the defenseclaw CLI does not read it, so it is ignored here.";
+            var ignored = $"{DataDirVariableName} is also set ({dataFull}). The defenseclaw CLI does not read it, so it is ignored here.";
             note = note is null ? ignored : note + " " + ignored;
         }
 

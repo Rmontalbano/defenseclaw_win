@@ -44,8 +44,8 @@ internal static class GatewayVerbs
             "Lists the pristine connector backups that teardown restores from."),
         new(
             new[] { "connector", "teardown" },
-            "Tears down the active connector: restores the agent framework's config from its pristine backup, removes the hook scripts the connector wrote into the DefenseClaw folder and clears the environment shims it installed. " +
-            "It does not touch the gateway's own service, its token or the audit database."),
+            "Tears down the active connector: restores the agent's config from backup, removes its hook scripts and clears its environment shims. " +
+            "The gateway service, its token and the audit database are untouched."),
         new(
             new[] { "policy", "reload" },
             "Tells the running gateway to reload its OPA policies. The gateway must be running.",

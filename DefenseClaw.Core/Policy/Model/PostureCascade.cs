@@ -10,7 +10,7 @@ namespace DefenseClaw.Core.Policy.Model;
 public sealed record PostureCascade(bool Set, string CriticalFloor)
 {
     /// <summary>The line under the matrix while the cascade is set.</summary>
-    public const string MatrixCaveat = "guardrail.cascade is set: it can change the outcome these pack levels predict for this scope; see Cascade.";
+    public const string MatrixCaveat = "guardrail.cascade is set: it can change the outcome these pack levels predict for this scope. See Cascade.";
 
     /// <summary>The context of a config.yaml read.</summary>
     public static PostureCascade Of(GuardrailCascade cascade)

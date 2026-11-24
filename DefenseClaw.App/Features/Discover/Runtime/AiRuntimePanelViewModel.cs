@@ -67,8 +67,7 @@ public sealed partial class AiRuntimePanelViewModel : PanelViewModelBase
     public const string UnsupportedTitle = "Runtime planes are not supported by this gateway";
 
     public const string UnsupportedDetail =
-        "This gateway does not serve GET /api/v1/ai-usage/runtime. Install a DefenseClaw build with the runtime planes. " +
-        "Until then nothing watches for shadow AI traffic or unattributed agent actions.";
+        "This gateway does not serve GET /api/v1/ai-usage/runtime. Install a DefenseClaw build with the runtime planes.";
 
     public const string UnavailableTitle = "Runtime coverage unavailable";
 
@@ -126,7 +125,7 @@ public sealed partial class AiRuntimePanelViewModel : PanelViewModelBase
     public override string Title => "Runtime";
 
     public override string Description =>
-        "What the runtime planes see on this PC: AI processes, network peers and agent actions.";
+        "What the runtime planes see on this machine: AI processes, network peers and agent actions.";
 
     /// <summary>The confirm-and-run overlay every change on this panel goes through.</summary>
     public DiscoverActionReview Review { get; }
@@ -242,7 +241,7 @@ public sealed partial class AiRuntimePanelViewModel : PanelViewModelBase
     public string CoverageTone => IsStale ? "Warn" : _coverageToneCore;
 
     public string CoverageHeadline =>
-        IsStale && _coverageHeadlineCore.Length > 0 ? "As of the last successful poll: " + _coverageHeadlineCore : _coverageHeadlineCore;
+        IsStale && _coverageHeadlineCore.Length > 0 ? "As of the last successful poll, which may no longer be true: " + _coverageHeadlineCore : _coverageHeadlineCore;
 
     [ObservableProperty]
     private string _countsText = string.Empty;

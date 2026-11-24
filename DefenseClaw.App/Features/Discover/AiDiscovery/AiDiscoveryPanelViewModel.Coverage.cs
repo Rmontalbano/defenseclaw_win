@@ -78,7 +78,7 @@ public sealed partial class AiDiscoveryPanelViewModel
     private const int MaxRuntimeFindings = 50;
 
     public const string CoverageCaveat =
-        "Only the sources above are checked.";
+        "No findings does not prove the machine is clean. Only the sources above are checked.";
 
     private bool _loadRunning;
     private DateTimeOffset? _loadedAt;
@@ -458,8 +458,8 @@ public sealed partial class AiDiscoveryPanelViewModel
 
         var text =
             $"Last scan {scannedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture)}: " +
-            $"{live.Source ?? "unknown"}, {live.Result ?? "unknown"}, {N(live.DurationMs)} ms, " +
-            $"{N(live.FilesScanned)} files, {N(live.TotalSignals)} signals ({N(live.ActiveSignals)} active, " +
+            $"source {live.Source ?? "unknown"} · result {live.Result ?? "unknown"} · {N(live.DurationMs)} ms\n" +
+            $"{N(live.FilesScanned)} files · {N(live.TotalSignals)} signals ({N(live.ActiveSignals)} active, " +
             $"{N(live.NewSignals)} new, {N(live.ChangedSignals)} changed, {N(live.GoneSignals)} gone)";
 
         if (live.Errors is > 0)
@@ -665,8 +665,7 @@ public sealed partial class AiDiscoveryPanelViewModel
                         "Not supported",
                         "Neutral",
                         "Runtime coverage is not supported by this DefenseClaw version",
-                        "This gateway has no /api/v1/ai-usage/runtime route. Shadow AI traffic and unattributed agent actions are not watched. " +
-                        "A newer DefenseClaw adds this.",
+                        "This gateway has no /api/v1/ai-usage/runtime route, so shadow AI traffic and unattributed agent actions are not watched.",
                         snapshot: false);
                 }
                 else

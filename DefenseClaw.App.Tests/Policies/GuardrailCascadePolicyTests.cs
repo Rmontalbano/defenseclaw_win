@@ -257,7 +257,7 @@ public sealed class GuardrailCascadePolicyTests : IDisposable
         Assert.Contains(set.InspectorLines, l => l.Text == PostureCascade.MatrixCaveat);
         Assert.DoesNotContain(plain.InspectorLines, l => l.Text == PostureCascade.MatrixCaveat);
         Assert.Equal(
-            "guardrail.cascade is set: it can change the outcome these pack levels predict for this scope; see Cascade.",
+            "guardrail.cascade is set: it can change the outcome these pack levels predict for this scope. See Cascade.",
             PostureCascade.MatrixCaveat);
     }
 

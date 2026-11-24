@@ -122,8 +122,8 @@ public sealed partial class FirstRunViewModel : ObservableObject, IDisposable
 
     public IReadOnlyList<FirstRunChoice> Profiles { get; } = new FirstRunChoice[]
     {
-        new("observe", "Observe - detect and log"),
-        new("action", "Action - enforce policy"),
+        new("observe", "Observe: detect and log"),
+        new("action", "Action: enforce policy"),
     };
 
     public IReadOnlyList<FirstRunChoice> ScannerModes { get; } = new FirstRunChoice[]
@@ -139,15 +139,15 @@ public sealed partial class FirstRunViewModel : ObservableObject, IDisposable
 
     private static readonly FirstRunChoice[] PlainFailModes =
     {
-        new("open", "Open - allow and log"),
-        new("closed", "Closed - block"),
+        new("open", "Open: allow and log"),
+        new("closed", "Closed: block"),
     };
 
     private static readonly FirstRunChoice[] SavedOrPolicyFailModes =
     {
-        new(FirstRunFailMode.Policy, "Policy tier - save nothing"),
-        new("open", "Open - allow with a warning"),
-        new("closed", "Closed - block"),
+        new(FirstRunFailMode.Policy, "Policy tier: save nothing"),
+        new("open", "Open: allow with a warning"),
+        new("closed", "Closed: block"),
     };
 
     public IReadOnlyList<string> Severities { get; } = new[] { "CRITICAL", "HIGH", "MEDIUM", "LOW" };
@@ -525,8 +525,8 @@ public sealed partial class FirstRunViewModel : ObservableObject, IDisposable
             if (!File.Exists(path))
             {
                 found = Array.Empty<string>();
-                note = "No AI discovery scan has been recorded yet. Choose a connector below. After setup, " +
-                       "the gateway's scan fills AI Discovery and Detect finds agents.";
+                note = "No AI discovery scan is recorded yet. Choose a connector below. " +
+                       "Detect can find agents after the gateway's first scan.";
             }
             else
             {

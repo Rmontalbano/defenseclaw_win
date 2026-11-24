@@ -72,7 +72,7 @@ internal static class ShortcutCatalog
                     new ShortcutRow(ShellShortcuts.LogsWarningsText, "Logs: show warnings and above, again for everything (not in a text box)"),
                     new ShortcutRow(ShellShortcuts.LogsFirstRowText, "Logs: go to the first row and pause"),
                     new ShortcutRow(ShellShortcuts.LogsNewestRowText, "Logs: go to the newest row and follow it again"),
-                    new ShortcutRow("Tab","Next control; Shift+Tab goes back"),
+                    new ShortcutRow("Tab","Next control. Shift+Tab goes back"),
                 }),
         };
 

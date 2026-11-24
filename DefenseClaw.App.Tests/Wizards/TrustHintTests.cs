@@ -166,7 +166,7 @@ public sealed class TrustHintTests : IDisposable
             Assert.True(vm.HasTrustHint);
             Assert.Equal(Folder, vm.TrustHintDirectory);
             Assert.Contains(Folder, vm.TrustHintMessage, StringComparison.Ordinal);
-            Assert.Contains("press Execute again", vm.TrustHintMessage, StringComparison.Ordinal);
+            Assert.Contains("select Execute again", vm.TrustHintMessage, StringComparison.Ordinal);
             Assert.Equal("exit 1", vm.ExitBadgeText);
             Assert.False(vm.LastRunSucceeded); // Execute stays available: the operator trusts the folder and goes on
             Assert.True(vm.TrustFolderCommand.CanExecute(null));

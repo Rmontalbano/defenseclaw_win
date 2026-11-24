@@ -81,7 +81,7 @@ public sealed partial class WizardGoalOptionViewModel : ObservableObject
         }
 
         IsAvailable = false;
-        UnavailableReason = status.Summary + " Local Splunk runs in Docker: install or start Docker Desktop, then check again.";
+        UnavailableReason = status.Summary + " Local Splunk runs in Docker: install or start Docker Desktop, then select Check for Docker again.";
         if (IsSelected)
         {
             _field.Value = string.Empty;

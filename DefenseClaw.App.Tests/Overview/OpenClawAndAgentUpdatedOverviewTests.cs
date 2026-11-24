@@ -37,7 +37,7 @@ public sealed class OpenClawAndAgentUpdatedOverviewTests : IDisposable
 
     private const string CodexRunning = "[{\"name\":\"codex\",\"state\":\"running\",\"requests\":4}]";
 
-    private const string UpdatedTitle = "Codex updated itself; DefenseClaw is not checking it";
+    private const string UpdatedTitle = "Codex updated itself. DefenseClaw is not checking it";
 
     private readonly TempDirectory _temp = new();
     private AppServices? _services;
@@ -127,7 +127,7 @@ public sealed class OpenClawAndAgentUpdatedOverviewTests : IDisposable
         Assert.Null(row.Command);
         var action = Assert.Single(row.Actions.Items);
         Assert.Equal((AttentionActionIds.ReselectCodex, true), (action.Id, action.Enabled));
-        Assert.Contains("not checking Codex's calls until setup runs again", row.Detail, StringComparison.Ordinal);
+        Assert.Contains("Its calls are not checked until setup runs again", row.Detail, StringComparison.Ordinal);
         Assert.Contains("the Codex executable changed since setup", row.Detail, StringComparison.Ordinal);
 
         // The 1.0.7 setup-failed row is not drawn beside it.
@@ -151,7 +151,7 @@ public sealed class OpenClawAndAgentUpdatedOverviewTests : IDisposable
 
         vm.Apply(Snapshot(Health("[]", NotStarted("amp", AmpChanged)), "amp"));
 
-        var row = Assert.Single(vm.Attention, static r => r.Title == "Amp updated itself; DefenseClaw is not checking it");
+        var row = Assert.Single(vm.Attention, static r => r.Title == "Amp updated itself. DefenseClaw is not checking it");
         Assert.Equal("Critical", row.SeverityKey);
         Assert.Equal("defenseclaw setup amp --yes", row.Command);
         Assert.Equal(0, row.Actions.Count);

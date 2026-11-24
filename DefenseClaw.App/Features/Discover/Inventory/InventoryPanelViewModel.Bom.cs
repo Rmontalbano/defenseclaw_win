@@ -71,8 +71,8 @@ public sealed partial class InventoryPanelViewModel
     public string SearchAutomationName => IsBomView ? "Search the AI BOM" : "Search components";
 
     public string SearchHelp => IsBomView
-        ? "Matches any column of the rows in the table. Shortcut Ctrl+F; Esc clears it."
-        : "Matches name, vendor, framework and ecosystem. Shortcut Ctrl+F; Esc clears it.";
+        ? "Matches any column of the rows in the table. Shortcut Ctrl+F. Esc clears it."
+        : "Matches name, vendor, framework and ecosystem. Shortcut Ctrl+F. Esc clears it.";
 
     /// <summary>
     /// A note about the last AI BOM that is not an error: connectors it printed that could not be read (skipped, and named), and the inventory
@@ -161,7 +161,7 @@ public sealed partial class InventoryPanelViewModel
         if (DatabaseMissing)
         {
             EmptyTitle = "No inventory yet";
-            EmptyDetail = "inventory.db is created the first time AI discovery runs. Turn on AI Discovery and run a scan, then refresh this page.";
+            EmptyDetail = "inventory.db is created the first time AI discovery runs. Turn on AI Discovery and run a scan, then select Refresh.";
             ShowEmptyState = true;
             return;
         }
@@ -325,7 +325,7 @@ public sealed partial class InventoryPanelViewModel
             "Generate an AI BOM?",
             $"Lists {what} of " +
             (scoped ? $"the {connector} connector" : "every active connector") +
-            ". Records a scan event in audit.db and posts an event to the gateway. Fails if the gateway is down.",
+            ". Records a scan event in audit.db and posts an event to the gateway. Fails if the gateway is not running.",
             new[]
             {
                 // The whole output is kept (up to the runner's full-output ceiling): a BOM is far longer than an ordinary command's 2,000 lines,
@@ -358,7 +358,7 @@ public sealed partial class InventoryPanelViewModel
         var stamp = DateTimeOffset.Now.ToString("HH:mm:ss", CultureInfo.InvariantCulture);
         if (!result.Succeeded || result.Invocations.Count == 0)
         {
-            BomStatus = $"The AI BOM run did not finish ({stamp}). The dialog and the Activity panel have its output.";
+            BomStatus = $"The AI BOM run did not finish ({stamp}). The dialog and Activity have its output.";
             return;
         }
 
@@ -390,7 +390,7 @@ public sealed partial class InventoryPanelViewModel
                 return;
 
             case InventoryBomParseStatus.NotJson:
-                BomStatus = $"AI BOM ran ({stamp}) but its output was not the expected JSON: {parsed.Message}. See the Activity panel.";
+                BomStatus = $"AI BOM ran ({stamp}) but its output was not the expected JSON: {parsed.Message}. See Activity.";
                 return;
         }
 
@@ -399,8 +399,8 @@ public sealed partial class InventoryPanelViewModel
         {
             // '[]' is what a scan of no connector prints (cmd_aibom.py:111-118): nothing was inventoried.
             BomStatus = bom.Skipped.Count == 0
-                ? $"AI BOM ran ({stamp}) but listed no connector. Check that a connector is configured. Output is in the Activity panel."
-                : $"AI BOM ran ({stamp}) but no connector in its output could be read: {SkippedText(bom)}. Output is in the Activity panel.";
+                ? $"AI BOM ran ({stamp}) but listed no connector. Check that a connector is configured. Output is in Activity."
+                : $"AI BOM ran ({stamp}) but no connector in its output could be read: {SkippedText(bom)}. Output is in Activity.";
             return;
         }
 
@@ -418,7 +418,7 @@ public sealed partial class InventoryPanelViewModel
         _lastBomJson = stdout;
         CanSaveBom = !string.IsNullOrWhiteSpace(stdout);
         BomWarning = WarningFor(bom);
-        BomStatus = $"AI BOM generated {stamp} for {scope}. Full JSON is in the Activity panel and can be saved.";
+        BomStatus = $"AI BOM generated {stamp} for {scope}. Full JSON is in Activity and can be saved.";
     }
 
     /// <summary>
@@ -529,7 +529,7 @@ public sealed partial class InventoryPanelViewModel
             rows.Add(new InventoryBomRow(
                 connector,
                 counts.Count == 0
-                    ? "Inventory generated. Category counts could not be read; see Activity."
+                    ? "Inventory generated. Category counts could not be read. See Activity."
                     : string.Join(
                         " · ",
                         counts.Select(c => $"{c.Name.Replace('_', ' ')} {c.Count.ToString(CultureInfo.InvariantCulture)}"))));

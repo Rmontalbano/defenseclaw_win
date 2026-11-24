@@ -199,10 +199,9 @@ public sealed partial class UpdatesWindowViewModel : ObservableObject, IDisposab
     /// first, then the failure that matters on this machine's layout today.
     /// </summary>
     public string UpgradeCaveat =>
-        "On Setup-based installs the defenseclaw-upgrade.ps1 resolver fails with \"Upgrade resolver stopped: Managed " +
-        "Python not found at %USERPROFILE%\\.defenseclaw\\.venv\\Scripts\\python.exe\". " +
-        "Use the Setup exe with /quiet /norestart INSTALLSCOPE=user instead. It keeps %USERPROFILE%\\.defenseclaw " +
-        "but has no automatic rollback, so back that folder up first.";
+        "On Setup installs the upgrade script fails with \"Managed Python not found\". " +
+        "Use the Setup installer with /quiet /norestart INSTALLSCOPE=user. " +
+        "It has no rollback, so back up %USERPROFILE%\\.defenseclaw first.";
 
     private bool CanOpenReleasePage => UpdateChecker.TrustedRepoUrl(HtmlUrl) is not null;
 
@@ -381,7 +380,7 @@ public sealed partial class UpdatesWindowViewModel : ObservableObject, IDisposab
         {
             UpdateCheckState.UpToDate => ("Up to date", "Ok"),
             UpdateCheckState.UpdateAvailable => ("Update available", "Warn"),
-            UpdateCheckState.CheckFailed when result.IsRateLimited => ("Rate-limited — try later", "Neutral"),
+            UpdateCheckState.CheckFailed when result.IsRateLimited => ("Rate-limited, try later", "Neutral"),
             UpdateCheckState.CheckFailed => ("Check failed", "Bad"),
             _ => ("Unknown", "Neutral"),
         };
@@ -419,7 +418,7 @@ public sealed partial class UpdatesWindowViewModel : ObservableObject, IDisposab
             ? $"curl.exe -LO {UpdateChecker.PowerShellSingleQuoted(url)}\n" +
               ChecksumVerificationLines(url, UpgradeRunner.InstallerAssetName) +
               $".\\{UpgradeRunner.InstallerAssetName} {string.Join(' ', UpgradeRunner.BuildInstallerArgv())}"
-            : "No Setup exe asset was found on this release.";
+            : "No Setup installer asset was found on this release.";
 
     /// <summary>The copyable resolver-script command, quoted and restricted like <see cref="BuildSetupCommand"/>.</summary>
     internal static string BuildUpgradeScriptCommand(ReleaseAsset? scriptAsset) =>
@@ -473,7 +472,7 @@ public sealed partial class UpdatesWindowViewModel : ObservableObject, IDisposab
             SigstoreBadgeKey = "Neutral";
             SigstoreDetail =
                 "checksums.txt and its sigstore signature files " + PublishedSignatureFiles(report) + " are on this release but not yet verified. " +
-                "Download & verify below verifies it with cosign when cosign is installed. Without cosign it only compares the SHA-256, " +
+                "Download & verify below checks the signature when cosign is installed. Without cosign it only compares the SHA-256, " +
                 "which does not prove the project signed it.";
         }
         else if (report.ChecksumsAssetPresent)

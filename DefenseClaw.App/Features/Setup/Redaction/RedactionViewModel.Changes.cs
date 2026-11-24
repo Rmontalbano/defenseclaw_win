@@ -205,7 +205,7 @@ public sealed partial class RedactionViewModel
     public string QuickNoneWarning =>
         "Profile none stops redacting. Raw governed content is kept in local SQLite and sent to every destination you configured. A managed enterprise destination stays locked.";
 
-    public string QuickArmedText => "Danger: press Apply again to review removing all redaction.";
+    public string QuickArmedText => "Danger: select Apply again to review removing all redaction.";
 
     public string QuickApplyLabel => QuickArmed ? "Apply: press again" : "Apply…";
 

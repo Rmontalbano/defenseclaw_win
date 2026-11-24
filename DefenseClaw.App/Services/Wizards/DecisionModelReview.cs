@@ -53,7 +53,7 @@ public static class DecisionModelReview
         {
             warnings.Add(new CommandReviewWarning(
                 RollbackTitle,
-                "This writes decision_model.hook_connectors, which releases before 1.0.7 refuse, so config.yaml no longer loads. Before going back, clear it with " +
+                "Releases before 1.0.7 refuse decision_model.hook_connectors and will not load this config.yaml. Before going back, clear it with " +
                 "defenseclaw setup decision-model --connectors \"\" --non-interactive."));
         }
 

@@ -214,7 +214,7 @@ public sealed partial class OverviewPanelViewModel
             ? GatewayControl.AdministratorTitle(_gatewayAction)
             : GatewayControl.Title(_gatewayAction).Replace("gateway", "Gateway", StringComparison.Ordinal);
         GatewayActionTip = allowed
-            ? (asAdministrator ? "Runs the gateway with administrator rights; Windows asks you to approve it. " : GatewayControl.Summary(_gatewayAction) + " ") + "Asks for confirmation first."
+            ? (asAdministrator ? "Runs the gateway with administrator rights. Windows asks you to approve it. " : GatewayControl.Summary(_gatewayAction) + " ") + "Asks for confirmation first."
             : reason ?? string.Empty;
         StopGatewayTip = stopAllowed ? GatewayControl.Summary(GatewayAction.Stop) + " Asks for confirmation first." : stopReason ?? string.Empty;
 
@@ -418,7 +418,7 @@ public sealed partial class OverviewPanelViewModel
             "Run an AI discovery scan?",
             "Asks the running gateway to scan this machine for AI tools now. " +
             "The result is written to ai_discovery_state.json and inventory.db, and the gateway records an ai.discovery audit event.\n\n" +
-            "The gateway must be running with AI discovery on. Otherwise the command fails and nothing changes.",
+            "Fails with nothing changed unless the gateway is running with AI discovery on.",
             new[]
             {
                 new DiscoverStep(
@@ -461,7 +461,7 @@ public sealed partial class OverviewPanelViewModel
         ShowDiagnosticMessage(
             title,
             "Neutral",
-            $"Opened a console window running `{CommandReview.CommandLine(CommandReview.DefaultExecutable, FillMissingKeysArgv)}`. Type each value at its hidden prompt, then run doctor again to refresh What needs attention.",
+            $"Opened a console window running `{CommandReview.CommandLine(CommandReview.DefaultExecutable, FillMissingKeysArgv)}`. Type each value at its hidden prompt, then run doctor again.",
             string.Empty);
     }
 
@@ -601,6 +601,6 @@ public sealed partial class OverviewPanelViewModel
         var shown = lines.Skip(Math.Max(0, lines.Count - DiagnosticOutputLines))
             .Select(static l => l.Length > DiagnosticLineLimit ? l[..DiagnosticLineLimit] + "…" : l);
         var omitted = lines.Count - Math.Min(lines.Count, DiagnosticOutputLines);
-        return (omitted > 0 ? $"… {omitted} earlier line(s) in Activity{Environment.NewLine}" : string.Empty) + string.Join(Environment.NewLine, shown);
+        return (omitted > 0 ? $"… {omitted} earlier {(omitted == 1 ? "line" : "lines")} in Activity{Environment.NewLine}" : string.Empty) + string.Join(Environment.NewLine, shown);
     }
 }

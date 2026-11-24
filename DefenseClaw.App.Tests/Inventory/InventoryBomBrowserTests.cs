@@ -279,7 +279,7 @@ public sealed class InventoryBomBrowserTests
         browser.SetConnectorLines(InventoryPanelViewModel.ParseBom(PayloadFixtures.Read("aibom-scan.multi-connector.json"), null));
 
         Assert.Equal("All 2 connectors: Claude Code, Codex", Value(browser, "Source"));
-        Assert.Equal("per connector (choose one in the connector scope)", Value(browser, "Home / Config"));
+        Assert.Equal("per connector. Choose one in the connector scope", Value(browser, "Home / Config"));
         Assert.DoesNotContain(Summary(browser), r => r.Label is "Home" or "Config");
         Assert.Equal("2", Value(browser, "Total items"));
         Assert.Equal("1 (1 eligible)", Value(browser, "Skills"));
@@ -376,9 +376,9 @@ public sealed class InventoryBomBrowserTests
         Assert.Contains("Skipped | entry 4: it is null, not an inventory object", notes);
 
         // The failed commands of the connector that was kept, and what a connector cannot inventory.
-        Assert.Contains(notes, n => n.StartsWith("codex: command failed | codex:mcp - could not read ", StringComparison.Ordinal));
-        Assert.Contains(notes, n => n.StartsWith("codex: command failed | codex:plugins - ambiguous plugin identity", StringComparison.Ordinal));
-        Assert.Contains("claudecode: Not supported | tools - tool registry is owned by each plugin's manifest", notes);
+        Assert.Contains(notes, n => n.StartsWith("codex: command failed | codex:mcp: could not read", StringComparison.Ordinal));
+        Assert.Contains(notes, n => n.StartsWith("codex: command failed | codex:plugins: ambiguous plugin identity", StringComparison.Ordinal));
+        Assert.Contains("claudecode: Not supported | tools: tool registry is owned by each plugin's manifest", notes);
         Assert.DoesNotContain(notes, n => n.StartsWith("Nothing to report", StringComparison.Ordinal));
     }
 
@@ -389,8 +389,8 @@ public sealed class InventoryBomBrowserTests
         Assert.Equal(("Nothing to report", "Every connector was read and every category was inventoried."), (clean.DetailFields[0].Key, clean.DetailFields[0].Value));
 
         var pinned = Browse("aibom-scan.95159fd.synthetic.json");
-        Assert.Contains(pinned.DetailFields, f => f.Key == "hermes: Partly checked" && f.Value.StartsWith("skills - ", StringComparison.Ordinal));
-        Assert.Contains(pinned.DetailFields, f => f.Key == "hermes: Not supported" && f.Value.StartsWith("tools - ", StringComparison.Ordinal));
+        Assert.Contains(pinned.DetailFields, f => f.Key == "hermes: Partly checked" && f.Value.StartsWith("skills: ", StringComparison.Ordinal));
+        Assert.Contains(pinned.DetailFields, f => f.Key == "hermes: Not supported" && f.Value.StartsWith("tools: ", StringComparison.Ordinal));
     }
 
     // ------------------------------------------------------------------ several connectors

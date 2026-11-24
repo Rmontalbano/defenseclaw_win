@@ -161,7 +161,7 @@ public sealed class AppUpdateCheckTests : IDisposable
         Assert.Equal(AppUpdateState.DevBuild, check.State);
         Assert.False(check.IsUpdateAvailable);
         Assert.Contains("Development build", check.Message);
-        Assert.Contains("latest release is 1.2.0", check.Message);
+        Assert.Contains("Latest release is 1.2.0", check.Message);
     }
 
     [Fact]

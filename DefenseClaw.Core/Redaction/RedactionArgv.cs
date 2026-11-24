@@ -345,7 +345,7 @@ public static class RedactionArgv
         }
         else if (RedactionVocabulary.BuiltInProfiles.Contains(inputs.ProfileName))
         {
-            problems.Add("A built-in profile cannot be edited: give the custom profile a name of its own.");
+            problems.Add("A built-in profile cannot be edited. Give the custom profile a new name.");
         }
         else if (!RedactionVocabulary.IsStableName(inputs.ProfileName))
         {

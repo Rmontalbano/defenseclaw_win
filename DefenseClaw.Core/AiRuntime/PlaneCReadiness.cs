@@ -102,7 +102,7 @@ public sealed record PlaneCCheck(string Id, PlaneCSubject Subject, string Title,
     {
         PlaneCSubject.App => "This app's token",
         PlaneCSubject.Gateway => "The gateway (runtime snapshot)",
-        _ => "This PC's audit policy",
+        _ => "This machine's audit policy",
     };
 
     public string StateText => State switch

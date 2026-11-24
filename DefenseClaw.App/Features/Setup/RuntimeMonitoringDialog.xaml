@@ -72,7 +72,7 @@
                     </TextBlock>
                     <TextBlock Style="{StaticResource DcCaption}" Margin="0,0,0,2" FontWeight="SemiBold" Text="What it records" />
                     <TextBlock Style="{StaticResource DcCaption}" Margin="0,0,0,6" TextWrapping="Wrap" Text="{Binding Records}" />
-                    <TextBlock Style="{StaticResource DcCaption}" Margin="0,0,0,4" FontWeight="SemiBold" Text="What it needs on this PC" />
+                    <TextBlock Style="{StaticResource DcCaption}" Margin="0,0,0,4" FontWeight="SemiBold" Text="What it needs on this machine" />
                     <ItemsControl ItemsSource="{Binding Requirements}"
                                   ItemTemplate="{StaticResource RequirementTemplate}"
                                   IsTabStop="False"
@@ -196,7 +196,7 @@
                                 </Grid.ColumnDefinitions>
                                 <StackPanel Grid.Column="0" Margin="0,0,16,0">
                                     <TextBlock Style="{StaticResource DcBody}" FontWeight="SemiBold" Text="{Binding MonitoringText}" AutomationProperties.LiveSetting="Polite" />
-                                    <TextBlock Style="{StaticResource DcCaption}" TextWrapping="Wrap" Text="Starts planes A and B (process and network), and stops every plane when off." />
+                                    <TextBlock Style="{StaticResource DcCaption}" TextWrapping="Wrap" Text="Starts planes A and B, process and network. Off stops every plane." />
                                 </StackPanel>
                                 <ui:ToggleSwitch Grid.Column="1"
                                                  VerticalAlignment="Center"

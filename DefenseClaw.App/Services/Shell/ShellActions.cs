@@ -317,7 +317,7 @@ internal sealed partial class ShellActions
                     ? "The doctor finished with no failures. Details are in Activity."
                     : invocation.ExitCode is { } code
                         ? $"The doctor reported problems (exit code {code}). Details are in Activity."
-                        : $"{invocation.FailureReason ?? "The doctor did not finish"}. See the Activity panel.");
+                        : $"{invocation.FailureReason ?? "The doctor did not finish"}. See Activity.");
         }
 #pragma warning disable CA1031 // A diagnosis that cannot start (no CLI) is reported, not thrown into a key handler.
         catch (Exception ex)
@@ -513,7 +513,7 @@ internal sealed partial class ShellActions
         }
 
         var accepted = _services.Cli.Cancel(target, out var why);
-        ShowToast(title, accepted ? $"Cancelling {LineOf(target)}." : why);
+        ShowToast(title, accepted ? $"Cancelling {LineOf(target)}. The process tree is being killed." : why);
     }
 
     /// <summary>

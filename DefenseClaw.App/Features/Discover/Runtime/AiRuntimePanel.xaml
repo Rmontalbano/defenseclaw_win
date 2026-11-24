@@ -63,7 +63,7 @@
                            SearchText="{Binding FilterText}"
                            SearchPlaceholder="Filter findings…"
                            SearchAutomationName="Filter findings"
-                           SearchHelpText="Shows only findings whose process, command line, user, agent, severity, providers or inventory verdict contain these words. Shortcut Ctrl+F; Esc clears it.">
+                           SearchHelpText="Shows only findings whose process, command line, user, agent, severity, providers or inventory verdict contain these words. Shortcut Ctrl+F. Esc clears it.">
             <ctl:DcPageToolbar.Leading>
                 <ui:ProgressRing Width="18"
                                  Height="18"
@@ -398,17 +398,17 @@
                                        Icon="{ctl:DcSymbolIcon Flash24}"
                                        Command="{Binding PollNowCommand}"
                                        ToolTip="defenseclaw agent discovery runtime scan: asks the gateway to poll the planes immediately."
-                                       AutomationProperties.HelpText="Asks the gateway to poll the runtime planes right now. Shows the exact command first." />
+                                       AutomationProperties.HelpText="Asks the gateway to poll the runtime planes right now. Nothing runs until you confirm." />
                             <ui:Button Content="{Binding EnableButtonText}"
                                        Icon="{ctl:DcSymbolIcon Power24}"
                                        Command="{Binding EnablePlanesCommand}"
                                        ToolTip="defenseclaw agent discovery runtime enable: turns the planes on, or applies the settings below."
-                                       AutomationProperties.HelpText="Turns the runtime planes on, or applies the plane settings below. Shows the exact command first." />
+                                       AutomationProperties.HelpText="Turns the runtime planes on, or applies the plane settings below. Nothing runs until you confirm." />
                             <ui:Button Content="Disable…"
                                        Icon="{ctl:DcSymbolIcon PauseCircle24}"
                                        Command="{Binding DisablePlanesCommand}"
                                        ToolTip="defenseclaw agent discovery runtime disable: turns the planes off. Recorded findings are kept."
-                                       AutomationProperties.HelpText="Turns the runtime planes off. Shows the exact command first." />
+                                       AutomationProperties.HelpText="Turns the runtime planes off. Nothing runs until you confirm." />
                         </WrapPanel>
 
                         <!-- Why a button is off, as text. -->
@@ -453,7 +453,7 @@
                                                   HorizontalAlignment="Left"
                                                   MinWidth="200"
                                                   AutomationProperties.Name="DNS capture"
-                                                  AutomationProperties.HelpText="On adds --dns-capture, which names peers from DNS answers this PC resolved. Off adds --no-dns-capture.">
+                                                  AutomationProperties.HelpText="On adds --dns-capture, which names peers from DNS answers this machine resolved. Off adds --no-dns-capture.">
                                             <ComboBoxItem Content="Keep as it is" />
                                             <ComboBoxItem Content="On" />
                                             <ComboBoxItem Content="Off" />
@@ -502,7 +502,7 @@
                 </Border>
 
                 <!-- What this PC needs. Read-only: the lines are text to copy, never run by this app. -->
-                <TextBlock Style="{StaticResource DcSectionHeader}" Text="Prerequisites on this PC" />
+                <TextBlock Style="{StaticResource DcSectionHeader}" Text="Prerequisites on this machine" />
                 <Border Style="{StaticResource DcCard}" Margin="{StaticResource DcCardGap}">
                     <StackPanel>
                         <StackPanel Orientation="Horizontal">
@@ -606,7 +606,7 @@
                                                  Height="18"
                                                  Margin="10,0,0,8"
                                                  IsIndeterminate="True"
-                                                 AutomationProperties.Name="Reading this PC"
+                                                 AutomationProperties.Name="Reading this machine"
                                                  Visibility="{Binding IsReadingPlaneC, Converter={StaticResource BoolToVisibility}}" />
                             </StackPanel>
                             <TextBlock Style="{StaticResource DcTextSecondary}" TextWrapping="Wrap" Text="{Binding PlaneCAppTokenNote}" />
@@ -709,7 +709,7 @@
                                            Icon="{ctl:DcSymbolIcon ArrowSync24}"
                                            Command="{Binding CheckPlaneCCommand}"
                                            ToolTip="Reads this app's token, group membership, the Security channel and one registry value. Read-only."
-                                           AutomationProperties.HelpText="Reads this PC again. Read-only." />
+                                           AutomationProperties.HelpText="Reads this machine again. Read-only." />
                             </WrapPanel>
                         </StackPanel>
                     </Border>

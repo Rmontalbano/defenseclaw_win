@@ -168,7 +168,7 @@ public static partial class CatalogPartialReads
                     if (source.Length > 0 && state.Length > 0)
                     {
                         var connector = Text(probe, "connector");
-                        yield return $"Plugin discovery source [{(connector.Length > 0 ? connector : "?")}]: {source} — {state}";
+                        yield return $"Plugin discovery source [{(connector.Length > 0 ? connector : "?")}]: {source}: {state}";
                     }
                 }
             }

@@ -164,7 +164,7 @@ public sealed class OverviewNoticesTests : IDisposable
         Assert.Equal("Critical", row.SeverityKey);
         Assert.Equal(
             "guardrail.connectors: 'ClaudeCode' and 'claudecode' refer to the same connector 'claudecode'; keep only one" +
-            ". Check your connector config.",
+            ". Check your connector config. This card shows a reduced view.",
             row.Detail);
     }
 

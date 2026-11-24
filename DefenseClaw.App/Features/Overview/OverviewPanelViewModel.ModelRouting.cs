@@ -79,7 +79,7 @@ public sealed partial class OverviewPanelViewModel
 
         if (!localStore)
         {
-            return "on, local usage store off, no usage kept";
+            return "on. The local usage store is off, so no usage is kept.";
         }
 
         var usage = _modelUsage;
@@ -93,7 +93,7 @@ public sealed partial class OverviewPanelViewModel
             case ModelUsageStatus.Unreadable:
                 return "on, usage could not be read";
             case ModelUsageStatus.StoreOff:
-                return "on in config.yaml, gateway reports usage store off";
+                return "on in config.yaml. The gateway reports the usage store off.";
             default:
                 var text = "on, " + ModelUsageReader.Describe(usage);
 

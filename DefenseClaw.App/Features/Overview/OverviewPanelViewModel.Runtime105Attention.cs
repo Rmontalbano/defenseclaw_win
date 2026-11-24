@@ -241,8 +241,8 @@ public sealed partial class OverviewPanelViewModel
             rows.Add(new AttentionRow
             {
                 Title = "Codex: its config turns hooks off",
-                Detail = $"{config} sets [features] {_hookSwitches.CodexKey} = false, so Codex runs no hooks and DefenseClaw is not guarding " +
-                         "its tool calls. Run the command below, then restart Codex.",
+                Detail = $"{config} sets [features] {_hookSwitches.CodexKey} = false, so Codex runs no hooks and its tool calls are not guarded. " +
+                         "Run the command below, then restart Codex.",
                 SeverityKey = "High",
                 Command = CodexEnableHooksCommand,
             });

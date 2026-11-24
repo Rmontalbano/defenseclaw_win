@@ -823,11 +823,11 @@ public sealed class ReviewChangeSummaryTests
             WizardViewModel.StopMessage(closeAfterStop: true, onlyReads: true));
 
         Assert.Equal(
-            "This ends the command and everything it started. It may leave setup half-applied. Read the output and the Activity panel afterwards before running it again.",
+            "This ends the command and everything it started. It may leave setup half-applied. Read the output and Activity afterwards before running it again.",
             WizardViewModel.StopMessage(closeAfterStop: false, onlyReads: false));
         Assert.Equal(
-            "Closing this window stops the command and everything it started. It may leave setup half-applied. Read the output and the Activity panel afterwards before running it again.",
-            WizardViewModel.StopMessage(closeAfterStop: true, onlyReads: false));
+            "Closing this window stops the command and everything it started. It may leave setup half-applied. Read the output and Activity afterwards before running it again.",
+WizardViewModel.StopMessage(closeAfterStop: true, onlyReads: false));
     }
 
     [Fact]
@@ -839,7 +839,7 @@ public sealed class ReviewChangeSummaryTests
         Assert.Equal(Cancelled + ". A preview writes nothing, so there is nothing to clean up.", WizardViewModel.CancelledMessage(Cancelled, preview: true, onlyReads: true));
         Assert.Equal(Cancelled + ". A preview writes nothing, so there is nothing to clean up.", WizardViewModel.CancelledMessage(Cancelled, preview: true, onlyReads: false));
         Assert.Equal(
-            Cancelled + ". The command may have left setup half-applied. Read the output above and the Activity panel before running it again.",
+            Cancelled + ". The command may have left setup half-applied. Read the output above and Activity before running it again.",
             WizardViewModel.CancelledMessage(Cancelled, preview: false, onlyReads: false));
     }
 
@@ -1024,7 +1024,7 @@ public sealed class LocalObservabilityCardTests
     [Theory]
     [InlineData(DockerState.NotInstalled, "Docker was not found on this machine's PATH.")]
     [InlineData(DockerState.EngineDown, "Docker is installed but its engine is not running. Start Docker Desktop and wait for it to say it is running.")]
-    [InlineData(DockerState.ComposeMissing, "Docker Compose v2 is not available (docker compose version failed). Install or enable the Compose plugin; Docker Desktop includes it.")]
+    [InlineData(DockerState.ComposeMissing, "Docker Compose v2 is not available (docker compose version failed). Install or enable the Compose plugin. Docker Desktop includes it.")]
     public async Task A_no_leaves_the_card_in_not_available_with_the_probes_own_reason(DockerState state, string summary)
     {
         using var hub = new Hub();

@@ -149,7 +149,7 @@ public sealed class ReviewStreamingTests : IDisposable
 
         var lines = output!.Split('\n', StringSplitOptions.RemoveEmptyEntries);
         Assert.True(lines.Length <= 35, $"{lines.Length} lines");
-        Assert.Contains("471 earlier line(s) omitted", output, StringComparison.Ordinal);
+        Assert.Contains("471 earlier lines omitted", output, StringComparison.Ordinal);
         Assert.DoesNotContain("chatty 1" + Environment.NewLine, output, StringComparison.Ordinal);
         Assert.DoesNotContain(new string('x', 700), output, StringComparison.Ordinal); // a 1000-character line is cut at the 600-character line cap (CUST-425 raised it from 300)
     }
@@ -176,7 +176,7 @@ public sealed class ReviewStreamingTests : IDisposable
 
         Assert.Null(during);
         Assert.Null(outputDuring);
-        Assert.Equal("Done. Full output is in the Activity panel.", review.ResultText);
+        Assert.Equal("Done. Full output is in Activity.", review.ResultText);
         Assert.Equal("hello", review.ResultOutput);
     }
 

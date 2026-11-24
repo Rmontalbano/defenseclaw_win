@@ -91,7 +91,7 @@ internal static partial class ShellCommandRegistry
             Id: CloseToTrayId,
             Title: "Close to tray",
             Category: AppCategory,
-            Description: "Hide this window. DefenseClaw keeps watching the gateway from the tray.",
+            Description: "Hide this window. DefenseClaw keeps watching the gateway from the tray. Click the shield to come back.",
             Shortcut: null,
             Keywords: "hide minimize tray close window",
             IsEnabled: true,

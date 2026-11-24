@@ -136,7 +136,7 @@ public sealed class DockerProbe : IDockerProbe
                 return new DockerStatus(
                     DockerState.ComposeMissing,
                     "Docker Compose v2 is not available (docker compose version " + (compose.TimedOut ? "did not answer" : "failed") + "). " +
-                    "Install or enable the Compose plugin; Docker Desktop includes it." +
+                    "Install or enable the Compose plugin. Docker Desktop includes it." +
                     (composeDetail.Length > 0 ? " (" + composeDetail + ")" : string.Empty),
                     Array.Empty<string>());
             }

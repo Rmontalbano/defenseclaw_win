@@ -361,7 +361,7 @@
                         <ctl:DcCardHeader AutomationProperties.HeadingLevel="Level2"
                                           Symbol="ArrowCircleUp24"
                                           Section="Updates"
-                                          Content="Updates: this app" />
+                                          Content="Updates: DefenseClaw for Windows" />
 
                         <HeaderedContentControl Style="{StaticResource SettingRow}"
                                                 local:SettingsRow.IsFirst="True"
@@ -669,7 +669,7 @@
                                              ToolTipService.ShowOnDisabled="True"
                                              ToolTip="{Binding AutoStartToolTip}"
                                              AutomationProperties.Name="Start the gateway automatically"
-                                             AutomationProperties.HelpText="Starts the gateway once per launch when its port refuses connections. Not after a timeout, a refused or unreadable answer, with a WSL gateway, while paused, or after you stop it. Turning it on shows the command first." />
+                                             AutomationProperties.HelpText="Starts the gateway once per launch when its port refuses connections. Not after a timeout, a refused or unreadable answer, with a WSL gateway, while paused, or after you stop it. Nothing runs until you confirm turning it on." />
                         </HeaderedContentControl>
 
                         <!--
@@ -854,7 +854,7 @@
                             </StackPanel>
 
                             <StackPanel Visibility="{Binding ShowRuntimeForm, Converter={StaticResource BoolToVisibility}}">
-                                <TextBlock Margin="0,10,0,2" Style="{StaticResource DcCaption}" Text="Gateway address on this PC: 127.0.0.1, localhost or [::1]. Optional for a CLI, required for a container." />
+                                <TextBlock Margin="0,10,0,2" Style="{StaticResource DcCaption}" Text="Gateway address on this machine: 127.0.0.1, localhost or [::1]. Optional for a CLI, required for a container." />
                                 <ui:TextBox PlaceholderText="http://127.0.0.1:18971"
                                             AutomationProperties.Name="Gateway address"
                                             Text="{Binding RuntimeGatewayUrl, UpdateSourceTrigger=PropertyChanged}" />

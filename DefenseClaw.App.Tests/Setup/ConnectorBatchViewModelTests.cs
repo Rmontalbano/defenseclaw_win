@@ -242,7 +242,7 @@ public sealed class ConnectorBatchViewModelTests : IDisposable
         Assert.False(vm.CanChooseDetected);
         Assert.True(vm.CanChooseAll);
         vm.ExtraIndex = 1;
-        Assert.Equal("setup does not list --detected.", vm.ReviewBlockedReason);
+        Assert.Equal("This DefenseClaw's setup does not list --detected.", vm.ReviewBlockedReason);
     }
 
     [Fact]

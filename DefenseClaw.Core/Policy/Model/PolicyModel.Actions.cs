@@ -318,7 +318,7 @@ public sealed partial class PolicyModel
         }
         else if (connector.Length > 0)
         {
-            details.Add("Only this connector changes; the others keep their mode. A running gateway restarts.");
+            details.Add("Only this connector changes. The others keep their mode. A running gateway restarts.");
         }
         else
         {
@@ -529,7 +529,7 @@ public sealed partial class PolicyModel
                 weakens = true;
                 var (oldBlock, oldAlert) = PolicyLevels.ProfileLevelsFor(row.PackFolder, Catalog.PackPostures);
                 var (newBlock, newAlert) = PolicyLevels.ProfileLevelsFor(target, Catalog.PackPostures);
-                warning = $"This weakens protection: the gateway reads tool-call levels from the pack's posture in defenseclaw-pack.json, or else its folder name. {profileFolder} counts as {after}: it blocks {newBlock} and alerts on {newAlert}, not {oldBlock} and {oldAlert} ({before}).";
+                warning = $"This weakens protection: {profileFolder} counts as {after}. It blocks {newBlock} and alerts on {newAlert}, where {before} blocked {oldBlock} and alerted on {oldAlert}.";
             }
         }
         else
@@ -632,7 +632,7 @@ public sealed partial class PolicyModel
         var old = PolicyLevels.Or(block ? policy.BlockAt : policy.AlertAt, "-");
         var details = new List<string>
         {
-            "LLM traffic through the guardrail proxy only; tool calls keep each scope's levels (Posture view).",
+            "LLM traffic through the guardrail proxy only. Tool calls keep each scope's levels (Posture view).",
         };
         if (!policy.IsActive)
         {

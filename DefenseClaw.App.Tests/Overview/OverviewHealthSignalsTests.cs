@@ -152,10 +152,10 @@ public sealed class OverviewHealthSignalsTests : IDisposable
         var detail = Assert.Single(vm.ObservabilityRows).Detail;
         Assert.StartsWith("activated · 5 accepted · 3 delivered · 2 retried · 0 dropped · 0 rejected", detail, StringComparison.Ordinal);
         Assert.Contains("counters: log and trace records", detail, StringComparison.Ordinal);
-        Assert.Contains("circuit open: not sending to this collector. A standard install keeps records queued and resends when it answers", detail, StringComparison.Ordinal);
+        Assert.Contains("circuit open: not sending to this collector. A standard install queues records and resends them", detail, StringComparison.Ordinal);
 
         // dispatch.go sets RetryUntilClosed only off a Secure Client install and /health does not say which this is, so the sentence says both.
-        Assert.Contains("a Secure Client install may drop some", detail, StringComparison.Ordinal);
+        Assert.Contains("A Secure Client install may drop some", detail, StringComparison.Ordinal);
     }
 
     [Fact]

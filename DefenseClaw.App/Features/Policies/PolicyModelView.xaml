@@ -42,7 +42,7 @@
                            SearchWidth="240"
                            SearchPlaceholder="Filter rows…"
                            SearchAutomationName="Filter rows"
-                           SearchHelpText="Matches the row's cells and details. Shortcut Ctrl+F; Esc clears it.">
+                           SearchHelpText="Matches the row's cells and details. Shortcut Ctrl+F. Esc clears it.">
             <ctl:DcPageToolbar.Actions>
                 <StackPanel Style="{StaticResource DcToolbarActions}">
                     <ui:Button Icon="{ctl:DcSymbolIcon ArrowClockwise24}"

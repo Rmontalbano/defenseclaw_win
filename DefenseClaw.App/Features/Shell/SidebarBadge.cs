@@ -118,7 +118,7 @@ internal sealed class SidebarBadge
         var name = shown ? $"{_title}, {description}" : _title;
         var before = AutomationProperties.GetName(_item);
         AutomationProperties.SetName(_item, name);
-        _item.ToolTip = shown ? $"{_baseToolTip} — {description}" : _baseToolTip;
+        _item.ToolTip = shown ? $"{_baseToolTip} · {description}" : _baseToolTip;
 
         // The entry's name is what changed; a screen reader that is listening hears it without re-reading the sidebar.
         if (!string.Equals(before, name, StringComparison.Ordinal) &&

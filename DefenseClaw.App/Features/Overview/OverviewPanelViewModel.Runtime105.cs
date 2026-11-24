@@ -79,6 +79,7 @@ public sealed partial class OverviewPanelViewModel
                     Title = $"{name}: observe mode with a fail-closed hook",
                     Detail = $"A gateway outage blocks the agent. {why} {way}",
                     Reference = HookFailModeRule.SavedWinsOutageRuleFor(Services.Runtime.Capabilities),
+                    ReferenceLabel = "Outage behaviour",
                     SeverityKey = "High",
                 });
             }
@@ -90,6 +91,7 @@ public sealed partial class OverviewPanelViewModel
                     Title = $"{name}: a saved hook_fail_mode: open overrides the strict rule pack",
                     Detail = $"config.yaml saves hook_fail_mode: open {where}, so calls run with a warning while the gateway is down. To block them, run {hint}.",
                     Reference = HookFailModeRule.SavedWinsOutageRuleFor(Services.Runtime.Capabilities),
+                    ReferenceLabel = "Outage behaviour",
                     SeverityKey = "Medium",
                     Command = hint,
                 });

@@ -68,7 +68,7 @@ public static partial class RedactionVocabulary
         "none" => "No redaction: everything is sent as recorded.",
         "sensitive" => "Removes credentials, hashes file paths, and masks PII, credentials and secrets found in content, reasons, evidence and errors.",
         "content" => "Like sensitive, but replaces content, reasons, evidence and errors whole.",
-        "strict" => "Keeps only metadata and identifiers; removes everything else.",
+        "strict" => "Keeps only metadata and identifiers.",
         _ => "A custom profile.",
     };
 

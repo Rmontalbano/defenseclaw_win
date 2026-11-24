@@ -142,5 +142,5 @@ internal sealed record GatewayAdminStatus
 
     /// <summary>The Windows exit-77 sentence.</summary>
     public const string OwnershipSentence =
-        "This installation has files owned by Administrators because the gateway ran as administrator. Run Repair ownership, or keep running the gateway as administrator.";
+        "Files here are owned by Administrators because the gateway ran as administrator. Run Repair ownership or keep running it as administrator.";
 }

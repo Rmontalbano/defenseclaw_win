@@ -97,7 +97,7 @@ public sealed class DecisionModelProtocolTests
     private static string AllText(WizardDefinition definition) => string.Join(
         "\n",
         definition.Steps.SelectMany(s => new[] { s.Title, s.Subtitle }
-            .Concat(s.Fields.SelectMany(f => new[] { f.Label, f.Help, f.Placeholder }.Concat(f.Choices.Select(c => c.Label))))));
+            .Concat(s.Fields.SelectMany(f => new[] { f.Label, f.Help, f.Details, f.Placeholder }.Concat(f.Choices.Select(c => c.Label))))));
 
     // ------------------------------------------------------------------ 1.0.10
 
@@ -153,20 +153,22 @@ public sealed class DecisionModelProtocolTests
 
         var token = definition.AllFields.Single(f => f.Flag == "--api-key-env");
         Assert.DoesNotContain("bearer token (", token.Help, StringComparison.Ordinal);
-        Assert.Contains("x-goog-api-key", token.Help, StringComparison.Ordinal);
-        Assert.Contains("defenseclaw keys set DEFENSECLAW_DECISION_MODEL_KEY", token.Help, StringComparison.Ordinal);
+        Assert.Contains("x-goog-api-key", token.Details, StringComparison.Ordinal);
+        Assert.Contains("defenseclaw keys set DEFENSECLAW_DECISION_MODEL_KEY", token.Details, StringComparison.Ordinal);
 
         var block = definition.AllFields.Single(f => f.Flag == "--block-threshold");
         Assert.Contains("decision_model.block_risk_score", block.Help, StringComparison.Ordinal);
         Assert.Contains("0.75", block.Help, StringComparison.Ordinal);
 
-        var connectors = definition.Steps.Single(s => s.Id == "decision-model-connectors").Fields[0].Help;
+        var connectorsField = definition.Steps.Single(s => s.Id == "decision-model-connectors").Fields[0];
+        Assert.Equal("Connectors listed here use the decision model where the LLM judge does not run.", connectorsField.Help);
+        var connectors = connectorsField.Details;
         Assert.Contains("decision_model.block_risk_score", connectors, StringComparison.Ordinal);
         Assert.Contains("flow_guard", connectors, StringComparison.Ordinal);
         Assert.Contains("decision_model.history_turns", connectors, StringComparison.Ordinal);
         Assert.Contains("25 turns", connectors, StringComparison.Ordinal);
         Assert.Contains("stands if it gives no verdict", connectors, StringComparison.Ordinal);
-        Assert.Contains("Each connector is on one of three paths", connectors, StringComparison.Ordinal);
+        Assert.Contains("on a call the rules did not flag", connectors, StringComparison.Ordinal);
         Assert.NotEmpty(text);
     }
 
@@ -276,18 +278,18 @@ public sealed class DecisionModelProtocolTests
         Assert.Equal("The full endpoint URL. https is accepted anywhere, http only to a loopback address.", url.Help);
         Assert.Equal("http://127.0.0.1:8791/v1/systemone", url.Placeholder);
         Assert.Equal("The model name the endpoint serves. It is sent in each request.", page.Fields[2].Help);
+        Assert.Equal("The name of the variable that holds the token. Blank means DEFENSECLAW_DECISION_MODEL_KEY.", page.Fields[3].Help);
         Assert.Equal(
-            "The NAME of the variable that holds the bearer token, DEFENSECLAW_DECISION_MODEL_KEY if blank. A local server needs none. " +
+            "A local server needs none. " +
             "Never type the token here. Store it with `defenseclaw keys set DEFENSECLAW_DECISION_MODEL_KEY` in a terminal, which writes ~/.defenseclaw/.env, then restart the gateway.",
-            page.Fields[3].Help);
+            page.Fields[3].Details);
 
-        var connectors = definition.Steps[1].Fields[0].Help;
+        var connectorsField = definition.Steps[1].Fields[0];
+        Assert.Equal("Connectors listed here use the decision model where the LLM judge does not run.", connectorsField.Help);
         Assert.Equal(
-            "The decision model answers on its own for the connectors in this list, where the LLM judge does not run. A confident allow is allowed, " +
-            "a confident block is denied, and anything else asks (Claude Code, Copilot, Amp, Antigravity) or raises a HIGH alert (strict mode blocks). " +
-            "Where the judge runs, the model allows clear benign calls and sends the rest to it. " +
-            "Each connector is on one of three paths: rules only, rules then decision model, or rules then decision model then judge.",
-            connectors);
+            "A confident allow is allowed and a confident block is denied. Anything else asks (Claude Code, Copilot, Amp, Antigravity) or raises a HIGH alert (strict mode blocks). " +
+            "Where the judge runs, the model allows the clear benign calls and sends the rest to it.",
+            connectorsField.Details);
 
         var thresholds = definition.Steps[2];
         Assert.Equal(

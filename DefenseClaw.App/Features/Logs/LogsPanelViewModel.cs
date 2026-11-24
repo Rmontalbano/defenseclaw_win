@@ -1055,7 +1055,7 @@ public sealed partial class LogsPanelViewModel : PanelViewModelBase, IAcceptsNav
                 : !structured.Loaded ? "The stream has not been read yet."
                 : structured.Entries.Count == 0 ? $"No data in audit.db for the {structured.Name} stream yet."
                 : structured.Kind == EventStreamKind.Verdicts && SelectedPreset == LogPresets.NoNoise
-                    ? "Nothing matches the filters. The no-noise preset hides quiet INFO, LOW and MEDIUM rows. Choose preset \"all\" to see every row."
+                    ? "Nothing matches the filters. The no-noise preset hides quiet INFO, LOW and MEDIUM rows. Select preset \"all\" to see every row."
                     : "Nothing matches the current filters.";
             return;
         }
@@ -1064,7 +1064,7 @@ public sealed partial class LogsPanelViewModel : PanelViewModelBase, IAcceptsNav
         if (file.Buffer.Count > 0)
         {
             EmptyTitle = "No log lines";
-            EmptyDetail = "Nothing matches the filters. Choose preset \"all\", Any severity and \"all\" for action and event, or clear the search.";
+            EmptyDetail = "Nothing matches the filters. Select preset \"all\", Any severity and \"all\" for action and event, or clear the search.";
         }
         else if (!File.Exists(path))
         {

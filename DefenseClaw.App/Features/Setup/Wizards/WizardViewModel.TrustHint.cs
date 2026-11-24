@@ -58,7 +58,7 @@ public sealed partial class WizardViewModel
             return;
         }
 
-        TrustHintMessage = "This setup stopped because its program is in " + hint.Directory + ", which DefenseClaw does not trust. Trust it, then press Execute again.";
+        TrustHintMessage = "This setup stopped because its program is in " + hint.Directory + ", which DefenseClaw does not trust. Trust it, then select Execute again.";
         TrustHintDirectory = hint.Directory;
     }
 

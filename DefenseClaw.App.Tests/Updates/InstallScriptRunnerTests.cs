@@ -510,7 +510,7 @@ public sealed class InstallScriptRunnerTests : IDisposable
 
         Assert.NotNull(result.LogPath);
         Assert.Equal(
-            "The 1.0.0 gateway did not become healthy within 90 s [09:02:31Z]; restoring 0.8.10 — DefenseClaw 1.0.0 was not installed. Your previous install is back.",
+            "The 1.0.0 gateway did not become healthy within 90 s [09:02:31Z]; restoring 0.8.10 · DefenseClaw 1.0.0 was not installed. Your previous install is back.",
             result.InstallerReason);
         Assert.True(result.Transcript.GatewayUnhealthy);
         Assert.True(result.Transcript.PreviousRestored);

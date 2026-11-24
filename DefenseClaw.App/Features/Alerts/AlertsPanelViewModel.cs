@@ -743,7 +743,7 @@ public sealed partial class AlertsPanelViewModel : PanelViewModelBase, IAcceptsN
         ChunkText = string.Empty;
         HasChunkText = false;
         IsSeverityReview = true;
-        ReviewIntro = "Applies to all active alerts of the chosen severity, not only those listed. The preview below is a dry run and changes nothing.";
+        ReviewIntro = "Applies to all active alerts of the chosen severity, including unlisted ones. The preview below is a dry run.";
         CommandNote = "This command runs when you confirm. --before is the preview time, so alerts that arrive later are left alone. --yes is the CLI's confirmation for a broad selector.";
         _openingReview = true;
         try
@@ -1137,7 +1137,7 @@ public sealed partial class AlertsPanelViewModel : PanelViewModelBase, IAcceptsN
     private void SetChunkText()
     {
         ChunkText = _idChunks.Count > 1
-            ? $"Run {_chunkIndex + 1} of {_idChunks.Count}: {_reviewIdTotal.ToString("N0", CultureInfo.CurrentCulture)} alerts, {IdChunkSize} per command. Each run is previewed and confirmed separately."
+            ? $"Run {_chunkIndex + 1} of {_idChunks.Count}: {_reviewIdTotal.ToString("N0", CultureInfo.CurrentCulture)} alerts, up to {IdChunkSize} per command. Each run is previewed and confirmed separately."
             : string.Empty;
         HasChunkText = ChunkText.Length > 0;
     }
@@ -1147,7 +1147,7 @@ public sealed partial class AlertsPanelViewModel : PanelViewModelBase, IAcceptsN
         var doing = string.Equals(verb, DismissVerb, StringComparison.Ordinal) ? "Dismissing" : "Acknowledging";
         if (matched == 0)
         {
-            return $"None of the {named.ToString("N0", CultureInfo.CurrentCulture)} {_reviewSetName} alerts is active (already acknowledged or dismissed). Nothing to {verb}.";
+            return $"None of the {named.ToString("N0", CultureInfo.CurrentCulture)} {_reviewSetName} alerts is active. They are already acknowledged or dismissed. Nothing to {verb}.";
         }
 
         var count = matched.ToString("N0", CultureInfo.CurrentCulture);
@@ -1169,13 +1169,13 @@ public sealed partial class AlertsPanelViewModel : PanelViewModelBase, IAcceptsN
         if (exactIds)
         {
             // Every match is listed below, and the command names each of them.
-            return $"{count} {scope}{plural} match. {doing} applies only to the {(matched == 1 ? "alert" : "alerts")} listed below, not to later arrivals.";
+            return $"{count} {scope}{plural} match. {doing} applies only to the {(matched == 1 ? "alert" : "alerts")} listed below. Later arrivals are left alone.";
         }
 
         var everything = choice.IsAll ? "every active alert of every severity" : $"the whole {choice.Value} severity class";
         return
             $"{count} {scope}{plural} match. {doing} applies to {everything} " +
-            $"as of this preview, not only the {_all.Count.ToString("N0", CultureInfo.CurrentCulture)} loaded in the list. " +
+            $"as of this preview, including alerts beyond the {_all.Count.ToString("N0", CultureInfo.CurrentCulture)} loaded in the list. " +
             "Later alerts are left alone.";
     }
 
@@ -1827,7 +1827,7 @@ public sealed partial class AlertsPanelViewModel : PanelViewModelBase, IAcceptsN
             EmptyTitle = $"No alerts for {Services.ConnectorScope.Current}";
             EmptyDetail =
                 $"{_scopeHiddenCount} {(_scopeHiddenCount == 1 ? "alert belongs" : "alerts belong")} to other connectors or none. " +
-                "Pick All connectors in the toolbar or press Ctrl+Shift+M.";
+                "Select All connectors in the toolbar or press Ctrl+Shift+M.";
             return;
         }
 
@@ -2160,7 +2160,7 @@ public sealed partial class AlertItem : ObservableObject
         get
         {
             var line = $"{TimestampText} [{Severity}] {Action} {TargetRef}".TrimEnd();
-            return Headline.Length > 0 ? $"{line} - {Headline}" : line;
+            return Headline.Length > 0 ? $"{line} · {Headline}" : line;
         }
     }
 
@@ -2293,7 +2293,7 @@ public sealed partial class AlertItem : ObservableObject
             ConfidenceText = string.Empty,
             StructuredText = structuredOver is null
                 ? Pretty(structured)
-                : $"({structuredOver.Reason}; left in the database, not shown here)",
+                : $"{structuredOver.Reason.TrimEnd('.')}. Left in the database and not shown here.",
             Fields = WithNotice(ToFields(structured), notice),
             HookStructured = structured,
             OversizedNotice = notice,

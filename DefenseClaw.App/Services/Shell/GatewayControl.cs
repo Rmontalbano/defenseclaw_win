@@ -135,7 +135,7 @@ internal static class GatewayControl
     /// <summary>Why nothing can be asked of the gateway yet or at all (not known, not installed, not initialized), or null.</summary>
     private static string? InstallProblem(GatewaySnapshot snapshot) => snapshot.Install switch
     {
-        null => "Still checking the gateway; try again in a moment.",
+        null => "Still checking the gateway. Try again in a moment.",
         InstallState.NotInstalled => "DefenseClaw is not installed on this machine.",
         InstallState.InstalledNotInitialized => "DefenseClaw is not initialized yet. Run 'defenseclaw init' first.",
         _ => null,

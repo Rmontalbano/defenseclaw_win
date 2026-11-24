@@ -47,10 +47,10 @@ public sealed partial class PolicyFormViewModel : ObservableObject
     public static IReadOnlyList<PolicyChoice> ThresholdChoices { get; } = new[]
     {
         Unchanged,
-        new PolicyChoice("1", "1 - LOW and above"),
-        new PolicyChoice("2", "2 - MEDIUM and above"),
-        new PolicyChoice("3", "3 - HIGH and above"),
-        new PolicyChoice("4", "4 - CRITICAL only"),
+        new PolicyChoice("1", "1: LOW and above"),
+        new PolicyChoice("2", "2: MEDIUM and above"),
+        new PolicyChoice("3", "3: HIGH and above"),
+        new PolicyChoice("4", "4: CRITICAL only"),
     };
 
     public static IReadOnlyList<PolicyChoice> PresetChoices { get; } =

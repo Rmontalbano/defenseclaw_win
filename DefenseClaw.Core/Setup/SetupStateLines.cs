@@ -131,8 +131,8 @@ public static class SetupStateLines
         var on = state.MasterEnabled ? "on" : "off";
         return new CardState(
             $"Desktop notifications {on}",
-            $"Desktop notifications: {on}" + (state.MasterIsExplicit ? string.Empty : " (config.yaml does not say; the runtime's default on Windows)") +
-            ". These are the gateway's own notifications, not the tray alerts of this app.");
+            $"Desktop notifications: {on}" + (state.MasterIsExplicit ? string.Empty : " (config.yaml does not say, so the runtime's default on Windows applies)") +
+            ". These are the gateway's notifications. The tray alerts of this app are separate.");
     }
 
     /// <summary>The categories and sources: <c>5 of 6 on</c>, and which are off.</summary>

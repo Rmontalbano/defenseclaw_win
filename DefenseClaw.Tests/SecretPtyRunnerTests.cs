@@ -353,7 +353,7 @@ public sealed class SecretPtyRunnerTests
         Assert.True(result.RouteFailed);
         var invocation = result.Invocation!;
         Assert.Contains("hidden prompt", invocation.FailureReason, StringComparison.Ordinal);
-        Assert.Contains("process tree killed", invocation.FailureReason, StringComparison.Ordinal);
+        Assert.Contains("process tree", invocation.FailureReason, StringComparison.Ordinal);
         Assert.Null(invocation.ExitCode);
         Assert.False(invocation.IsRunning);
         AssertHoldsNo(invocation, Synthetic);
@@ -425,7 +425,7 @@ public sealed class SecretPtyRunnerTests
 
             Assert.Equal(SecretPtyOutcome.Cancelled, result.Outcome);
             Assert.StartsWith("cancelled", result.Invocation!.FailureReason, StringComparison.Ordinal);
-            Assert.Contains("process tree killed", result.Invocation.FailureReason, StringComparison.Ordinal);
+            Assert.Contains("process tree", result.Invocation.FailureReason, StringComparison.Ordinal);
             Assert.Null(result.Invocation.ExitCode);
             Assert.False(result.Invocation.IsRunning);
             Assert.False(result.RouteFailed);

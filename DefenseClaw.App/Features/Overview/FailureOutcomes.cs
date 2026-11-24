@@ -57,7 +57,7 @@ internal sealed record FailureOutcomes(string? GatewayDown, string? NoAnswer, st
 
     private static string? NoAnswerText(string value) => value switch
     {
-        "allow-ordinary" => "tool calls allow with a warning unless they may reach a protected file. Prompts and tool results allow with a warning if the gateway is frozen, block if a running gateway answers too late",
+        "allow-ordinary" => "tool calls allow with a warning unless they may reach a protected file.\nNo answer to a prompt or tool result: allow with a warning if the gateway is frozen, block if a running gateway answers too late",
         "block" => "block",
         _ => null,
     };

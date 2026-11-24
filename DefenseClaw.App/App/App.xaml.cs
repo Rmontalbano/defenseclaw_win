@@ -311,10 +311,10 @@ public partial class App : Application
                 var answer = MessageBox.Show(
                     "A DefenseClaw upgrade is still running.\n\n" +
                     "Exiting now leaves the installer running in the background with no progress shown, " +
-                    "and an upgrade run through the resolver script may be interrupted when its output " +
-                    "pipe closes. Waiting for the Updates window to report the result is safer.\n\n" +
+                    "and an upgrade run through the resolver script may be interrupted. " +
+                    "Wait for the Updates window to report the result.\n\n" +
                     "Exit anyway?",
-                    "DefenseClaw — upgrade in progress",
+                    "DefenseClaw upgrade in progress",
                     MessageBoxButton.YesNo,
                     MessageBoxImage.Warning,
                     MessageBoxResult.No);
@@ -394,7 +394,7 @@ public partial class App : Application
                 Views.ConfigEditor.ConfigEditorExitResult.Closed => new ExitClearance(true, null),
                 Views.ConfigEditor.ConfigEditorExitResult.Busy => new ExitClearance(
                     false,
-                    "Could not exit: the config editor is still saving or asking about unsaved changes. Finish there, then choose Exit again."),
+                    "Could not exit: the config editor is still saving or asking about unsaved changes. Finish there, then select Exit again."),
                 _ => new ExitClearance(false, null),
             };
         }
@@ -510,7 +510,7 @@ public partial class App : Application
             "The dashboard hit an unexpected error and was closed to the tray." +
             Environment.NewLine + Environment.NewLine +
             "Monitoring is still running. Reopen the dashboard from the shield in the " +
-            "notification area, or right-click the shield and pick Exit to quit." +
+            "notification area, or right-click the shield and select Exit to quit." +
             Environment.NewLine + Environment.NewLine +
             $"{exception.GetType().Name}: {exception.Message}" +
             Environment.NewLine + Environment.NewLine +

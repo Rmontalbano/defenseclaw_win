@@ -412,7 +412,7 @@ public static class PolicyLevels
 
         var clause = parts.Count == 1 ? parts[0] : string.Join(", ", parts.Take(parts.Count - 1)) + " and " + parts[^1];
         var subject = scope.Length == 0 || string.Equals(scope, PolicyScopes.Global, StringComparison.Ordinal) ? "The global default" : scope;
-        return observe ? $"{subject} logs only; in action mode it would {clause}." : $"{subject} {clause}.";
+        return observe ? $"{subject} logs only. In action mode it would {clause}." : $"{subject} {clause}.";
     }
 
     /// <summary>The severity-to-action matrix, one line per severity.</summary>

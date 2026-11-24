@@ -171,7 +171,7 @@ public sealed partial class TokenResolver
         if (!string.IsNullOrEmpty(configured) && IsOpenClawName(configured))
         {
             // Names the variable only. 'doctor --fix' rewrites a config that still names it (CHANGELOG 1.0.10).
-            note = $"gateway.token_env names {OpenClawVariable}, which DefenseClaw 1.0.10 no longer accepts as its API token; run 'defenseclaw doctor --fix'.";
+            note = $"gateway.token_env names {OpenClawVariable}, which DefenseClaw 1.0.10 no longer accepts as its API token. Run 'defenseclaw doctor --fix'.";
         }
 
         var names = new List<string>(2);
@@ -256,7 +256,7 @@ public sealed partial class TokenResolver
         if (skipReferences && IsSecretRefText(trimmed))
         {
             // DefenseClaw 1.0.5/1.0.6 could save an OpenClaw secret reference as the token (upstream issue #1404). Never echo the value.
-            var sentence = $"{where} holds an OpenClaw secret reference that an earlier DefenseClaw saved as the gateway token, so it was ignored; run defenseclaw doctor --fix.";
+            var sentence = $"{where} holds an OpenClaw secret reference that an earlier DefenseClaw saved as the gateway token, so it was ignored. Run defenseclaw doctor --fix.";
             note = note is null ? sentence : $"{note} {sentence}";
             return null;
         }

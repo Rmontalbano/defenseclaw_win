@@ -52,8 +52,8 @@ public static class FirstRunFailMode
 
     /// <summary>The 1.0.5 TUI's hint for the field (<c>tui/panels/first_run.py</c>), with what <see cref="Policy"/> does to a mode saved earlier.</summary>
     public const string SavedOrPolicyHint =
-        "Action profile only. While the gateway is down: policy = save nothing and let the policy tier decide (strict blocks, the others allow with a warning), open = allow with a warning, closed = block. " +
-        "A saved choice wins over the policy tier.";
+        "Action profile only. While the gateway is down: policy keeps any mode saved earlier, else the policy tier decides (strict blocks, the others allow with a warning). " +
+        "open allows with a warning. closed blocks. Other hook failures always block.";
 
     /// <summary>The first release whose first run asks the fail mode for the Action profile only (the 1.0.0 TUI and <c>cmd_init.py</c>).</summary>
     private static readonly Version ActionOnlyRelease = new(1, 0, 0);

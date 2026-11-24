@@ -285,7 +285,7 @@ public sealed partial class SelfUpdateViewModel : ObservableObject, IDisposable
         }
         catch (OperationCanceledException)
         {
-            failure = "The update was cancelled; nothing was installed.";
+            failure = "The update was cancelled. Nothing was installed.";
         }
 
         if (failure is null)

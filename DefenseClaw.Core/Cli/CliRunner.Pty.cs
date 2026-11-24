@@ -33,8 +33,8 @@ public sealed partial class CliRunner
     private static readonly TimeSpan PtyDrainLimit = TimeSpan.FromSeconds(2);
 
     private const string PtyNotice =
-        "Run in a pseudo-console: this app typed the value at the CLI's hidden prompt. It is not on the command line and it is not recorded here; " +
-        "the CLI's own masked preview of it is hidden too.";
+        "Run in a pseudo-console. This app typed the value at the CLI's hidden prompt. It is not on the command line and is not recorded here. " +
+        "The CLI's own masked preview of it is hidden too.";
 
     /// <summary>
     /// Runs <paramref name="executable"/> in a pseudo-console and types each answer at its prompt. See <see cref="SecretPtyRunner"/>, which is the way in.
@@ -300,7 +300,7 @@ public sealed partial class CliRunner
             if (!conversation.AllTyped && clock.Elapsed - lastTyped > promptTimeout)
             {
                 invocation.FailureReason =
-                    $"the command did not show its hidden prompt within {SecretPtyRunner.Seconds(promptTimeout)} s - process tree killed" +
+                    $"the command did not show its hidden prompt within {SecretPtyRunner.Seconds(promptTimeout)} s. The process tree was killed" +
                     (conversation.Queries.Count > 0 ? " (the console was asked for " + string.Join(", ", conversation.Queries.Distinct()) + ")" : string.Empty);
                 console.Kill();
                 await DrainAsync(console, conversation, invocation, secrets, TimeSpan.FromMilliseconds(100), KillSettleTimeout).ConfigureAwait(false);
@@ -310,7 +310,7 @@ public sealed partial class CliRunner
             if (conversation.AllTyped && clock.Elapsed - lastTyped > completionTimeout)
             {
                 invocation.FailureReason =
-                    $"the command did not finish within {SecretPtyRunner.Seconds(completionTimeout)} s of the value being typed - process tree killed";
+                    $"the command did not finish within {SecretPtyRunner.Seconds(completionTimeout)} s of the value being typed. The process tree was killed.";
                 console.Kill();
                 await DrainAsync(console, conversation, invocation, secrets, TimeSpan.FromMilliseconds(100), KillSettleTimeout).ConfigureAwait(false);
                 return SecretPtyOutcome.TimedOut;
@@ -362,7 +362,7 @@ public sealed partial class CliRunner
             invocation.Append(new CliOutputLine(
                 DateTimeOffset.UtcNow,
                 CliStream.Notice,
-                $"[output truncated] the command wrote more than {PseudoConsole.MaxOutputCharacters:N0} characters; the rest was dropped."));
+                $"[output truncated] the command wrote more than {PseudoConsole.MaxOutputCharacters:N0} characters. The rest was dropped."));
         }
     }
 
