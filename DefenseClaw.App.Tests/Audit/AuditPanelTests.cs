@@ -105,8 +105,8 @@ public sealed class AuditPanelTests : IDisposable
     [Fact]
     public void A_row_with_no_payload_says_so_and_a_malformed_one_shows_the_raw_text()
     {
-        Assert.Equal("(no structured payload on this row)", new AuditRow(Event(1, null)).StructuredJson);
-        Assert.Equal("(no structured payload on this row)", new AuditRow(Event(2, "   ")).StructuredJson);
+        Assert.Equal("(no structured payload)", new AuditRow(Event(1, null)).StructuredJson);
+        Assert.Equal("(no structured payload)", new AuditRow(Event(2, "   ")).StructuredJson);
         Assert.Equal("{not json", new AuditRow(Event(3, "{not json")).StructuredJson);
     }
 

@@ -234,7 +234,7 @@ public sealed partial class ActivityMutationsViewModel : ObservableObject
         var parts = new List<string>(2);
         if (result.HasMore)
         {
-            parts.Add(string.Create(CultureInfo.CurrentCulture, $"Showing the newest {MutationReader.DefaultLimit} changes; older ones are in the Audit panel."));
+            parts.Add(string.Create(CultureInfo.CurrentCulture, $"Showing the newest {MutationReader.DefaultLimit} changes. Older ones are in the Audit panel."));
         }
 
         var oversized = result.Items.Count(static item => item.IsOversized);

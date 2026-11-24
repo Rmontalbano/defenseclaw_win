@@ -9,9 +9,9 @@ namespace DefenseClaw.Tests;
 public sealed class RuleIdLabelsTests
 {
     [Theory]
-    [InlineData("ACTION-OPERAND-BOUND", "more than 1024 operands")]
-    [InlineData("ACTION-SHARE-BODY-UNREAD", "network share could not be read")]
-    [InlineData("TOOL-PATH-UNVERIFIED", "Windows file path")]
+    [InlineData("ACTION-OPERAND-BOUND", "More than 1024 operands")]
+    [InlineData("ACTION-SHARE-BODY-UNREAD", "Network share script not readable")]
+    [InlineData("TOOL-PATH-UNVERIFIED", "Windows path")]
     [InlineData("tamper.agent_hook_config_disable", "turns off the agent's DefenseClaw hooks")]
     [InlineData("tamper.agent_hook_config_write", "writes to an agent's hook settings file")]
     [InlineData("ACTION-COMPOUND-LIMIT", "too long or too complex")]
@@ -47,9 +47,9 @@ public sealed class RuleIdLabelsTests
         var text = "ACTION-COMPOUND-LIMIT, CMD-X, tamper.agent_hook_config_write";
         Assert.True(RuleIdLabels.Mentions(text));
         var labelled = RuleIdLabels.Replace(text);
-        Assert.Contains("ACTION-COMPOUND-LIMIT (A shell command too long or too complex for the policy check.)", labelled, StringComparison.Ordinal);
+        Assert.Contains("ACTION-COMPOUND-LIMIT (Shell command too long or too complex for the policy check)", labelled, StringComparison.Ordinal);
         Assert.Contains(", CMD-X,", labelled, StringComparison.Ordinal);
-        Assert.Contains("tamper.agent_hook_config_write (A shell command that writes", labelled, StringComparison.Ordinal);
+        Assert.Contains("tamper.agent_hook_config_write (Shell command that writes", labelled, StringComparison.Ordinal);
         Assert.False(RuleIdLabels.Mentions("ACTION-COMPOUND-LIMIT-2"));
         Assert.Equal("CMD-X", RuleIdLabels.Replace("CMD-X"));
     }
@@ -75,14 +75,14 @@ public sealed class RuleIdLabelsTests
     public void An_alert_row_says_the_call_ran_from_its_own_fields(string? decision, string? details)
     {
         var outcome = RuleIdLabels.CompoundLimitOutcome(decision, details);
-        Assert.Equal("The call ran; DefenseClaw recorded it as an alert (the strict rule pack blocks it).", outcome);
+        Assert.Equal("The call ran and was recorded as an alert. The strict rule pack blocks it.", outcome);
     }
 
     [Theory]
     [InlineData("allow", "connector=codex action=allow raw_action=alert mode=observe would_block=false")]
     [InlineData(null, "connector=codex action=allowed raw_action=alert mode=observe")]
     public void An_observe_mode_alert_row_says_the_call_ran_without_the_strict_pack_clause(string? decision, string? details) =>
-        Assert.Equal("The call ran; DefenseClaw recorded it as an alert (observe mode).", RuleIdLabels.CompoundLimitOutcome(decision, details));
+        Assert.Equal("The call ran and was recorded as an alert (observe mode).", RuleIdLabels.CompoundLimitOutcome(decision, details));
 
     [Theory]
     [InlineData("blocked", null)]
@@ -153,12 +153,11 @@ public sealed class RuleIdLabelsTests
         Assert.Equal("Shell startup files and autostart entries are watched on Linux and macOS only.", ProtectedFileWatchFacts.WindowsCoverage);
 
         var text = ProtectedFileWatchFacts.ShellFloorCoverage;
-        Assert.Contains("On Windows too", text, StringComparison.Ordinal);
-        Assert.Contains(@"~\.ssh\authorized_keys", text, StringComparison.Ordinal);
-        Assert.Contains("at least an alert in every rule pack, permissive included", text, StringComparison.Ordinal);
+                Assert.Contains(@"~\.ssh\authorized_keys", text, StringComparison.Ordinal);
+        Assert.Contains("at least an alert in every rule pack", text, StringComparison.Ordinal);
         Assert.Contains("DefenseClaw's own files are blocked in every pack", text, StringComparison.Ordinal);
         Assert.Contains("In action mode", text, StringComparison.Ordinal);
-        Assert.Contains("the strict pack blocks it", text, StringComparison.Ordinal);
+        Assert.Contains("blocked in the strict pack", text, StringComparison.Ordinal);
         Assert.DoesNotContain("observe", text, StringComparison.OrdinalIgnoreCase);
     }
 }

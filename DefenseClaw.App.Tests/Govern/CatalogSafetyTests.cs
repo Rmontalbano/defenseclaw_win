@@ -261,7 +261,7 @@ public sealed class CatalogSafetyTests : IDisposable
 
         Assert.Equal(GovernState.Error, vm.State);
         Assert.False(vm.HasPartialDiscovery);
-        Assert.Contains("returned rows could not be trusted", vm.ErrorMessage, StringComparison.Ordinal);
+        Assert.Contains("Its rows cannot be trusted", vm.ErrorMessage, StringComparison.Ordinal);
         Assert.DoesNotContain("\"name\"", vm.ErrorMessage, StringComparison.Ordinal);
     }
 
@@ -367,7 +367,7 @@ public sealed class CatalogSafetyTests : IDisposable
         Assert.Equal(GovernState.Loaded, vm.State);
         Assert.Equal(2, vm.Rows.Count);
         Assert.True(vm.HasRefreshWarning);
-        Assert.Contains("changes are off", vm.RefreshWarning, StringComparison.Ordinal);
+        Assert.Contains("Changes are off", vm.RefreshWarning, StringComparison.Ordinal);
         Assert.False(vm.IsDataTrusted);
         Assert.False(vm.CanChange);
         Assert.Contains("last read failed", vm.DataUntrustedReason, StringComparison.Ordinal);

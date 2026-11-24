@@ -98,7 +98,7 @@
                                       ItemsSource="{Binding Connectors}"
                                       SelectedItem="{Binding SelectedConnector, Mode=TwoWay}"
                                       AutomationProperties.Name="Connector scope"
-                                      AutomationProperties.HelpText="Which connector's rules to list (plus the rules that apply to every connector), and the scope of Manage a tool by name. All configured connectors means the fallback rule." />
+                                      AutomationProperties.HelpText="Connector whose rules are listed (plus the rules for every connector), and the scope of Manage a tool by name. All configured connectors means the fallback rule." />
                         </StackPanel>
                         <StackPanel Orientation="Horizontal">
                             <TextBlock Style="{StaticResource DcToolbarLabel}" Text="Reason" />
@@ -123,7 +123,7 @@
                         </ui:CardExpander.Header>
                         <StackPanel>
                             <TextBlock Style="{StaticResource DcCaption}"
-                                       Text="A tool with no rule yet is not listed below. Enter its bare name to block or allow it, remove its rule, or read which rule applies (Status is read-only). The scope is the connector chosen in the toolbar: 'All configured connectors' sets the fallback rule for every connector; one connector sets a rule for that connector only." />
+                                       Text="Enter a bare tool name. The toolbar's connector is the scope; 'All configured connectors' sets the fallback rule for every connector." />
                             <WrapPanel Style="{StaticResource DcToolbarPanel}" Margin="0,10,0,0">
                                 <ui:TextBox Width="260"
                                             PlaceholderText="Tool name, for example delete_file"
@@ -285,7 +285,7 @@
                     <StackPanel Style="{StaticResource DcEmptyState}">
                         <ctl:DcSymbolIcon Style="{StaticResource DcEmptyIcon}" Symbol="Search24" />
                         <TextBlock Style="{StaticResource DcEmptyTitle}" Text="No tool rules match the filter" />
-                        <TextBlock Style="{StaticResource DcEmptyDetail}" Text="The filter hides every rule the CLI listed. Clear it to see them all." />
+                        <TextBlock Style="{StaticResource DcEmptyDetail}" Text="Clear the filter to see all tool rules." />
                         <ui:Button Margin="0,12,0,0"
                                    HorizontalAlignment="Center"
                                    Content="Clear filter"

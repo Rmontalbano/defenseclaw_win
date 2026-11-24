@@ -66,7 +66,7 @@ public sealed class SecretWarningTests : IDisposable
         Assert.Contains("visible on the command line", bar.Message, StringComparison.Ordinal);
         Assert.Contains("Activity", bar.Message, StringComparison.Ordinal);
         Assert.Contains("exported log", bar.Message, StringComparison.Ordinal);
-        Assert.Contains("no other way", bar.Message, StringComparison.Ordinal);
+        Assert.Contains("plain text", bar.Message, StringComparison.Ordinal);
         Assert.DoesNotContain("abcd1234", bar.Message, StringComparison.Ordinal);
     }
 
@@ -88,7 +88,7 @@ public sealed class SecretWarningTests : IDisposable
 
         Assert.True(vm.IsConfirmOpen);
         Assert.Empty(SecretBars(vm));
-        Assert.Contains("Environment values are part of this command line", vm.ConfirmNote, StringComparison.Ordinal);
+        Assert.Contains("Environment values are on the command line", vm.ConfirmNote, StringComparison.Ordinal);
     }
 
     [Fact]

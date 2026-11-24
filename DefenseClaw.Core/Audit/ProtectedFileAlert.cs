@@ -233,26 +233,26 @@ public static class ProtectedFileWatchFacts
 
     /// <summary>The attribution limit.</summary>
     public const string Attribution =
-        "Attribution is by time: a change you make by hand while an agent call runs is reported as the agent's, and a background program an agent left running is reported as yours.";
+        "Attribution is by time. A change you make by hand during an agent call is reported as the agent's. A background program an agent left running is reported as yours.";
 
     /// <summary>What the watch does not do.</summary>
-    public const string BlocksNothing = "The watch blocks nothing: it reports a change after it happened.";
+    public const string BlocksNothing = "The watch blocks nothing. It reports a change after it happens.";
 
     /// <summary>What the alert holds of the file.</summary>
-    public const string NoContent = "The alert holds the first 12 hex characters of the SHA-256 before and after, never the file's content.";
+    public const string NoContent = "The alert holds the first 12 hex characters of the SHA-256 before and after, not the file content.";
 
     /// <summary>What <c>restore</c> does, shown in its review before it runs.</summary>
     public const string RestoreWarning =
-        "Restore puts back the last accepted content after an agent's change, and a file the agent created is removed. It is meant for strict setups only and is off " +
-        "in every pack. Configuration tools that rewrite these files during an agent session are undone: leave it off on those hosts. It still blocks nothing.";
+        "Restore puts back the last accepted content after an agent's change and removes files the agent created. Meant for strict setups; off in every pack. " +
+        "It undoes config tools that rewrite these files during an agent session, so leave it off on those hosts. It still blocks nothing.";
 
     /// <summary>What a rollback does with the setting, shown where it is changed.</summary>
     public const string RollbackWarning =
-        "defenseclaw rollback to 1.0.5 or older puts back the config from before the upgrade. A 1.0.5 or older release started on a config that sets " +
-        "guardrail.protected_files refuses it, so remove the block first if you move the config by hand.";
+        "defenseclaw rollback to 1.0.5 or older restores the config from before the upgrade. Those releases refuse a config that sets " +
+        "guardrail.protected_files, so remove the block first if you move the config by hand.";
 
     /// <summary>When a change to the setting takes effect.</summary>
-    public const string RestartNote = "Saved in config.yaml. The gateway reads this setting when it starts, so it applies at the next gateway restart.";
+    public const string RestartNote = "Saved in config.yaml. Applies at the next gateway restart.";
 
     /// <summary>What Windows does not get, whatever the docs' table says for other systems.</summary>
     public const string WindowsCoverage = "Shell startup files and autostart entries are watched on Linux and macOS only.";
@@ -266,7 +266,7 @@ public static class ProtectedFileWatchFacts
     /// Shown only on a runtime with <see cref="DefenseClaw.Core.Runtime.RuntimeCapability.ShellProtectedFileFloor"/>.
     /// </summary>
     public const string ShellFloorCoverage =
-        "On Windows too, a shell command the agent runs that writes ~\\.ssh\\authorized_keys, a shell startup file or a Git hook is at least an alert in every rule pack, " +
-        "permissive included, and changes to DefenseClaw's own files are blocked in every pack. In action mode an agent edit that turns DefenseClaw's hooks off in its " +
-        "settings is blocked; a shell command that writes those settings is an alert (the strict pack blocks it).";
+        "A shell command that writes ~\\.ssh\\authorized_keys, a shell startup file or a Git hook is at least an alert in every rule pack. " +
+        "Changes to DefenseClaw's own files are blocked in every pack. In action mode, an agent edit that turns DefenseClaw's hooks off is blocked. " +
+        "A shell command that writes those settings is an alert, blocked in the strict pack.";
 }

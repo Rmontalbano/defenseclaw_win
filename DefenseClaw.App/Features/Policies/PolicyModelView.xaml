@@ -113,9 +113,9 @@
                                Icon="{ctl:DcSymbolIcon Info24}"
                                Command="{Binding ExplainCascadeCommand}"
                                IsEnabled="{Binding CanExplainCascade}"
-                               ToolTip="Run defenseclaw guardrail cascade explain for this scope and show what the runtime decides"
+                               ToolTip="Run defenseclaw guardrail cascade explain for this scope"
                                AutomationProperties.Name="Explain the cascade"
-                               AutomationProperties.HelpText="Runs defenseclaw guardrail cascade explain for the chosen scope. It reads configuration and changes nothing." />
+                               AutomationProperties.HelpText="Runs defenseclaw guardrail cascade explain for the chosen scope. It only reads." />
                 </Grid>
             </Border>
         </StackPanel>

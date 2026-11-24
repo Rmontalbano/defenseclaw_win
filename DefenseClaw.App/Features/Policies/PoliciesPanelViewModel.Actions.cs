@@ -116,13 +116,13 @@ public sealed partial class PoliciesPanelViewModel
 
     public bool CanCreate => CreateBlockedReason is null;
 
-    public string ActivateTip => ActivateBlockedReason ?? "Validate the policies, then review what activating this one changes before it is applied.";
+    public string ActivateTip => ActivateBlockedReason ?? "Validates the policies, then shows what activating this one changes.";
 
-    public string EditTip => EditBlockedReason ?? "Change one section of this policy (severity actions, scanner overrides, guardrail or firewall). The command is shown first.";
+    public string EditTip => EditBlockedReason ?? "Edit one section: severity actions, scanner overrides, guardrail or firewall. The command is shown first.";
 
     public string DeleteTip => DeleteBlockedReason ?? "Delete this custom policy. The command is shown first.";
 
-    public string CreateTip => CreateBlockedReason ?? "Create a new custom policy, optionally from a built-in preset. It stays inactive until you activate it.";
+    public string CreateTip => CreateBlockedReason ?? "Create a custom policy, optionally from a built-in preset. It stays inactive until activated.";
 
     private string? ActivateBlockedReason =>
         ChangesBlockedReasonNow
@@ -143,12 +143,12 @@ public sealed partial class PoliciesPanelViewModel
             : row.IsBuiltIn
                 ? "Built-in policies cannot be deleted."
                 : PolicyNames.Protected.Contains(row.Name)
-                    ? $"The CLI never deletes '{row.Name}': it is one of the three protected policy names."
+                    ? $"'{row.Name}' is a protected policy name. The CLI will not delete it."
                     : !row.HasSafeName ? UnsafeNameReason : null);
 
     private string? CreateBlockedReason => ChangesBlockedReasonNow;
 
-    private const string UnsafeNameReason = "This policy's name has characters that cannot be passed to the CLI safely, so the app will not act on it.";
+    private const string UnsafeNameReason = "This policy name has characters the CLI cannot take safely, so the app will not act on it.";
 
     /// <summary>
     /// The check made again at the moment a change is requested: the list must still be a complete, recent read and nothing else may be
@@ -269,7 +269,7 @@ public sealed partial class PoliciesPanelViewModel
         var transcript = Transcript(invocation);
         var passed = invocation.ExitCode == 0;
         var note = !passed && transcript.Contains("'opa' binary not found", StringComparison.Ordinal)
-            ? "OPA (the opa executable) is not installed or not on PATH, so DefenseClaw cannot compile or test the Rego bundle. Install OPA, then validate again."
+            ? "OPA is not installed or not on PATH, so the Rego bundle cannot be compiled or tested. Install OPA, then validate again."
             : string.Empty;
         return (passed, transcript, note);
     }
@@ -298,7 +298,7 @@ public sealed partial class PoliciesPanelViewModel
             {
                 ShowNotice(
                     "Activation is withheld",
-                    $"'{row.Name}' was not offered because policy validate did not pass. The output is below; fix what it names, then try again.");
+                    $"'{row.Name}' was not activated because policy validate failed. Fix what the output below names, then try again.");
                 return;
             }
 
@@ -312,7 +312,7 @@ public sealed partial class PoliciesPanelViewModel
             var target = await ReadDetailAsync(row.Name).ConfigureAwait(true);
             if (target.Detail is null)
             {
-                ShowNotice("Activation is withheld", $"'{row.Name}' could not be read ({target.Error}), so what activating it changes cannot be shown.");
+                ShowNotice("Activation is withheld", $"'{row.Name}' could not be read ({target.Error}), so what activating it changes is not shown.");
                 return;
             }
 
@@ -342,14 +342,14 @@ public sealed partial class PoliciesPanelViewModel
         var from = ActiveName is { } active ? $"the active policy '{active}'" : "the policy in force";
         var effect = summary.IsComplete
             ? summary.IsEmpty
-                ? $"It reads the same as {from} in every section this app can see."
+                ? $"It matches {from} in every section the app can see."
                 : $"{Plural(summary.Lines.Count, "change")} from {from}"
                   + (summary.Weakens ? $", {summary.WeakeningLines.Count.ToString(CultureInfo.InvariantCulture)} of them reducing protection." : ", none of them reducing protection.")
-            : "What it changes could not be compared with the policy in force.";
+            : "The change from the policy in force could not be compared.";
 
         Review.Open(
             heading: $"Activate policy '{row.Name}'?",
-            explanation: $"Applies '{row.Name}' to config.yaml (skill actions and rescan settings, plus any Cisco AI Defense or webhook settings the policy file carries, which policy show does not display) and syncs the OPA data.json. {effect}",
+            explanation: $"Applies '{row.Name}' to config.yaml and syncs the OPA data.json. Cisco AI Defense and webhook settings in the file apply too, but policy show does not list them. {effect}",
             steps: new[] { new DiscoverStep(_backend.ActivateArgv(row.Name), $"Activate policy {row.Name}") },
             onFinished: result => AfterChangeAsync(result, $"Activated '{row.Name}'."),
             primaryText: "Activate policy",
@@ -385,7 +385,7 @@ public sealed partial class PoliciesPanelViewModel
                 var current = (await ReadDetailAsync(row.Name).ConfigureAwait(true)).Detail;
                 var fallbackDetail = (await ReadDetailAsync("default").ConfigureAwait(true)).Detail;
                 fallback = fallbackDetail is null
-                    ? PolicyDiff.Incomplete("The 'default' policy could not be read, so what re-activating it changes cannot be compared. Assume it can reduce protection.")
+                    ? PolicyDiff.Incomplete("The 'default' policy could not be read, so the change cannot be compared. Assume it can reduce protection.")
                     : PolicyDiff.Compare(current, fallbackDetail);
             }
         }
@@ -400,9 +400,9 @@ public sealed partial class PoliciesPanelViewModel
         }
 
         var explanation = active
-            ? $"Deletes the custom policy file '{row.Name}' from your policy folder. It is the active policy, so the CLI then re-activates 'default' (--force); " +
-              (fallback!.IsComplete ? $"that is {Plural(fallback.Lines.Count, "change")} from it." : "what that changes could not be compared.")
-            : $"Deletes the custom policy file '{row.Name}' from your policy folder. The app cannot bring it back.";
+            ? $"Deletes the custom policy file '{row.Name}' from your policy folder. It is active, so the CLI re-activates 'default' (--force): " +
+              (fallback!.IsComplete ? $"{Plural(fallback.Lines.Count, "change")} from it." : "the change could not be compared.")
+            : $"Deletes the custom policy file '{row.Name}' from your policy folder. It cannot be restored.";
 
         Review.Open(
             heading: $"Delete policy '{row.Name}'?",
@@ -484,7 +484,7 @@ public sealed partial class PoliciesPanelViewModel
         var from = create.FromPreset.Length > 0 ? $" from the '{create.FromPreset}' preset" : string.Empty;
         Review.Open(
             heading: $"Create policy '{create.Name}'?",
-            explanation: $"Writes a new custom policy file '{create.Name}.yaml'{from} to your policy folder. It is not applied: nothing changes until you activate it.",
+            explanation: $"Writes a new custom policy file '{create.Name}.yaml'{from} to your policy folder. It stays inactive until you activate it.",
             steps: new[] { new DiscoverStep(_backend.CreateArgv(create), $"Create policy {create.Name}") },
             onFinished: result =>
             {
@@ -510,7 +510,7 @@ public sealed partial class PoliciesPanelViewModel
         var read = await ReadDetailAsync(row.Name).ConfigureAwait(true);
         if (read.Detail is null)
         {
-            Form.Error = $"'{row.Name}' could not be read ({read.Error}), so what this edit changes cannot be shown.";
+            Form.Error = $"'{row.Name}' could not be read ({read.Error}), so what this edit changes is not shown.";
             return;
         }
 
@@ -527,11 +527,11 @@ public sealed partial class PoliciesPanelViewModel
         Form.Close();
 
         var where = row.IsBuiltIn
-            ? $"'{row.Name}' is a built-in policy, so the CLI saves the result as a custom copy named '{row.Name}' in your policy folder, which then shadows the built-in. "
+            ? $"'{row.Name}' is built in, so the CLI saves a custom copy with the same name in your policy folder. The copy shadows the built-in. "
             : string.Empty;
         var effect = live
-            ? "It is the active policy, so the change is applied to the live policy data immediately."
-            : "It is not the active policy, so the change is saved as a draft and does not apply until you activate it.";
+            ? "It is the active policy, so the change is applied to the live policy data."
+            : "It is not active, so the change is saved as a draft until you activate it.";
 
         Review.Open(
             heading: $"Edit policy '{row.Name}'?",
@@ -568,7 +568,7 @@ public sealed partial class PoliciesPanelViewModel
         }
         else
         {
-            ShowNotice("The command did not finish", "The review dialog and the Activity panel have its output. The list above is read again.", InfoBarSeverity.Warning);
+            ShowNotice("The command did not finish", "The review dialog and the Activity panel show its output. The list is read again.", InfoBarSeverity.Warning);
         }
     }
 

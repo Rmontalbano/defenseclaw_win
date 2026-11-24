@@ -101,7 +101,7 @@
                                   ItemsSource="{Binding Connectors}"
                                   SelectedItem="{Binding SelectedConnector, Mode=TwoWay}"
                                   AutomationProperties.Name="Connector scope"
-                                  AutomationProperties.HelpText="Which connector's plugins to list, and which connector Install plugin targets. All configured connectors means every one." />
+                                  AutomationProperties.HelpText="Connector whose plugins are listed, and the target of Install plugin. All configured connectors means every one." />
                     </StackPanel>
                     <StackPanel Orientation="Horizontal">
                         <TextBlock Style="{StaticResource DcToolbarLabel}" Text="Reason" />
@@ -121,7 +121,7 @@
                     <StackPanel>
                         <ctl:DcCardHeader Symbol="ArrowDownload24" Section="Govern" Content="Install a plugin" />
                         <TextBlock Style="{StaticResource DcCaption}"
-                                   Text="Runs 'defenseclaw plugin install'. The plugin is fetched or copied, placed in the connector's plugin folder and scanned. The scope is the connector chosen in the toolbar; 'All configured connectors' installs into every one that has a plugin folder. You review the exact command before anything runs." />
+                                   Text="Runs 'defenseclaw plugin install' for the toolbar's connector; 'All configured connectors' installs into every one that has a plugin folder. You review the command first." />
 
                         <StackPanel Margin="0,12,0,8">
                             <TextBlock Style="{StaticResource DcFieldLabel}" Text="Local path, npm package, clawhub:// URI or https URL" />
@@ -234,7 +234,7 @@
                     <StackPanel Style="{StaticResource DcEmptyState}">
                         <ctl:DcSymbolIcon Style="{StaticResource DcEmptyIcon}" Symbol="Search24" />
                         <TextBlock Style="{StaticResource DcEmptyTitle}" Text="No plugins match the filter" />
-                        <TextBlock Style="{StaticResource DcEmptyDetail}" Text="The filter hides every plugin the CLI listed. Clear it to see them all." />
+                        <TextBlock Style="{StaticResource DcEmptyDetail}" Text="Clear the filter to see all plugins." />
                         <ui:Button Margin="0,12,0,0"
                                    HorizontalAlignment="Center"
                                    Content="Clear filter"
@@ -305,7 +305,7 @@
                     <StackPanel Margin="0,8,0,0">
                         <TextBlock Style="{StaticResource DcCaption}"
                                    Margin="0,0,0,8"
-                                   Text="DefenseClaw 0.8.10 treats every folder in Claude Code's plugin store as a plugin. These are shown so nothing the CLI reported is hidden, but they are not plugins: the only action offered is Info." />
+                                   Text="DefenseClaw 0.8.10 lists every folder in Claude Code's plugin store as a plugin. These entries are not plugins, so only Info is offered." />
                         <ui:DataGrid Style="{StaticResource DcDataGrid}"
                                      RowStyle="{StaticResource GovernGridRow}"
                                      SelectionMode="Single"

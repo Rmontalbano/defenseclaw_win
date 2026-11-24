@@ -102,7 +102,7 @@ public sealed partial class JudgeHistoryReader
     public const int FieldLimit = 2_048;
 
     /// <summary>Shown when neither file exists, the same words as the TUI.</summary>
-    public const string MissingGuidance = "Judge history is unavailable; configure observability.local.judge_bodies_path or audit_db. The databases appear once the gateway has retained its first judge response.";
+    public const string MissingGuidance = "Judge history is unavailable. Configure observability.local.judge_bodies_path or audit_db; data appears after the first judge response.";
 
     /// <summary>Shown when a database has no <c>judge_responses</c> table yet.</summary>
     public const string NotInitializedGuidance = "The judge_responses table is not initialized yet.";
@@ -259,7 +259,7 @@ public sealed partial class JudgeHistoryReader
     private static string ErrorText(Exception ex) =>
         ex switch
         {
-            TimeoutException => "The judge history database did not answer in time (it may be busy). " + ex.Message,
+            TimeoutException => "The judge history database did not answer in time. " + ex.Message,
             SqliteException sqlite => "The judge history database could not be read: " + sqlite.Message,
             _ => "The judge history database could not be read: " + ex.Message,
         };

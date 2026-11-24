@@ -24,13 +24,13 @@ public static class PackRepin
 
         if (!validation.IsValid)
         {
-            return new PackRepinDecision(null, $"'{action.Title}' was not offered because the pack did not validate ({validation.Summary}). The output is below; fix the pack, then try again.");
+            return new PackRepinDecision(null, $"'{action.Title}' was not applied because the pack did not validate ({validation.Summary}). Fix the pack using the output below, then try again.");
         }
 
         var now = PackPin.Spelled(validation.FilesDigest);
         if (now.Length == 0)
         {
-            return new PackRepinDecision(null, "The validator did not report the digest of the pack's files, so the new digest cannot be shown and nothing is re-pinned.");
+            return new PackRepinDecision(null, "The validator did not report the digest of the pack's files, so nothing is re-pinned.");
         }
 
         var pinned = PackPin.Spelled(action.PinnedDigest);

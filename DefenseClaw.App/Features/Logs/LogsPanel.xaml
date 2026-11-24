@@ -84,7 +84,7 @@
                            SearchDelay="400"
                            SearchPlaceholder="Filter lines… (connector:codex)"
                            SearchAutomationName="Filter log lines"
-                           SearchHelpText="Shows only lines that contain this text. connector:codex shows only that connector's lines. Shortcut Ctrl+F; Esc clears it.">
+                           SearchHelpText="Shows lines that contain this text. connector:codex limits to one connector. Ctrl+F focuses, Esc clears.">
             <ctl:DcPageToolbar.ConnectorSlot>
                 <ctl:DcConnectorScopeChip Model="{Binding ConnectorChip}" />
             </ctl:DcPageToolbar.ConnectorSlot>
@@ -94,7 +94,7 @@
                                Command="{Binding ReloadFromDiskCommand}"
                                ToolTip="Reload from disk"
                                AutomationProperties.Name="Reload from disk"
-                               AutomationProperties.HelpText="Read the stream again: audit.db for Verdicts and Events, the start of the file for a log." />
+                               AutomationProperties.HelpText="Rereads the stream: audit.db for Verdicts and Events, the log file from the start." />
                     <ui:Button Icon="{ctl:DcSymbolIcon Gavel24}"
                                Command="{Binding OpenJudgeHistoryCommand}"
                                Visibility="{Binding IsVerdictsSource, Converter={StaticResource BoolToVisibility}}"
@@ -104,14 +104,14 @@
                     <ui:Button Icon="{ctl:DcSymbolIcon EyeOff24}"
                                Command="{Binding OpenRedactionCommand}"
                                Visibility="{Binding HasRedactionEntry, Converter={StaticResource BoolToVisibility}}"
-                               ToolTip="Redaction policy - what is collected and how it is redacted (runtimes with 'setup redaction')"
+                               ToolTip="Redaction policy: what is collected and how it is redacted. Needs a runtime with 'setup redaction'."
                                AutomationProperties.Name="Redaction policy"
-                               AutomationProperties.HelpText="Open the redaction policy: the profile of each bucket and destination, with every change previewed before it is applied." />
+                               AutomationProperties.HelpText="Opens the redaction policy: the profile of each bucket and destination. Changes are previewed first." />
                     <ui:Button Icon="{ctl:DcSymbolIcon Broom24}"
                                Command="{Binding ClearCommand}"
                                ToolTip="Clear the buffered lines"
                                AutomationProperties.Name="Clear"
-                               AutomationProperties.HelpText="Empty the buffered lines for the log file on screen. The file itself is untouched. Not available on Verdicts and Events." />
+                               AutomationProperties.HelpText="Empties the buffered lines. The file is untouched. Not available on Verdicts and Events." />
                     <ui:Button Icon="{ctl:DcSymbolIcon Copy24}"
                                Command="{Binding CopySelectionCommand}"
                                ToolTip="Copy selection"
@@ -136,7 +136,7 @@
                                    ToolTip="Show the decisions in audit.db: guardrail evaluations, enforcement actions, scans, findings and errors" />
                     <ctl:DcSegment Value="Events"
                                    Content="Events"
-                                   ToolTip="Show the canonical events in audit.db: the actionable ones (as the DefenseClaw TUI does) or, with Actionable only off, every one. Telemetry ingest is hidden unless switched on" />
+                                   ToolTip="Canonical events in audit.db. Only actionable ones (as in the TUI) unless Actionable only is off. Telemetry stays hidden unless Telemetry is on." />
                     <ctl:DcSegment Value="Watchdog"
                                    Content="Watchdog"
                                    ToolTip="Show watchdog.log" />
@@ -147,9 +147,9 @@
                     <ComboBox Width="130"
                               ItemsSource="{Binding Presets}"
                               SelectedItem="{Binding SelectedPreset, Mode=TwoWay}"
-                              ToolTip="A saved filter: no-noise hides heartbeat chatter and quiet INFO / LOW / MEDIUM rows (as the TUI does), important keeps errors, verdicts and lifecycle, the rest keep one topic. E toggles errors and W warnings+ (not while typing in a box)"
+                              ToolTip="Saved filter. no-noise hides heartbeats and quiet INFO, LOW and MEDIUM rows. important keeps errors, verdicts and lifecycle. Others keep one topic. E: errors only, W: warnings and above."
                               AutomationProperties.Name="Preset"
-                              AutomationProperties.HelpText="Which rows the list keeps. With focus outside a text box or drop-down list, E shows only errors (again: everything) and W shows warnings and above (again: everything)." />
+                              AutomationProperties.HelpText="Which rows the list keeps. Outside a text box, E shows only errors and W shows warnings and above. Press again to show all." />
                 </StackPanel>
 
                 <StackPanel Orientation="Horizontal">
@@ -181,9 +181,9 @@
                           Content="Telemetry"
                           IsChecked="{Binding IncludeTelemetry, Mode=TwoWay}"
                           Visibility="{Binding IsEventsSource, Converter={StaticResource BoolToVisibility}}"
-                          ToolTip="Include the telemetry.ingest bucket, which is most of audit.db and hidden by default"
+                          ToolTip="Include telemetry.ingest, most of audit.db. Hidden by default."
                           AutomationProperties.Name="Include telemetry"
-                          AutomationProperties.HelpText="Events only: also show telemetry.ingest events, which are hidden by default because they are most of the table." />
+                          AutomationProperties.HelpText="Events only. Also shows telemetry.ingest events, which are hidden by default." />
 
                 <!-- Events only: the TUI's actionable-by-default view (CUST-262). It pauses while a search or another filter asks for something specific; the chip counts what it leaves out. -->
                 <ui:ToggleSwitch Content="Actionable only"
@@ -193,7 +193,7 @@
                                  ToolTip="{Binding ActionableToolTip}"
                                  ToolTipService.ShowOnDisabled="True"
                                  AutomationProperties.Name="Actionable only"
-                                 AutomationProperties.HelpText="Events only: show the events the DefenseClaw TUI shows by default - HIGH, CRITICAL and ERROR, and anything that blocked, denied, rejected, quarantined or failed. Paused while a search, a preset or another filter is on." />
+                                 AutomationProperties.HelpText="Events only. Shows HIGH, CRITICAL and ERROR events and any that blocked, denied, rejected, quarantined or failed, as the TUI does. Paused while a search, preset or other filter is on." />
 
                 <Border Style="{StaticResource DcChip}"
                         Margin="0,0,12,8"
@@ -231,7 +231,7 @@
                                  Content="{Binding LiveStateText}"
                                  IsChecked="{Binding AutoScroll, Mode=TwoWay}"
                                  AutomationProperties.Name="Auto-scroll"
-                                 AutomationProperties.HelpText="On: the list scrolls to each new row as it arrives (live). Off: the list stays where you are (paused)." />
+                                 AutomationProperties.HelpText="On: scrolls to each new row (live). Off: stays where you are (paused)." />
 
                 <TextBlock Style="{StaticResource DcResultCaption}"
                            Margin="0,0,0,8"
@@ -281,7 +281,7 @@
                          VirtualizingPanel.IsVirtualizing="True"
                          VirtualizingPanel.VirtualizationMode="Recycling"
                          AutomationProperties.Name="Log rows"
-                         AutomationProperties.HelpText="Up and Down move through the rows. Home goes to the first row and pauses, End to the newest and follows it. E and W show only errors, or warnings and above."
+                         AutomationProperties.HelpText="Up and Down move through rows. Home goes to the first row and pauses. End goes to the newest and follows. E shows errors only, W warnings and above."
                          PreviewKeyDown="OnListPreviewKeyDown"
                          SelectionChanged="OnSelectionChanged">
                     <!-- WPF-UI's list item pads 12 px on every side: a one-line log entry became a 42 px row and only
@@ -319,7 +319,9 @@
                                     <TextBlock Style="{StaticResource DcMono}"
                                                TextWrapping="Wrap"
                                                TextTrimming="CharacterEllipsis"
-                                               MaxHeight="54"
+                                               LineStackingStrategy="BlockLineHeight"
+                                               LineHeight="16"
+                                               MaxHeight="32"
                                                Text="{Binding DisplayMessage}" />
                                 </StackPanel>
                             </Grid>

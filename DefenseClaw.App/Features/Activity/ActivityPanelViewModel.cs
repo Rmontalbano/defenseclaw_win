@@ -122,7 +122,7 @@ public sealed partial class ActivityPanelViewModel : PanelViewModelBase
     public override string Title => "Activity";
 
     public override string Description =>
-        "Every DefenseClaw mutation this app makes: exact argv, live output and exit code.";
+        "Commands this app ran: exact command line, live output and exit code.";
 
     /// <summary>
     /// Stated once, from fixed capacities - neither changes at runtime.
@@ -133,21 +133,18 @@ public sealed partial class ActivityPanelViewModel : PanelViewModelBase
     /// </para>
     /// </summary>
     public string CapacityNote =>
-        $"Showing the last {Services.Cli.ActivityCapacity.ToString(CultureInfo.CurrentCulture)} invocations, in memory only. " +
-        $"Each one keeps up to {CliInvocation.MaxRetainedOutputLines.ToString(CultureInfo.CurrentCulture)} lines " +
-        $"({(CliInvocation.MaxRetainedOutputBytes / 1024).ToString(CultureInfo.CurrentCulture)} KiB) of output " +
-        $"(a list the app parses as JSON keeps up to {CliInvocation.MaxFullOutputLines.ToString("N0", CultureInfo.CurrentCulture)} lines / " +
-        $"{(CliInvocation.MaxFullOutputBytes / (1024 * 1024)).ToString(CultureInfo.CurrentCulture)} MiB) - past that the oldest lines are dropped and the invocation says how many. " +
-        "Nothing here survives an app restart.";
+        $"Last {Services.Cli.ActivityCapacity.ToString(CultureInfo.CurrentCulture)} commands, kept in memory until the app restarts. " +
+        $"Each keeps up to {CliInvocation.MaxRetainedOutputLines.ToString(CultureInfo.CurrentCulture)} output lines " +
+        $"({(CliInvocation.MaxRetainedOutputBytes / 1024).ToString(CultureInfo.CurrentCulture)} KiB), or " +
+        $"{CliInvocation.MaxFullOutputLines.ToString("N0", CultureInfo.CurrentCulture)} lines / " +
+        $"{(CliInvocation.MaxFullOutputBytes / (1024 * 1024)).ToString(CultureInfo.CurrentCulture)} MiB for a list the app parses as JSON. " +
+        "Older lines are dropped and the command says how many.";
 
     public string EmptyTitle => "No CLI activity yet";
 
     public string EmptyDetail =>
-        "The GUI never edits DefenseClaw state directly - every mutation it makes (a Govern action, a Setup wizard, " +
-        "an upgrade) runs as a subprocess, and so does the config check behind the editor's Save; each one's exact " +
-        "command line, live output and exit code " +
-        "show up here. Nothing has been run in this session yet; the list is kept in memory only, so it also " +
-        "starts empty each time the app launches.";
+        "Commands this app runs are listed here with their exact command line, live output and exit code. " +
+        "None has run in this session.";
 
     public ObservableCollection<ActivityRow> Rows { get; } = new();
 
@@ -550,9 +547,9 @@ public sealed partial class ActivityRow : ObservableObject
         TierKey = CommandReview.ToneFor(tier);
         TierHelp = tier switch
         {
-            CommandTier.ReadOnly => "Only reads state; runs without a confirmation step.",
-            CommandTier.Destructive => "Removes or resets something; needs a confirmation with the exact command.",
-            _ => "Changes DefenseClaw state; needs a confirmation with the exact command.",
+            CommandTier.ReadOnly => "Only reads state. Runs without a confirmation.",
+            CommandTier.Destructive => "Removes or resets something. Needs a confirmation that shows the exact command.",
+            _ => "Changes DefenseClaw state. Needs a confirmation that shows the exact command.",
         };
 
         Tick();
@@ -851,13 +848,13 @@ public sealed partial class ActivityRow : ObservableObject
         {
             CanCancel = false;
             CancelHint =
-                "This is the upgrade installer. It cannot be cancelled from here: killing it part-way can leave " +
-                "DefenseClaw half-installed, so it stops only when it finishes.";
+                "The upgrade installer cannot be cancelled from here. Stopping it part-way can leave " +
+                "DefenseClaw half-installed, so it runs to the end.";
         }
         else if (cancelRequested)
         {
             CanCancel = false;
-            CancelHint = "Cancelling - waiting for the process tree to exit.";
+            CancelHint = "Cancelling. Waiting for the process tree to exit.";
         }
         else
         {

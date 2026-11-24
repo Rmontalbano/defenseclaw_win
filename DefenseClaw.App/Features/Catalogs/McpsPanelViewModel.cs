@@ -77,9 +77,8 @@ public sealed partial class McpsPanelViewModel : GovernPanelViewModelBase
     protected override string BuildEmptyTitle(string scope) => $"No MCP servers configured for {scope}";
 
     protected override string BuildEmptyDetail(string scope) =>
-        "For Claude Code, DefenseClaw 0.8.10 reads the mcpServers key of settings.json. Servers added with 'claude mcp add' " +
-        "are stored in ~\\.claude.json instead and are not listed here, so an empty list means nothing was found in the " +
-        "file it reads. Use Add MCP server to register one through DefenseClaw (it is scanned first).";
+        "For Claude Code, DefenseClaw 0.8.10 reads mcpServers in settings.json. Servers added with 'claude mcp add' " +
+        "(stored in ~\\.claude.json) are not listed. Add MCP server registers one and scans it first.";
 
     protected override GovernRow? ParseRow(JsonElement item, string? groupConnector)
     {
@@ -156,9 +155,9 @@ public sealed partial class McpsPanelViewModel : GovernPanelViewModelBase
     protected override string? NoteFor(GovernVerbs verb, GovernRow row) => verb switch
     {
         GovernVerbs.Block or GovernVerbs.Allow =>
-            "In DefenseClaw 0.8.10 this decision gates its own 'mcp set' and 'mcp scan'; it does not by itself stop a server that is already configured.",
+            "In DefenseClaw 0.8.10 this gates 'mcp set' and 'mcp scan' only. It does not stop a server that is already configured.",
         GovernVerbs.Unset =>
-            "Edits the connector's MCP config file (for Claude Code, settings.json) and removes the server there. Add it back with Add MCP server.",
+            "Removes the server from the connector's MCP config file (Claude Code: settings.json). Add it back with Add MCP server.",
         _ => base.NoteFor(verb, row),
     };
 
@@ -200,13 +199,13 @@ public sealed partial class McpsPanelViewModel : GovernPanelViewModelBase
         // 'mcp set' refuses both and neither: a mixed entry would scan one thing and run another.
         if (command.Length == 0 && url.Length == 0)
         {
-            SetFormError = "Enter either a command (a local server) or a URL (a remote server).";
+            SetFormError = "Enter either a command (local server) or a URL (remote server).";
             return;
         }
 
         if (command.Length > 0 && url.Length > 0)
         {
-            SetFormError = "Enter a command or a URL, not both: the scan and the running server would differ.";
+            SetFormError = "Enter a command or a URL, not both. The scan and the running server would differ.";
             return;
         }
 
@@ -218,13 +217,13 @@ public sealed partial class McpsPanelViewModel : GovernPanelViewModelBase
 
         if (transport == "stdio" && url.Length > 0)
         {
-            SetFormError = "The stdio transport runs a local command; clear the URL or choose sse.";
+            SetFormError = "The stdio transport runs a local command. Clear the URL or choose sse.";
             return;
         }
 
         if (transport == "sse" && command.Length > 0)
         {
-            SetFormError = "The sse transport connects to a URL; clear the command or choose stdio.";
+            SetFormError = "The sse transport connects to a URL. Clear the command or choose stdio.";
             return;
         }
 
@@ -236,7 +235,7 @@ public sealed partial class McpsPanelViewModel : GovernPanelViewModelBase
 
         if (argsJson is not null && command.Length == 0)
         {
-            SetFormError = "Arguments belong to a command; clear them or enter a command instead of a URL.";
+            SetFormError = "Arguments belong to a command. Clear them or enter a command instead of a URL.";
             return;
         }
 
@@ -293,11 +292,11 @@ public sealed partial class McpsPanelViewModel : GovernPanelViewModelBase
 
         var notes = new List<string>();
         notes.Add(SetSkipScan
-            ? "The security scan is skipped: this server is added with no check at all."
-            : "Unless the scan is skipped, DefenseClaw starts the server (runs the command, or connects to the URL) to scan it, and refuses it on HIGH or CRITICAL findings.");
+            ? "The security scan is skipped, so the server is added unchecked."
+            : "DefenseClaw starts the server (runs the command or connects to the URL) to scan it, and refuses it on HIGH or CRITICAL findings.");
         if (envPairs.Count > 0)
         {
-            notes.Add("Environment values are part of this command line: they are shown here, recorded in Activity and visible to other processes on this machine. Do not put secrets in them.");
+            notes.Add("Environment values are on the command line: shown here and in Activity, and visible to other processes on this machine. Do not put secrets in them.");
         }
 
         BeginReview(new GovernPlan
@@ -324,16 +323,15 @@ public sealed partial class McpsPanelViewModel : GovernPanelViewModelBase
     }
 
     private const string EnvSecretAdvice =
-        "'mcp set' has no other way to take it and stores it as plain text in the connector's MCP config. Leave the value out " +
-        "and set the variable in the environment the connector starts the server from (for example a Windows user " +
-        "environment variable), or enter a reference to a variable instead of the value.";
+        "'mcp set' stores it as plain text in the connector's MCP config. Leave the value out and set the variable in the " +
+        "environment the connector starts the server from (for example a Windows user variable), or enter a reference to a variable.";
 
     private const string UrlSecretAdvice =
-        "'mcp set' has no other way to take it and stores the URL as typed in the connector's MCP config. Prefer an address " +
-        "without the credential in it, or a server that reads its token from its own environment.";
+        "'mcp set' stores the URL as typed in the connector's MCP config. Use an address without the credential, " +
+        "or a server that reads its token from its own environment.";
 
     private const string ArgsSecretAdvice =
-        "'mcp set' has no other way to take it and stores the arguments as typed in the connector's MCP config. Prefer a server " +
+        "'mcp set' stores the arguments as typed in the connector's MCP config. Use a server " +
         "that reads the value from an environment variable it already has.";
 
     /// <summary>
@@ -395,7 +393,7 @@ public sealed partial class McpsPanelViewModel : GovernPanelViewModelBase
             var eq = entry.IndexOf('=', StringComparison.Ordinal);
             if (eq <= 0 || !EnvKeyPattern.IsMatch(entry[..eq]))
             {
-                error = $"“{entry}” is not KEY=VAL. Put one KEY=VAL per line; the key may use letters, digits and underscores.";
+                error = $"“{entry}” is not KEY=VAL. Use one KEY=VAL per line, with letters, digits and underscores in the key.";
                 return false;
             }
 

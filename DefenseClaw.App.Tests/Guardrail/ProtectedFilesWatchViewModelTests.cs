@@ -88,7 +88,7 @@ public sealed class ProtectedFilesWatchViewModelTests : IDisposable
 
         // The 1.0.6 text is word for word what it was.
         Assert.EndsWith("Shell startup files and autostart entries are watched on Linux and macOS only.", vm.WatchedText, StringComparison.Ordinal);
-        Assert.Equal("The gateway checks a short list of files every 2 seconds while it runs. The watch blocks nothing: it reports a change after it happened.", vm.Summary);
+        Assert.Equal("The gateway checks a short list of files every 2 seconds while it runs. The watch blocks nothing. It reports a change after it happens.", vm.Summary);
         Assert.DoesNotContain("authorized_keys, a shell startup file", vm.WatchedText, StringComparison.Ordinal);
     }
 
@@ -108,7 +108,7 @@ public sealed class ProtectedFilesWatchViewModelTests : IDisposable
         Assert.Contains("while it runs", vm.Summary, StringComparison.Ordinal);
         Assert.Contains("blocks nothing", vm.Summary, StringComparison.Ordinal);
         Assert.Contains("Attribution is by time", vm.AttributionText, StringComparison.Ordinal);
-        Assert.Contains("refuses it", vm.RollbackText, StringComparison.Ordinal);
+        Assert.Contains("refuse a config", vm.RollbackText, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -177,11 +177,11 @@ public sealed class ProtectedFilesWatchViewModelTests : IDisposable
 
             var warnings = string.Join(' ', opened.Warnings.Select(w => w.Message));
             Assert.Contains("puts back the last accepted content", warnings, StringComparison.Ordinal);
-            Assert.Contains("a file the agent created is removed", warnings, StringComparison.Ordinal);
-            Assert.Contains("strict setups only", warnings, StringComparison.Ordinal);
+            Assert.Contains("removes files the agent created", warnings, StringComparison.Ordinal);
+            Assert.Contains("Meant for strict setups", warnings, StringComparison.Ordinal);
             Assert.Contains("off in every pack", warnings, StringComparison.Ordinal);
-            Assert.Contains("Configuration tools that rewrite these files", warnings, StringComparison.Ordinal);
-            Assert.Contains("refuses it", warnings, StringComparison.Ordinal);
+            Assert.Contains("config tools that rewrite these files", warnings, StringComparison.Ordinal);
+            Assert.Contains("refuse a config", warnings, StringComparison.Ordinal);
             Assert.Empty(services.Cli.Activity);
         });
     }

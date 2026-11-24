@@ -89,7 +89,7 @@ public sealed class HookRowAuditTests : IDisposable
         var panel = await OpenAsync("1.0.8");
         var refused = Row(panel, "refused");
 
-        Assert.StartsWith("Hook blocked the call itself", refused.Title, StringComparison.Ordinal);
+        Assert.StartsWith("Hook blocked the call", refused.Title, StringComparison.Ordinal);
         Assert.Equal(HookFailureRow.SourceLabel, Pair(refused, "Decided by"));
         Assert.Equal("gateway unreachable", Pair(refused, "Hook's reason"));
         Assert.Contains("hook_fail_mode is closed", Pair(refused, "Explanation"), StringComparison.Ordinal);

@@ -102,7 +102,7 @@ public sealed class PolicySurfaceTests : IDisposable
         Assert.Equal(PoliciesState.Loaded, vm.State);
         Assert.Equal(4, vm.Rows.Count);
         Assert.Equal(new[] { "policy list" }, calls);
-        Assert.Equal("Security policies for skills, MCP servers and plugins: which are built in, which you made, and which one is active.", vm.Description);
+        Assert.Equal("Built-in and custom policies for skills, MCP servers and plugins.", vm.Description);
     }
 
     [Fact]

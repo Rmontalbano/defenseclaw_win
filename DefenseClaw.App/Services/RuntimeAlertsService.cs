@@ -254,12 +254,12 @@ internal sealed class RuntimeAlertsService
                 }
                 else
                 {
-                    stale = "the runtime's alert list was not in the expected form (" + parsed.Message + ")";
+                    stale = "the alert list was not in the expected form (" + parsed.Message + ")";
                 }
             }
             else
             {
-                stale = fetch.Failure ?? "the runtime's alert list could not be read";
+                stale = fetch.Failure ?? "the alert list could not be read";
             }
 
             next = new RuntimeAlertState(rows, fetchedAt, stale, detectionOnly ?? previous.DetectionOnly24h);
@@ -296,7 +296,7 @@ internal sealed class RuntimeAlertsService
 
         if (run.FailureReason is { Length: > 0 } stopped)
         {
-            return new RuntimeAlertFetch(false, stdout, OneLine($"the runtime's alert command {stopped}"));
+            return new RuntimeAlertFetch(false, stdout, OneLine($"the alert command {stopped}"));
         }
 
         if (run.ExitCode is not 0)
@@ -308,12 +308,12 @@ internal sealed class RuntimeAlertsService
             }
 
             var reason = stderr.Count > 0 ? stderr[^1] : "exit code " + (run.ExitCode?.ToString(CultureInfo.InvariantCulture) ?? "unknown");
-            return new RuntimeAlertFetch(false, stdout, OneLine("the runtime's alert command failed: " + reason));
+            return new RuntimeAlertFetch(false, stdout, OneLine("the alert command failed: " + reason));
         }
 
         if (run.IsOutputTruncated)
         {
-            return new RuntimeAlertFetch(false, stdout, "the runtime's alert list was longer than this app keeps of one command's output");
+            return new RuntimeAlertFetch(false, stdout, "the alert list was longer than the app keeps from one command");
         }
 
         return new RuntimeAlertFetch(true, stdout, null);

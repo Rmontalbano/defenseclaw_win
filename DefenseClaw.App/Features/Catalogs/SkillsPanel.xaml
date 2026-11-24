@@ -111,7 +111,7 @@
                                       ItemsSource="{Binding Connectors}"
                                       SelectedItem="{Binding SelectedConnector, Mode=TwoWay}"
                                       AutomationProperties.Name="Connector scope"
-                                      AutomationProperties.HelpText="Which connector's skills to list, and which connector block, allow and the other actions apply to when a row does not name one." />
+                                      AutomationProperties.HelpText="Connector whose skills are listed, and the connector that actions apply to when a row names none." />
                         </StackPanel>
                         <StackPanel Orientation="Horizontal">
                             <TextBlock Style="{StaticResource DcToolbarLabel}" Text="Reason" />
@@ -140,7 +140,7 @@
                         <StackPanel>
                             <ctl:DcCardHeader Symbol="ArrowDownload24" Section="Govern" Content="Install a skill" />
                             <TextBlock Style="{StaticResource DcCaption}"
-                                       Text="Runs 'defenseclaw skill install'. The skill is downloaded from ClawHub, copied into the connector's skill folder and scanned. The scope is the connector chosen in the toolbar; 'All configured connectors' installs into every one. You review the exact command before anything runs." />
+                                       Text="Runs 'defenseclaw skill install' for the toolbar's connector; 'All configured connectors' installs into every one. You review the command first." />
 
                             <StackPanel Margin="0,12,0,8">
                                 <TextBlock Style="{StaticResource DcFieldLabel}" Text="ClawHub skill name" />
@@ -248,7 +248,7 @@
                     <StackPanel Style="{StaticResource DcEmptyState}">
                         <ctl:DcSymbolIcon Style="{StaticResource DcEmptyIcon}" Symbol="Search24" />
                         <TextBlock Style="{StaticResource DcEmptyTitle}" Text="No skills match the filter" />
-                        <TextBlock Style="{StaticResource DcEmptyDetail}" Text="The filter hides every skill the CLI listed. Clear it to see them all." />
+                        <TextBlock Style="{StaticResource DcEmptyDetail}" Text="Clear the filter to see all skills." />
                         <ui:Button Margin="0,12,0,0"
                                    HorizontalAlignment="Center"
                                    Content="Clear filter"
@@ -287,7 +287,7 @@
                                                 CellTemplate="{StaticResource GovernNameCell}" />
                         <DataGridTextColumn Width="2.2*" MinWidth="100" Header="Description"
                                             SortMemberPath="Description"
-                                            ElementStyle="{StaticResource DcCellTextQuiet}"
+                                            ElementStyle="{StaticResource GovernCellTextClamp2}"
                                             Binding="{Binding Description}" />
                         <DataGridTemplateColumn Width="1.3*" MinWidth="120" Header="Scan"
                                                 SortMemberPath="ScanLabel"

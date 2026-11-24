@@ -48,7 +48,7 @@
                                Icon="{ctl:DcSymbolIcon ShieldSettings24}"
                                Command="{Binding OpenSetupCommand}"
                                AutomationProperties.Name="Open Setup"
-                               AutomationProperties.HelpText="Shows the Setup panel, where this PC's protection is configured. There is no sandbox setting on Windows, and nothing runs." />
+                               AutomationProperties.HelpText="Shows the Setup panel. Windows has no sandbox setting." />
                 </StackPanel>
             </ScrollViewer>
         </Border>

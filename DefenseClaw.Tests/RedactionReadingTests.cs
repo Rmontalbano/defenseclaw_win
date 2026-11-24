@@ -55,7 +55,7 @@ public sealed class RedactionReadingTests
         Assert.False(local.IsConfigurable);
         Assert.Equal("built-in policy", local.PolicyFormText);
         Assert.Equal("unredacted (none)", local.Label);
-        Assert.Equal("Built-in: its policy is generated, so it is read-only here.", local.Lock);
+        Assert.Equal("Built-in: generated policy, read-only here.", local.Lock);
         Assert.Empty(status.ConfigurableDestinations);
         Assert.Empty(status.RoutedDestinations);
 

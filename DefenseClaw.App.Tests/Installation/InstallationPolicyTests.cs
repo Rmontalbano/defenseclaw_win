@@ -88,7 +88,7 @@ public sealed class InstallationPolicyTests : IDisposable
         Assert.True(vm.CanEdit);
         Assert.True(vm.CanDelete);
         Assert.True(vm.CanCreate);
-        Assert.StartsWith("Validate the policies", vm.ActivateTip, StringComparison.Ordinal);
+        Assert.StartsWith("Validates the policies", vm.ActivateTip, StringComparison.Ordinal);
     }
 
     [Fact]

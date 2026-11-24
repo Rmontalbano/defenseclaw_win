@@ -62,13 +62,13 @@
                                IsEnabled="{Binding CanRunReads}"
                                ToolTip="Validate the Rego modules and data.json (read-only)"
                                AutomationProperties.Name="Validate"
-                               AutomationProperties.HelpText="Run policy validate. It only reads; its output appears under the table." />
+                               AutomationProperties.HelpText="Runs policy validate. It only reads. Output appears under the table." />
                     <ui:Button Icon="{ctl:DcSymbolIcon PlayCircle24}"
                                Command="{Binding RunTestsCommand}"
                                IsEnabled="{Binding CanRunReads}"
                                ToolTip="Run the OPA Rego unit tests (read-only)"
                                AutomationProperties.Name="Run tests"
-                               AutomationProperties.HelpText="Run policy test, which runs opa test on the bundled Rego. Its output appears under the table." />
+                               AutomationProperties.HelpText="Runs policy test (opa test on the bundled Rego). Output appears under the table." />
                     <ui:Button Icon="{ctl:DcSymbolIcon ArrowClockwise24}"
                                Command="{Binding RefreshCommand}"
                                ToolTip="Refresh (F5)"
@@ -269,7 +269,7 @@
                                            ToolTip="{Binding ActivateTip}"
                                            ToolTipService.ShowOnDisabled="True"
                                            AutomationProperties.Name="Activate policy"
-                                           AutomationProperties.HelpText="Validate, then review what activating this policy changes before it is applied." />
+                                           AutomationProperties.HelpText="Validates, then shows what activating this policy changes." />
                                 <ui:Button Margin="0,0,8,4"
                                            Appearance="Secondary"
                                            Icon="{ctl:DcSymbolIcon DocumentEdit24}"
@@ -427,7 +427,7 @@
                                     <ctl:DcSegment Value="guardrail" Content="Guardrail" ToolTip="Thresholds, trust level, patterns and severity mappings" />
                                     <ctl:DcSegment Value="firewall" Content="Firewall" ToolTip="Default action, domains, blocked destinations and ports" />
                                 </ctl:DcSegmented>
-                                <TextBlock Style="{StaticResource DcCaption}" Margin="0,0,0,8" Text="Leave a field (unchanged) or empty to leave that value alone." />
+                                <TextBlock Style="{StaticResource DcCaption}" Margin="0,0,0,8" Text="A field left at (unchanged) or empty keeps its value." />
 
                                 <StackPanel Visibility="{Binding Form.IsScannerSection, Converter={StaticResource BoolToVisibility}}" Style="{StaticResource DcField}">
                                     <TextBlock Style="{StaticResource DcFieldLabel}" Text="Scanner type" />

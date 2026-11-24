@@ -189,7 +189,7 @@ public static class CorrelationReader
     {
         if (root.ValueKind != JsonValueKind.Object || !root.TryGetProperty("identities", out var list) || list.ValueKind is not (JsonValueKind.Array or JsonValueKind.Null))
         {
-            return Fail<AgentDirectoryPage>(CorrelationReadStatus.Malformed, "The agent directory answer is incomplete: it is missing identities. Nothing here is an empty directory.");
+            return Fail<AgentDirectoryPage>(CorrelationReadStatus.Malformed, "The agent directory answer is missing identities, so it is not an empty directory.");
         }
 
         var skipped = 0;

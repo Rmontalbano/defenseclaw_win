@@ -158,7 +158,7 @@ public sealed class CatalogTrust
                     return "Changes are off until the first read finishes.";
 
                 case Kind.Partial:
-                    return "Changes are off: discovery was incomplete, so this list may be missing entries. Fix the source named in the warning and refresh.";
+                    return "Changes are off: discovery was incomplete and entries may be missing. Fix the source named in the warning, then refresh.";
 
                 case Kind.Failed:
                     return "Changes are off: the last read failed, so these rows may be out of date. Refresh to read them again.";

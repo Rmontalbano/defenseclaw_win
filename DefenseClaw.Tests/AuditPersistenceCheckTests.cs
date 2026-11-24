@@ -29,7 +29,7 @@ public sealed class AuditPersistenceCheckTests : IDisposable
         Assert.Equal(AuditPersistenceState.Persisted, result.State);
         Assert.True(result.IsVerified);
         Assert.Equal(AuditPersistenceCheck.SidecarStartAction, result.NewestAction);
-        Assert.Contains("start was recorded", result.Text, StringComparison.Ordinal);
+        Assert.Contains("start is recorded", result.Text, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -42,7 +42,7 @@ public sealed class AuditPersistenceCheckTests : IDisposable
 
         Assert.Equal(AuditPersistenceState.Persisted, result.State);
         Assert.Equal("tool-call", result.NewestAction);
-        Assert.Contains("has events written since the gateway started", result.Text, StringComparison.Ordinal);
+        Assert.Contains("has events since the gateway started", result.Text, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -90,7 +90,7 @@ public sealed class AuditPersistenceCheckTests : IDisposable
 
             Assert.Equal(AuditPersistenceState.Busy, result.State);
             Assert.True(result.IsDegraded);
-            Assert.Contains("contention, not damage", result.Text, StringComparison.Ordinal);
+            Assert.Contains("Retention cleanup can hold it", result.Text, StringComparison.Ordinal);
             Assert.DoesNotContain("corrupt", result.Text, StringComparison.OrdinalIgnoreCase);
 
             using var rollback = writer.CreateCommand();

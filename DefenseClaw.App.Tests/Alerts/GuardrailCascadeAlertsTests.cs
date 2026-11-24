@@ -14,11 +14,11 @@ public sealed class GuardrailCascadeAlertsTests
     private static readonly HookRowGate Gate109 = new(true, true, true, true, true);
     private static readonly HookRowGate Gate1010 = new(true, true, true, true, true, true);
 
-    private const string OldLimit = "A shell command too long or too complex for the policy check.";
-    private const string OldOperand = "The command had more than 1024 operands: the first 1024, and every later word that may name a protected file or is a link, were checked; the other names were not.";
+    private const string OldLimit = "Shell command too long or too complex for the policy check";
+    private const string OldOperand = "More than 1024 operands, so later words were checked only for protected files and links";
     private const string NewLimit =
-        "An input too large or too complex for the policy check to read in full (a command, a tool's output or a model reply); DefenseClaw judged it at the rule pack's unknown tier.";
-    private const string Drift = "The alignment check (a question to the LLM judge) found that this tool call does not serve the task the user gave.";
+        "Input too large or complex for the policy check, judged at the unknown tier";
+    private const string Drift = "Alignment check: this tool call does not serve the user's task";
 
     private static RuntimeAlertRow Runtime(string rule, string decision, string details)
     {
@@ -40,12 +40,12 @@ public sealed class GuardrailCascadeAlertsTests
         Assert.Equal("ACTION-COMPOUND-LIMIT: Input exceeds policy evaluation limit, judged as unknown (bounded_truncated cap=items)", item.Headline);
         var paragraphs = Paragraphs(item);
         Assert.Equal(NewLimit, paragraphs[0]);
-        Assert.Equal("It went through; DefenseClaw recorded it as an alert (the strict rule pack blocks it).", paragraphs[1]);
+        Assert.Equal("It ran and was recorded as an alert. The strict rule pack blocks it.", paragraphs[1]);
     }
 
     [Theory]
     [InlineData("blocked", "connector=codex action=block raw_action=block mode=action would_block=true", "It was blocked.")]
-    [InlineData("alert", "connector=codex action=alert raw_action=alert mode=observe", "It went through; DefenseClaw recorded it as an alert (observe mode).")]
+    [InlineData("alert", "connector=codex action=alert raw_action=alert mode=observe", "It ran and was recorded as an alert (observe mode).")]
     public void The_cascade_outcome_is_worded_without_the_word_command(string decision, string details, string expected)
     {
         var item = Item(Gate1010, Runtime("ACTION-COMPOUND-LIMIT: x", decision, details));
@@ -54,7 +54,7 @@ public sealed class GuardrailCascadeAlertsTests
     }
 
     [Theory]
-    [InlineData("alert", "connector=codex action=alert raw_action=alert mode=action would_block=false", "The call ran; DefenseClaw recorded it as an alert (the strict rule pack blocks it).")]
+    [InlineData("alert", "connector=codex action=alert raw_action=alert mode=action would_block=false", "The call ran and was recorded as an alert. The strict rule pack blocks it.")]
     [InlineData("blocked", "connector=codex action=block raw_action=block mode=action would_block=true", "The call was blocked.")]
     public void A_1_0_9_runtime_reads_the_limit_exactly_as_before(string decision, string details, string outcome)
     {
@@ -78,7 +78,7 @@ public sealed class GuardrailCascadeAlertsTests
         Assert.Equal("ALIGNMENT-DRIFT: Tool call does not serve the user task (alignment check)", item.Headline);
         var paragraphs = Paragraphs(item);
         Assert.Equal(Drift, paragraphs[0]);
-        Assert.StartsWith("Measured only: the call was not changed", paragraphs[1], StringComparison.Ordinal);
+        Assert.StartsWith("Measured only. The call was not changed", paragraphs[1], StringComparison.Ordinal);
 
         var before = Item(Gate109, drift);
         Assert.Equal("ALIGNMENT-DRIFT: Tool call does not serve the user task (alignment check)", before.Headline);
@@ -88,7 +88,7 @@ public sealed class GuardrailCascadeAlertsTests
     }
 
     [Theory]
-    [InlineData("alert", "connector=codex action=alert raw_action=alert mode=action", "The call ran; DefenseClaw recorded an alert.")]
+    [InlineData("alert", "connector=codex action=alert raw_action=alert mode=action", "The call ran and was recorded as an alert.")]
     [InlineData("blocked", "connector=codex action=block raw_action=block mode=action would_block=true", "The call was blocked.")]
     public void The_alignment_outcome_follows_the_rows_own_decision(string decision, string details, string expected)
     {

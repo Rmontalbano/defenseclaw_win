@@ -181,7 +181,7 @@ public sealed class AgentLedgerTests
     public void What_the_ledger_does_not_hold_is_worded_not_reported_and_never_a_number()
     {
         Assert.Equal("Not reported", AgentKpis.NotReported);
-        Assert.Contains("Nothing is estimated", AgentKpis.UsageNote, StringComparison.Ordinal);
+        Assert.Contains("nothing is estimated", AgentKpis.UsageNote, StringComparison.Ordinal);
         Assert.Contains("observe-mode would-block", AgentKpis.WouldBlockNote, StringComparison.Ordinal);
         Assert.Contains("verdict", AgentKpis.WouldBlockNote, StringComparison.Ordinal);
     }

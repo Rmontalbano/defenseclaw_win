@@ -14,8 +14,8 @@ public sealed class GuardrailRowAuditTests
     private static readonly HookRowGate Gate108 = new(true, true, true, true);
 
     private const string Effects = "lane=effects-shadow mode=shadow tier=t2 would=block cost_us=120 effects=3";
-    private const string OldLimit = "A shell command too long or too complex for the policy check.";
-    private const string OldOperand = "The command had more than 1024 operands: the first 1024, and every later word that may name a protected file or is a link, were checked; the other names were not.";
+    private const string OldLimit = "Shell command too long or too complex for the policy check";
+    private const string OldOperand = "More than 1024 operands, so later words were checked only for protected files and links";
 
     private static AuditEvent Row(string action, string target, string details, string severity, string? structured = null, string connector = "codex") => new()
     {
@@ -46,7 +46,7 @@ public sealed class GuardrailRowAuditTests
 
         Assert.Equal("Shadow measurement (no action taken)", row.Title);
         Assert.Equal(
-            "What the effects lane would have done (would=block); the call was not changed.",
+            "What the effects lane would have done (would=block). The call was not changed.",
             Value(row.DetailPairs, "Shadow measurement"));
         Assert.True(row.HasDetailPairs);
     }
@@ -57,7 +57,7 @@ public sealed class GuardrailRowAuditTests
         var row = new AuditRow(
             Row("guardrail-inspection", "secret-flow:shadow", "rule=SF-1 mode=shadow kind=token program=curl host=example.test sets=S1 source_digest=abc would=block connector=codex", "INFO"));
 
-        Assert.Equal("What secret flow tracking would have done (would=block); the call was not changed.", Value(row.DetailPairs, "Shadow measurement"));
+        Assert.Equal("What secret flow tracking would have done (would=block). The call was not changed.", Value(row.DetailPairs, "Shadow measurement"));
     }
 
     [Theory]
@@ -69,11 +69,11 @@ public sealed class GuardrailRowAuditTests
     {
         var gate = GateOf(gateIndex);
         var scan = new AuditRow(Row("inspect-tool-timeout", "shell", "verdict=none reason=scan_timeout elapsed_ms=2001 budget_ms=2000", "MEDIUM"), gate);
-        Assert.Equal("Inspection timed out: the call was decided without this check", scan.Title);
-        Assert.Equal("Inspection timed out: the call was decided without this check", Value(scan.DetailPairs, "Inspection timeout"));
+        Assert.Equal("Inspection timed out, call decided without it", scan.Title);
+        Assert.Equal("Inspection timed out, call decided without it", Value(scan.DetailPairs, "Inspection timeout"));
 
         var canceled = new AuditRow(Row("inspect-request-timeout", "pre-request", "verdict=none reason=caller_canceled elapsed_ms=40 budget_ms=2000", "MEDIUM"), gate);
-        Assert.EndsWith("(the caller canceled it)", Value(canceled.DetailPairs, "Inspection timeout"), StringComparison.Ordinal);
+        Assert.StartsWith("Inspection canceled by the caller",Value(canceled.DetailPairs, "Inspection timeout"), StringComparison.Ordinal);
 
         const string text = "guardrail degraded: guardrail.cascade is invalid: unknown layer; the guardrail decides with the built-in order";
         var cascade = new AuditRow(Row("guardrail-degraded", string.Empty, text, "HIGH"), gate);
@@ -103,9 +103,9 @@ public sealed class GuardrailRowAuditTests
             "{\"connector\":\"codex\",\"rule_ids\":[\"ACTION-COMPOUND-LIMIT\"]}");
         var pairs = AuditHookRows.Pairs(Array.Empty<DetailPair>(), limit, HookRowGate.All, null, null);
         Assert.Equal(
-            "An input too large or too complex for the policy check to read in full (a command, a tool's output or a model reply); DefenseClaw judged it at the rule pack's unknown tier.",
+            "Input too large or complex for the policy check, judged at the unknown tier",
             Value(pairs, "Rule meaning"));
-        Assert.Equal("It went through; DefenseClaw recorded it as an alert (the strict rule pack blocks it).", Value(pairs, "Call outcome"));
+        Assert.Equal("It ran and was recorded as an alert. The strict rule pack blocks it.", Value(pairs, "Call outcome"));
 
         var drift = Row(
             "connector-hook", "PreToolUse", "connector=codex result=ok action=allow raw_action=allow mode=observe would_block=false", "MEDIUM",
@@ -118,9 +118,9 @@ public sealed class GuardrailRowAuditTests
             null);
         Assert.Equal("ALIGNMENT-DRIFT: Tool call does not serve the user task (alignment check)", driftPairs[0].Value);
         Assert.Equal(
-            "The alignment check (a question to the LLM judge) found that this tool call does not serve the task the user gave.",
+            "Alignment check: this tool call does not serve the user's task",
             Value(driftPairs, "Rule meaning"));
-        Assert.StartsWith("Measured only: the call was not changed", Value(driftPairs, "Call outcome"), StringComparison.Ordinal);
+        Assert.StartsWith("Measured only. The call was not changed", Value(driftPairs, "Call outcome"), StringComparison.Ordinal);
     }
 
     [Fact]
@@ -132,7 +132,7 @@ public sealed class GuardrailRowAuditTests
         var pairs = AuditHookRows.Pairs(Array.Empty<DetailPair>(), limit, Gate109, null, null);
 
         Assert.Equal(new[] { OldLimit, OldOperand }, pairs.Where(p => p.Label == "Rule meaning").Select(p => p.Value));
-        Assert.Equal("The call ran; DefenseClaw recorded it as an alert (the strict rule pack blocks it).", Value(pairs, "Call outcome"));
+        Assert.Equal("The call ran and was recorded as an alert. The strict rule pack blocks it.", Value(pairs, "Call outcome"));
         Assert.Single(pairs, p => p.Label == "Call outcome");
 
         var drift = Row(

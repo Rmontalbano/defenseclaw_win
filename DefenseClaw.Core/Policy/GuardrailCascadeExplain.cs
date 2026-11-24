@@ -378,5 +378,5 @@ public sealed class GuardrailCascadeExplain
     }
 
     /// <summary>The line shown when the command answered but its output was not the shape this app reads.</summary>
-    public const string UnreadableLine = "The output of defenseclaw guardrail cascade explain could not be read; the lines above are from config.yaml.";
+    public const string UnreadableLine = "The explain output could not be read. The lines above come from config.yaml.";
 }

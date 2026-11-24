@@ -51,7 +51,7 @@ public sealed class RuleLabelAlertsTests
         Assert.Contains(item.Fields, f => f.Name == "runtime.rule" && f.Value.StartsWith("ACTION-COMPOUND-LIMIT: Shell command exceeds", StringComparison.Ordinal));
         var paragraphs = item.HookRowNote.Split(Environment.NewLine + Environment.NewLine);
         Assert.Equal(RuleIdLabels.Sentence("ACTION-COMPOUND-LIMIT"), paragraphs[0]);
-        Assert.Equal("The call ran; DefenseClaw recorded it as an alert (the strict rule pack blocks it).", paragraphs[1]);
+        Assert.Equal("The call ran and was recorded as an alert. The strict rule pack blocks it.", paragraphs[1]);
     }
 
     [Theory]
@@ -102,7 +102,7 @@ public sealed class RuleLabelAlertsTests
         var item = AlertItem.FromRuntime(row).WithHookRows(Gate109, row);
 
         Assert.Equal("tamper.agent_hook_config_disable: Turn off the agent's DefenseClaw hooks", item.Headline);
-        Assert.Equal("An edit that turns off the agent's DefenseClaw hooks in its settings.", item.HookRowNote);
+        Assert.Equal("Edit that turns off the agent's DefenseClaw hooks", item.HookRowNote);
     }
 
     [Fact]

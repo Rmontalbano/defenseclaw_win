@@ -34,7 +34,7 @@ public sealed record PolicyCreate
 
         if (PolicyNames.Protected.Contains(Name))
         {
-            return $"'{Name}' is a built-in policy; the CLI will not overwrite it.";
+            return $"'{Name}' is a built-in policy. The CLI will not overwrite it.";
         }
 
         if (existingNames is not null && existingNames.Contains(Name, StringComparer.Ordinal))

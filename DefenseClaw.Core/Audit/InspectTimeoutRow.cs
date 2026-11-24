@@ -32,7 +32,7 @@ public sealed record InspectTimeoutRow(string Action, string Reason)
     public bool IsCallerCanceled => string.Equals(Reason, CallerCanceled, StringComparison.Ordinal);
 
     /// <summary>The row's title and label.</summary>
-    public string Label => "Inspection timed out: the call was decided without this check" + (IsCallerCanceled ? " (the caller canceled it)" : string.Empty);
+    public string Label => IsCallerCanceled ? "Inspection canceled by the caller, call decided without it" : "Inspection timed out, call decided without it";
 
     /// <summary>True when <paramref name="action"/> is one of the four timeout actions.</summary>
     public static bool IsTimeoutAction(string? action)

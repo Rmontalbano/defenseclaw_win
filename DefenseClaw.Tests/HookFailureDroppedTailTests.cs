@@ -31,15 +31,14 @@ public sealed class HookFailureDroppedTailTests
     public void The_explanation_names_the_dropped_file_and_the_jsonl_text_is_byte_for_byte_what_it_was()
     {
         var jsonl = HookFailureRow.Parse("guardrail-block", Body + Jsonl)!;
-        Assert.EndsWith(" The hook logged the call in logs\\hook-failures.jsonl.", jsonl.Explanation, StringComparison.Ordinal);
+        Assert.EndsWith(" Logged in logs\\hook-failures.jsonl.", jsonl.Explanation, StringComparison.Ordinal);
         Assert.Equal(
-            "The gateway was down or did not answer, and this connector's hook_fail_mode is closed, so the hook refused on its own. No gateway policy " +
-            "decided it, so there is no rule to look for. The hook logged the call in logs\\hook-failures.jsonl.",
+            "The gateway did not answer and this connector's hook_fail_mode is closed, so the hook blocked it. No gateway policy decided it. Logged in logs\\hook-failures.jsonl.",
             jsonl.Explanation);
 
         var dropped = HookFailureRow.Parse("guardrail-block", Body + Dropped)!;
-        Assert.EndsWith(" The hook could not finish its usual record, so it logged the call in logs\\hook-failures.dropped.", dropped.Explanation, StringComparison.Ordinal);
-        Assert.StartsWith("The gateway was down or did not answer", dropped.Explanation, StringComparison.Ordinal);
+        Assert.EndsWith(" The usual record could not be written, so the call is logged in logs\\hook-failures.dropped.", dropped.Explanation, StringComparison.Ordinal);
+        Assert.StartsWith("The gateway did not answer", dropped.Explanation, StringComparison.Ordinal);
     }
 
     [Theory]

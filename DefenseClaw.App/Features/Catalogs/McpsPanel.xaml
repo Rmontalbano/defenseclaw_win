@@ -103,7 +103,7 @@
                                       ItemsSource="{Binding Connectors}"
                                       SelectedItem="{Binding SelectedConnector, Mode=TwoWay}"
                                       AutomationProperties.Name="Connector scope"
-                                      AutomationProperties.HelpText="Which connector's MCP servers to list, and which connector Add MCP server writes to. All configured connectors means every one." />
+                                      AutomationProperties.HelpText="Connector whose MCP servers are listed, and the target of Add MCP server. All configured connectors means every one." />
                         </StackPanel>
                         <StackPanel Orientation="Horizontal">
                             <TextBlock Style="{StaticResource DcToolbarLabel}" Text="Reason" />
@@ -132,7 +132,7 @@
                         <StackPanel>
                             <ctl:DcCardHeader Symbol="PlugConnected24" Section="Govern" Content="Add or update an MCP server" />
                             <TextBlock Style="{StaticResource DcCaption}"
-                                       Text="Runs 'defenseclaw mcp set'. Give either a command (a local server) or a URL (a remote server), not both. The scope is the connector chosen in the toolbar; 'All configured connectors' writes to every one. You review the exact command before anything runs." />
+                                       Text="Runs 'defenseclaw mcp set' for the toolbar's connector; 'All configured connectors' writes to every one. Give a command or a URL, not both. You review the command first." />
 
                             <WrapPanel Margin="0,12,0,0">
                                 <StackPanel Width="280" Margin="0,0,12,8">
@@ -168,7 +168,7 @@
                                                 HorizontalScrollBarVisibility="Auto"
                                                 Text="{Binding SetArgs, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                                                 AutomationProperties.Name="Command arguments"
-                                                AutomationProperties.HelpText="One argument per line; sent to the CLI as a JSON array, so commas inside an argument are safe. Only for a command, not a URL." />
+                                                AutomationProperties.HelpText="One argument per line, sent as a JSON array, so commas inside an argument are safe. Only for a command." />
                                 </StackPanel>
                                 <StackPanel Width="280" Margin="0,0,12,8">
                                     <TextBlock Style="{StaticResource DcFieldLabel}" Text="Environment (one KEY=VAL per line)" />
@@ -180,12 +180,12 @@
                                                 HorizontalScrollBarVisibility="Auto"
                                                 Text="{Binding SetEnv, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                                                 AutomationProperties.Name="Environment variables"
-                                                AutomationProperties.HelpText="Sent as one --env flag per line. Values are visible in the confirm box, Activity and to other processes: no secrets." />
+                                                AutomationProperties.HelpText="Sent as one --env flag per line. Values are visible in the review, in Activity and to other processes. No secrets." />
                                 </StackPanel>
                             </WrapPanel>
 
                             <TextBlock Style="{StaticResource DcCaption}"
-                                       Text="Environment values are placed on the command line: they show in the review, in Activity and to other processes on this machine. Do not put secrets here." />
+                                       Text="Environment values are visible in the review, in Activity and to other processes on this machine. Do not put secrets here." />
 
                             <CheckBox Margin="0,8,0,0"
                                       Content="Skip the security scan (the server is added unchecked)"
@@ -285,7 +285,7 @@
                     <StackPanel Style="{StaticResource DcEmptyState}">
                         <ctl:DcSymbolIcon Style="{StaticResource DcEmptyIcon}" Symbol="Search24" />
                         <TextBlock Style="{StaticResource DcEmptyTitle}" Text="No MCP servers match the filter" />
-                        <TextBlock Style="{StaticResource DcEmptyDetail}" Text="The filter hides every server the CLI listed. Clear it to see them all." />
+                        <TextBlock Style="{StaticResource DcEmptyDetail}" Text="Clear the filter to see all MCP servers." />
                         <ui:Button Margin="0,12,0,0"
                                    HorizontalAlignment="Center"
                                    Content="Clear filter"

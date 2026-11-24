@@ -66,7 +66,7 @@ public sealed record RedactionDestination(
     /// <summary>Why the operator cannot change this destination here; empty for one they can.</summary>
     public string Lock => IsManaged
         ? "Managed by your organisation: locked."
-        : Generated ? "Built-in: its policy is generated, so it is read-only here." : string.Empty;
+        : Generated ? "Built-in: generated policy, read-only here." : string.Empty;
 
     /// <summary>The tone key of the label: unredacted is a warning, redacted is fine, mixed is a warning.</summary>
     public string Tone => Profiles.Count == 0 ? "Neutral" : IsUnredacted ? "Warn" : "Ok";
@@ -84,7 +84,7 @@ public sealed record RedactionJudgeBodies(bool Capture, string Path, int Retenti
     /// <summary>Says plainly that the store is outside every profile (the CLI's own disclosure, shortened).</summary>
     public string Disclosure => !Capture
         ? "The raw LLM-judge text is not kept (guardrail.retain_judge_bodies is false)."
-        : $"The raw LLM-judge request and response text is kept unredacted ({(RetentionDays == 0 ? "with no retention limit" : $"for {RetentionDays.ToString(CultureInfo.InvariantCulture)} days")}); a prompt can quote a secret. No redaction profile covers this store.";
+        : $"Raw LLM-judge requests and responses are kept unredacted ({(RetentionDays == 0 ? "with no retention limit" : $"for {RetentionDays.ToString(CultureInfo.InvariantCulture)} days")}). A prompt can quote a secret. No redaction profile covers this store.";
 }
 
 /// <summary>

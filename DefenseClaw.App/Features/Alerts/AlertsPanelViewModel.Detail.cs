@@ -289,7 +289,7 @@ public sealed partial class AlertsPanelViewModel
         {
             ShowActionResult(
                 skipped > 0
-                    ? $"Nothing to {verb}: the {skipped} {setName} alert(s) are gateway-only rows with no audit id for the CLI to name."
+                    ? $"Nothing to {verb}: {skipped} {setName} gateway-only {(skipped == 1 ? "row has" : "rows have")} no audit id."
                     : $"No {setName} alerts to {verb}.",
                 isError: true);
             return;
@@ -312,9 +312,9 @@ public sealed partial class AlertsPanelViewModel
         {
             IsSeverityReview = false;
             ReviewHeading = $"{(dismissing ? "Dismiss" : "Acknowledge")} {total} {setName} {(ids.Count == 1 ? "alert" : "alerts")}";
-            ReviewIntro = "This applies to exactly the alerts named in the command below, by id - never to the rest of their severity. The preview below is the CLI's own dry run and changes nothing."
-                + (skipped > 0 ? $" {skipped} {setName} gateway-only row(s) have no audit id and are left out." : string.Empty);
-            CommandNote = "This is the exact command that will run. Nothing happens until you confirm. --yes is the CLI's own confirmation for more than one id; this review is yours.";
+            ReviewIntro = "Applies only to the alerts named by id in the command below. The preview below is a dry run and changes nothing."
+                + (skipped > 0 ? $" {skipped} {setName} gateway-only {(skipped == 1 ? "row has" : "rows have")} no audit id and {(skipped == 1 ? "is" : "are")} left out." : string.Empty);
+            CommandNote = "This command runs when you confirm. --yes is the CLI's confirmation for more than one id.";
             SetChunkText();
             SetReviewError(string.Empty);
             IsReviewOpen = true;

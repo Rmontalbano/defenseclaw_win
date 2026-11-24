@@ -433,18 +433,18 @@ public sealed record AgentKpis(
 
     /// <summary>Why observe-mode would-blocks are not counted.</summary>
     public const string WouldBlockNote =
-        "Not reported: an observe-mode would-block is part of a guardrail verdict, which the correlation ledger does not store. Only blocks the gateway names as applied are counted above.";
+        "Not reported: an observe-mode would-block is part of a guardrail verdict, which the ledger does not store. Only applied blocks are counted.";
 
     /// <summary>Why tokens and cost are not shown.</summary>
     public const string UsageNote =
-        "Not reported: the correlation ledger holds identifiers and event names, not token counts or cost. Nothing is estimated.";
+        "Not reported. The correlation ledger holds identifiers and event names only, so nothing is estimated.";
 
     /// <summary>
     /// Added to <see cref="UsageNote"/> on a runtime with tokenomics (1.0.10): where model usage is kept. <c>GET /usage</c> has no agent dimension
     /// (<c>api_usage.go</c> at 1.0.10: model, connector, route, profile, role, provider, user, group, hour).
     /// </summary>
     public const string UsageSourceNote =
-        "When tokenomics is on, DefenseClaw records the usage and cost of the model calls it carries itself (GET /usage); that record has no per-agent breakdown.";
+        "With tokenomics on, DefenseClaw records usage and cost of the model calls it carries (GET /usage), with no per-agent breakdown.";
 
     /// <summary>The note under the Tokens and Cost tiles: <see cref="UsageNote"/>, plus <see cref="UsageSourceNote"/> when the runtime has tokenomics.</summary>
     public static string UsageNoteFor(bool tokenomics) => tokenomics ? UsageNote + " " + UsageSourceNote : UsageNote;

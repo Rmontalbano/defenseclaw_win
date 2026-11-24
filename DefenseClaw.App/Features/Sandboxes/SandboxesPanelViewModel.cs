@@ -31,7 +31,7 @@ public sealed partial class SandboxesPanelViewModel : PanelViewModelBase
     public override string Title => "Sandboxes";
 
     public override string Description =>
-        "Run a coding agent in an NVIDIA OpenShell sandbox that sees only your project folder. The DefenseClaw runtime offers sandboxes on Linux and macOS only.";
+        "Run a coding agent in an NVIDIA OpenShell sandbox limited to your project folder. Linux and macOS only.";
 
     /// <summary>True when the runtime's sandboxes can be used on this machine; never on Windows (the decision is the runtime capability catalog's).</summary>
     public bool IsUsableHere => RuntimeCapabilityCatalog.IsUsableHere(RuntimeCapability.Sandbox);
@@ -42,13 +42,12 @@ public sealed partial class SandboxesPanelViewModel : PanelViewModelBase
     public string StateTitle => IsUsableHere ? "Sandboxes are managed by the DefenseClaw runtime" : "Sandboxes are not available on Windows";
 
     public string StateDetail => IsUsableHere
-        ? "This app does not run or manage sandboxes; the runtime's own commands do."
-        : "DefenseClaw can run a coding agent in an NVIDIA OpenShell sandbox that sees only your project folder. The runtime supports sandboxes on "
-          + "Linux and macOS only, so there is nothing to set up on this PC, and this app offers no sandbox actions.";
+        ? "The runtime's sandbox commands run and manage them."
+        : "The runtime supports OpenShell sandboxes on Linux and macOS only. This app offers no sandbox actions on Windows.";
 
     /// <summary>Where they do work, and with what: informational only (<see cref="ElsewhereSetupCommand"/> is not a button here).</summary>
     public string ElsewhereText =>
-        $"On a Linux or macOS host, the runtime turns them on with: {ElsewhereSetupCommand}. The rest of this PC's protection is configured in Setup.";
+        $"On Linux or macOS, turn them on with {ElsewhereSetupCommand}. This PC's protection is set in Setup.";
 
     /// <summary>What the connected runtime says about its sandbox commands, in a sentence; follows the runtime probe while the page is on screen.</summary>
     public string RuntimeFact
@@ -88,12 +87,12 @@ public sealed partial class SandboxesPanelViewModel : PanelViewModelBase
         var snapshot = Services.Runtime.Current;
         if (!snapshot.IsKnown)
         {
-            return "The connected runtime has not been identified yet.";
+            return "The connected runtime is not identified yet.";
         }
 
         var who = snapshot.Identity!.Display;
         return snapshot.Capabilities.Has(RuntimeCapability.Sandbox)
-            ? $"The connected runtime ({who}) has the sandbox commands; they target Linux and macOS."
+            ? $"The connected runtime ({who}) has sandbox commands for Linux and macOS."
             : $"The connected runtime ({who}) has no sandbox commands.";
     }
 }

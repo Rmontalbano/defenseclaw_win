@@ -22,10 +22,8 @@ public static partial class JudgeEscalationFinding
 
     /// <summary>What happened and what to look at, for the detail pane.</summary>
     public const string Explanation =
-        "Under the regex_judge strategy a CRITICAL pattern finding the rules cannot enforce on their own waits for the LLM judge. The judge gave no verdict " +
-        "(an error, a timeout, a late answer, no free judge slot or no hook budget left), and this connector's hook_fail_mode is closed, so the call was " +
-        "refused. Where hook_fail_mode is open the rule verdict stands and the call runs with a judge-fallback warning. If this repeats, check the judge's " +
-        "provider and its timeout; for a slow judge model, set guardrail.judge.max_parallel.";
+        "A CRITICAL finding waited for the LLM judge (regex_judge strategy). The judge gave no verdict and this connector's hook_fail_mode is closed, " +
+        "so the call was refused. If this repeats, check the judge's provider and timeout. For a slow judge model, set guardrail.judge.max_parallel.";
 
     /// <summary>
     /// True when a hook row's details text carries the gateway's reason as its own <c>reason=judge-unavailable: ...</c> pair (renderHookAuditLegacyDetails,

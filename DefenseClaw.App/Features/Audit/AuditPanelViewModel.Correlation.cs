@@ -254,7 +254,7 @@ public sealed partial class AuditPanelViewModel
 
         if (!row.HasRun && !row.HasTarget)
         {
-            RelatedNote = "This event has no run id or target to relate it by.";
+            RelatedNote = "No run id or target to find related events.";
             return;
         }
 
@@ -298,15 +298,15 @@ public sealed partial class AuditPanelViewModel
             RelatedNote = (related.Basis, related.Events.Count) switch
             {
                 (RelatedBasis.Run, 0) => "No other events in this run.",
-                (RelatedBasis.Run, _) => "Other events of the same run, newest first.",
-                (RelatedBasis.Target, 0) => "No other events about this target within an hour of this one.",
-                (RelatedBasis.Target, _) => "Other events about the same target within an hour of this one, newest first.",
+                (RelatedBasis.Run, _) => "Other events in this run, newest first.",
+                (RelatedBasis.Target, 0) => "No other events about this target within an hour.",
+                (RelatedBasis.Target, _) => "Events about this target within an hour, newest first.",
                 _ => string.Empty,
             };
         }
         catch (OperationCanceledException) when (ReferenceEquals(_correlation, source))
         {
-            RelatedNote = "Related events took too long to look up and were skipped.";
+            RelatedNote = "Related events took too long and were skipped.";
         }
         catch (OperationCanceledException)
         {
@@ -346,11 +346,11 @@ public sealed partial class AuditPanelViewModel
                     f.Description));
             }
 
-            FindingsNote = findings.Count == 0 ? "No scan findings were recorded for this run." : string.Empty;
+            FindingsNote = findings.Count == 0 ? "No scan findings for this run." : string.Empty;
         }
         catch (OperationCanceledException) when (ReferenceEquals(_correlation, source))
         {
-            FindingsNote = "Findings took too long to look up and were skipped.";
+            FindingsNote = "Findings took too long and were skipped.";
         }
         catch (OperationCanceledException)
         {
@@ -376,8 +376,8 @@ public sealed partial class AuditPanelViewModel
         if (ActiveReader is not { Exists: true } reader)
         {
             ExportNote = IsArchive
-                ? "There is no readable archive to export from."
-                : "There is no audit database to export from yet.";
+                ? "No readable archive to export."
+                : "No audit database to export yet.";
             return;
         }
 
@@ -425,12 +425,12 @@ public sealed partial class AuditPanelViewModel
             var total = totalRead is null ? (int?)null : await totalRead;
             ExportNote = actionable
                 ? page.HasMore
-                    ? $"Exported {written} actionable events from the newest {ExportCap.ToString("N0", CultureInfo.CurrentCulture)} read (the cap; older events were not looked at) to {path}."
+                    ? $"Exported {written} actionable events from the newest {ExportCap.ToString("N0", CultureInfo.CurrentCulture)} read (the cap) to {path}."
                     : $"Exported {written} actionable events to {path}."
                 : page.HasMore || (total is { } t && t > events.Count)
                     ? total is { } all
-                        ? $"Exported the newest {written} of {all.ToString("N0", CultureInfo.CurrentCulture)} matching events (the cap is {ExportCap.ToString("N0", CultureInfo.CurrentCulture)}) to {path}."
-                        : $"Exported the newest {written} matching events (the cap is {ExportCap.ToString("N0", CultureInfo.CurrentCulture)}; more match) to {path}."
+                        ? $"Exported the newest {written} of {all.ToString("N0", CultureInfo.CurrentCulture)} matching events (cap {ExportCap.ToString("N0", CultureInfo.CurrentCulture)}) to {path}."
+                        : $"Exported the newest {written} matching events (cap {ExportCap.ToString("N0", CultureInfo.CurrentCulture)}; more match) to {path}."
                     : $"Exported {written} matching events to {path}.";
         }
         catch (OperationCanceledException)

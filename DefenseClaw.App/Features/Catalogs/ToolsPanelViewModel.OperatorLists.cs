@@ -88,12 +88,12 @@ public sealed partial class ToolsPanelViewModel
 
         ShowOperatorLists = lists.SecureClient || sections.Count > 0;
         OperatorListsSummary = lists.SecureClient
-            ? "This is a Secure Client install: its block and allow decisions are kept in the audit store, not in config.yaml, so there are no lists to show here."
+            ? "Secure Client install: block and allow decisions are in the audit store, so there are no config.yaml lists to show."
             : sections.Count == 0
                 ? string.Empty
                 : string.Create(
                     CultureInfo.CurrentCulture,
-                    $"{lists.Total} rule{(lists.Total == 1 ? string.Empty : "s")} in config.yaml asset_policy (read-only). Block, Allow and Unblock on this panel and on Skills, MCPs and Plugins run the reviewed commands that change them.")
+                    $"{lists.Total} rule{(lists.Total == 1 ? string.Empty : "s")} in config.yaml asset_policy (read-only). Change them with Block, Allow and Unblock on Tools, Skills, MCPs and Plugins.")
                   + (lists.Truncated > 0 ? string.Create(CultureInfo.CurrentCulture, $" {lists.Truncated} more are not shown.") : string.Empty);
     }
 }

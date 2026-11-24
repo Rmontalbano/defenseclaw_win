@@ -57,7 +57,7 @@ public sealed class HookRowLabelsTests : IDisposable
         Assert.Equal("PreToolUse", refusal.Event);
         Assert.Equal("gateway unreachable: dial tcp 127.0.0.1:18970: connect refused", refusal.Reason);
         Assert.True(refusal.IsRefusal);
-        Assert.Contains("Hook blocked the call itself", refusal.Headline, StringComparison.Ordinal);
+        Assert.Contains("Hook blocked the call", refusal.Headline, StringComparison.Ordinal);
         Assert.Contains("hook_fail_mode is closed", refusal.Explanation, StringComparison.Ordinal);
         Assert.Contains(HookFailureRow.FailuresLog, refusal.Explanation, StringComparison.Ordinal);
     }
@@ -69,7 +69,7 @@ public sealed class HookRowLabelsTests : IDisposable
         Assert.Equal(HookFailureKind.ResultRefused, result.Kind);
         Assert.Equal("PostToolUse", result.Event);
         Assert.Equal("gateway timeout", result.Reason);
-        Assert.Contains("tool's result", result.Headline, StringComparison.Ordinal);
+        Assert.Contains("tool result", result.Headline, StringComparison.Ordinal);
 
         var prompt = HookFailureRow.Parse("guardrail-block", EventRefused)!;
         Assert.Equal(HookFailureKind.EventRefused, prompt.Kind);

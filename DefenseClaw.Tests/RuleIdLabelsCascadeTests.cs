@@ -8,10 +8,10 @@ namespace DefenseClaw.Tests;
 /// </summary>
 public sealed class RuleIdLabelsCascadeTests
 {
-    private const string OldLimit = "A shell command too long or too complex for the policy check.";
+    private const string OldLimit = "Shell command too long or too complex for the policy check";
     private const string NewLimit =
-        "An input too large or too complex for the policy check to read in full (a command, a tool's output or a model reply); DefenseClaw judged it at the rule pack's unknown tier.";
-    private const string Drift = "The alignment check (a question to the LLM judge) found that this tool call does not serve the task the user gave.";
+        "Input too large or complex for the policy check, judged at the unknown tier";
+    private const string Drift = "Alignment check: this tool call does not serve the user's task";
 
     [Fact]
     public void The_cascade_era_words_the_limit_for_every_surface_and_adds_the_alignment_check()
@@ -30,7 +30,7 @@ public sealed class RuleIdLabelsCascadeTests
             Assert.Equal(RuleIdLabels.Sentence(id), RuleIdLabels.Sentence(id, cascadeEra: true));
         }
 
-        Assert.Contains("more than 1024 operands", RuleIdLabels.Sentence("ACTION-OPERAND-BOUND", cascadeEra: true), StringComparison.Ordinal);
+        Assert.Contains("More than 1024 operands", RuleIdLabels.Sentence("ACTION-OPERAND-BOUND", cascadeEra: true), StringComparison.Ordinal);
         Assert.Null(RuleIdLabels.Sentence("CMD-X", cascadeEra: true));
     }
 
@@ -64,9 +64,9 @@ public sealed class RuleIdLabelsCascadeTests
     [Theory]
     [InlineData("blocked", "mode=action", "It was blocked.", "The call was blocked.")]
     [InlineData(null, "action=block raw_action=block mode=action would_block=true", "It was blocked.", "The call was blocked.")]
-    [InlineData(null, "action=alert raw_action=alert mode=observe", "It went through; DefenseClaw recorded it as an alert (observe mode).", "The call ran; DefenseClaw recorded it as an alert (observe mode).")]
-    [InlineData("alert", "mode=action", "It went through; DefenseClaw recorded it as an alert (the strict rule pack blocks it).", "The call ran; DefenseClaw recorded it as an alert (the strict rule pack blocks it).")]
-    [InlineData("allow", "raw_action=alert mode=action", "It went through; DefenseClaw recorded it as an alert (the strict rule pack blocks it).", "The call ran; DefenseClaw recorded it as an alert (the strict rule pack blocks it).")]
+    [InlineData(null, "action=alert raw_action=alert mode=observe", "It ran and was recorded as an alert (observe mode).", "The call ran and was recorded as an alert (observe mode).")]
+    [InlineData("alert", "mode=action", "It ran and was recorded as an alert. The strict rule pack blocks it.", "The call ran and was recorded as an alert. The strict rule pack blocks it.")]
+    [InlineData("allow", "raw_action=alert mode=action", "It ran and was recorded as an alert. The strict rule pack blocks it.", "The call ran and was recorded as an alert. The strict rule pack blocks it.")]
     public void The_limit_outcome_is_worded_for_every_surface_in_the_cascade_era_and_as_before_otherwise(string? decision, string details, string cascade, string before)
     {
         Assert.Equal(cascade, RuleIdLabels.CompoundLimitOutcome(decision, details, cascadeEra: true));
@@ -82,11 +82,11 @@ public sealed class RuleIdLabelsCascadeTests
     }
 
     [Theory]
-    [InlineData("allow", null, "Measured only: the call was not changed (the alignment lane records without acting in shadow mode, and observe mode never acts).")]
-    [InlineData(null, "connector=codex action=allow raw_action=allow mode=observe", "Measured only: the call was not changed (the alignment lane records without acting in shadow mode, and observe mode never acts).")]
-    [InlineData(null, "connector=codex mode=shadow would_block=false", "Measured only: the call was not changed (the alignment lane records without acting in shadow mode, and observe mode never acts).")]
-    [InlineData("alert", null, "The call ran; DefenseClaw recorded an alert.")]
-    [InlineData(null, "action=alert raw_action=alert", "The call ran; DefenseClaw recorded an alert.")]
+    [InlineData("allow", null, "Measured only. The call was not changed.")]
+    [InlineData(null, "connector=codex action=allow raw_action=allow mode=observe", "Measured only. The call was not changed.")]
+    [InlineData(null, "connector=codex mode=shadow would_block=false", "Measured only. The call was not changed.")]
+    [InlineData("alert", null, "The call ran and was recorded as an alert.")]
+    [InlineData(null, "action=alert raw_action=alert", "The call ran and was recorded as an alert.")]
     [InlineData("blocked", null, "The call was blocked.")]
     [InlineData(null, "action=deny", "The call was blocked.")]
     public void The_alignment_outcome_comes_from_the_rows_own_fields(string? decision, string? details, string expected) =>
@@ -95,10 +95,10 @@ public sealed class RuleIdLabelsCascadeTests
     // Audit and Logs pass the details only, Alerts also the decision label: one row reads one way, and an allow that carries raw_action=alert is an alert
     // (the same rule CompoundLimitOutcome applies).
     [Theory]
-    [InlineData(null, "action=allow raw_action=alert", "The call ran; DefenseClaw recorded an alert.")]
-    [InlineData("allow", "action=allow raw_action=alert", "The call ran; DefenseClaw recorded an alert.")]
-    [InlineData("allowed", "raw_action=alert", "The call ran; DefenseClaw recorded an alert.")]
-    [InlineData(null, "action=allow raw_action=allow", "Measured only: the call was not changed (the alignment lane records without acting in shadow mode, and observe mode never acts).")]
+    [InlineData(null, "action=allow raw_action=alert", "The call ran and was recorded as an alert.")]
+    [InlineData("allow", "action=allow raw_action=alert", "The call ran and was recorded as an alert.")]
+    [InlineData("allowed", "raw_action=alert", "The call ran and was recorded as an alert.")]
+    [InlineData(null, "action=allow raw_action=allow", "Measured only. The call was not changed.")]
     [InlineData(null, "action=block raw_action=alert", "The call was blocked.")]
     public void An_allow_with_raw_action_alert_reads_as_an_alert_on_every_surface(string? decision, string? details, string expected)
     {

@@ -49,7 +49,7 @@ public static class PolicyDiff
 
         if (before is null)
         {
-            return Incomplete("The policy in force could not be read, so what this changes cannot be compared. Assume it can reduce protection.");
+            return Incomplete("The policy in force could not be read, so the change cannot be compared. Assume it can reduce protection.");
         }
 
         var lines = new List<PolicyChangeLine>();

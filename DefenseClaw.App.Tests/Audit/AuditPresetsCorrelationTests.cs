@@ -280,7 +280,7 @@ public sealed class AuditPresetsCorrelationTests : IDisposable
 
         Assert.Equal(new[] { "blk-2", "scan-1" }, panel.RelatedEvents.Select(r => r.Id).OrderBy(i => i, StringComparer.Ordinal));
         Assert.DoesNotContain(panel.RelatedEvents, r => r.Id == "blk-1");
-        Assert.Equal("Other events of the same run, newest first.", panel.RelatedNote);
+        Assert.Equal("Other events in this run, newest first.", panel.RelatedNote);
         Assert.Equal(new[] { "Exfil", "Odd" }, panel.RunFindings.Select(f => f.Title));
         Assert.Equal("High", panel.RunFindings[0].SeverityKey);
         Assert.Equal("skill-scan · SKILL.md:3", panel.RunFindings[0].Origin);
@@ -304,7 +304,7 @@ public sealed class AuditPresetsCorrelationTests : IDisposable
 
         Assert.Equal(8, panel.RelatedEvents.Count);
         Assert.Empty(panel.RunFindings);
-        Assert.Equal("No scan findings were recorded for this run.", panel.FindingsNote);
+        Assert.Equal("No scan findings for this run.", panel.FindingsNote);
     }
 
     [Fact]
@@ -321,7 +321,7 @@ public sealed class AuditPresetsCorrelationTests : IDisposable
 
         panel.SelectedRow = panel.Rows.First(r => r.Id == "evt-000003");
         await panel.LastCorrelation;
-        Assert.Contains("no run id or target", panel.RelatedNote, StringComparison.Ordinal);
+        Assert.Contains("No run id or target", panel.RelatedNote, StringComparison.Ordinal);
 
         panel.SelectedRow = null;
         Assert.Empty(panel.RelatedEvents);

@@ -62,13 +62,13 @@ public sealed class ShadowMeasurementRowTests
     {
         Assert.Equal("Shadow measurement (no action taken)", ShadowMeasurementRow.Headline);
         Assert.Equal(
-            "What the effects lane would have done (would=block); the call was not changed.",
+            "What the effects lane would have done (would=block). The call was not changed.",
             ShadowMeasurementRow.Describe("guardrail-inspection", "codex", Effects));
         Assert.Equal(
-            "What secret flow tracking would have done (would=block); the call was not changed.",
+            "What secret flow tracking would have done (would=block). The call was not changed.",
             ShadowMeasurementRow.Describe("guardrail-inspection", "secret-flow:shadow", SecretFlow));
         Assert.Equal(
-            "What the effects lane would have done; the call was not changed.",
+            "What the effects lane would have done. The call was not changed.",
             ShadowMeasurementRow.Describe("guardrail-inspection", "codex", "lane=effects-shadow mode=shadow"));
         Assert.Null(ShadowMeasurementRow.Describe("guardrail-block", "codex", Effects));
     }

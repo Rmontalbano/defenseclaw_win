@@ -60,7 +60,7 @@ public sealed partial class PoliciesPanelViewModel : PanelViewModelBase
     internal static readonly TimeSpan StaleAfter = TimeSpan.FromMinutes(2);
 
     private const string ClassicDescription =
-        "Security policies for skills, MCP servers and plugins: which are built in, which you made, and which one is active.";
+        "Built-in and custom policies for skills, MCP servers and plugins.";
 
     private readonly IPolicyBackend _backend;
     private readonly bool _surfaceFixed;
@@ -473,7 +473,7 @@ public sealed partial class PoliciesPanelViewModel : PanelViewModelBase
                          || (argv[1] == "show" && argv.Count == 3 && PolicyNames.IsSafe(argv[2])));
         if (!isRead)
         {
-            throw new InvalidOperationException($"'{string.Join(' ', argv)}' is not a read-only policy command, so it has to be reviewed first.");
+            throw new InvalidOperationException($"'{string.Join(' ', argv)}' is not a read-only policy command. It needs review first.");
         }
 
         return RunCliAsync(argv, background ? CliRunOptions.BackgroundRead : CliRunOptions.JsonRead);
@@ -517,7 +517,7 @@ public sealed partial class PoliciesPanelViewModel : PanelViewModelBase
         }
         catch (CliNotFoundException ex)
         {
-            FailLoad(PoliciesState.CliUnavailable, "The defenseclaw CLI was not found", $"Policies cannot be listed without it. {ex.Message}");
+            FailLoad(PoliciesState.CliUnavailable, "The defenseclaw CLI was not found", $"Policies cannot be listed. {ex.Message}");
             return;
         }
 
@@ -535,7 +535,7 @@ public sealed partial class PoliciesPanelViewModel : PanelViewModelBase
 
         if (invocation.IsOutputTruncated)
         {
-            FailLoad(PoliciesState.Error, "The policy list is too large to read here", $"'{command}' printed more than this app keeps for one command.");
+            FailLoad(PoliciesState.Error, "The policy list is too large to read", $"'{command}' printed more output than the app keeps.");
             return;
         }
 
@@ -579,7 +579,7 @@ public sealed partial class PoliciesPanelViewModel : PanelViewModelBase
 
         if (_lastLoadedAt is { } at && _all.Count > 0)
         {
-            RefreshWarning = $"{title}: {message} Showing the last good read (as of {at.LocalDateTime:HH:mm}); changes are off until the list is read again.";
+            RefreshWarning = $"{title}: {message} Showing the last read, from {at.LocalDateTime:HH:mm}. Changes are off until the list is read again.";
             return;
         }
 
@@ -660,7 +660,7 @@ public sealed partial class PoliciesPanelViewModel : PanelViewModelBase
         var generation = ++_detailGeneration;
         if (!row.HasSafeName)
         {
-            DetailError = "This name cannot be passed to the CLI safely, so its detail is not read.";
+            DetailError = "This name has characters the CLI cannot take safely, so its detail is not read.";
             return;
         }
 

@@ -63,9 +63,8 @@ public sealed partial class SkillsPanelViewModel : GovernPanelViewModelBase
     protected override string BuildEmptyTitle(string scope) => $"No skills installed for {scope}";
 
     protected override string BuildEmptyDetail(string scope) =>
-        "DefenseClaw 0.8.10 lists the skill folders of each connector (for Claude Code, ~\\.claude\\skills). " +
-        "Skills that ship inside plugins, or live in a project's .claude\\skills folder, are not visible to it, " +
-        "so an empty list here means nothing was found in the folders it looked at, not that nothing is installed.";
+        "DefenseClaw 0.8.10 reads each connector's skill folder (Claude Code: ~\\.claude\\skills). " +
+        "Skills inside plugins or in a project's .claude\\skills folder are not listed.";
 
     protected override GovernRow? ParseRow(JsonElement item, string? groupConnector)
     {
@@ -84,6 +83,7 @@ public sealed partial class SkillsPanelViewModel : GovernPanelViewModelBase
 
         var fields = new List<GovernField>();
         AddField(fields, "Name", name);
+        AddField(fields, "Description", GovernJson.Str(item, "description"));
         AddField(fields, "Connector", connector);
         AddField(fields, "Status", state.Status);
         AddField(fields, "Source", source);
@@ -135,7 +135,7 @@ public sealed partial class SkillsPanelViewModel : GovernPanelViewModelBase
     protected override string? NoteFor(GovernVerbs verb, GovernRow row) => verb switch
     {
         GovernVerbs.Block =>
-            "Blocks future installs of this skill: it is rejected before any scan. A skill that is already installed keeps running; use Disable or Quarantine for that.",
+            "Rejects future installs before any scan, but an installed skill keeps running. Use Disable or Quarantine to stop it.",
         GovernVerbs.Allow =>
             "Allow-listed skills skip the scan gate during install. Allowing also removes the skill from the block list.",
         _ => base.NoteFor(verb, row),
@@ -206,7 +206,7 @@ public sealed partial class SkillsPanelViewModel : GovernPanelViewModelBase
         }
         else
         {
-            notes.Add("Without the policy option the scan only reports findings; nothing is enforced.");
+            notes.Add("Without the policy option the scan only reports findings. Nothing is enforced.");
         }
 
         if (InstallForce)
@@ -235,6 +235,6 @@ public sealed partial class SkillsPanelViewModel : GovernPanelViewModelBase
         ArgumentNullException.ThrowIfNull(name);
         return ClawHubNamePattern.IsMatch(name)
             ? null
-            : "That is not a ClawHub skill name: use letters, digits, '.', '_' and '-' (up to 128 characters), with no path, URL or @version.";
+            : "That is not a ClawHub skill name. Use letters, digits, '.', '_' and '-' (up to 128 characters), with no path, URL or @version.";
     }
 }

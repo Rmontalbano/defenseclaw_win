@@ -83,7 +83,7 @@ public sealed partial class AuditPanelViewModel
     /// <summary>"Archived history, up to Mar 2, 2026 8:03 AM" (the newest event, in the operator's time zone).</summary>
     public string ArchiveBanner => ArchiveNewest is { } newest
         ? $"Archived history, up to {newest.ToLocalTime().ToString("f", CultureInfo.CurrentCulture)}"
-        : "Archived history (the archive has no events)";
+        : "Archived history: no events";
 
     /// <summary>The time range a source opens on and Reset filters returns to: the last 24 hours live, all time for the archive (its newest event is months old).</summary>
     private TimeRangeOption DefaultRange => IsArchive ? TimeRangeOption.AllTime : TimeRangeOption.Day;

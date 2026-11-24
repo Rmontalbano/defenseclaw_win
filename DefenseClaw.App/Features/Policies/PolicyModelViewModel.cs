@@ -80,7 +80,7 @@ public sealed partial class PolicyModelViewModel : PanelViewModelBase, IDisposab
     public override string Title => "Policies";
 
     public override string Description =>
-        "The connected runtime's policy model: posture per scope, opt-in protection packs, chains, rule families, named policies and rule packs.";
+        "Posture, opt-in packs, chains, rule families, policies and rule packs.";
 
     // ---- what is shown -----------------------------------------------------------------------------------------------------
 
@@ -221,8 +221,8 @@ public sealed partial class PolicyModelViewModel : PanelViewModelBase, IDisposab
     /// <summary>What a view whose rows cannot be changed says under the table.</summary>
     public string ReadOnlyNote => View switch
     {
-        "chains" => "Built in and read-only: the runtime does not let chains be changed or turned off.",
-        "families" => "Read-only: a scope's rule families follow its rule pack. Switch the pack on Posture or Rule packs.",
+        "chains" => "Built in. The runtime does not let chains be changed or turned off.",
+        "families" => "Read-only. A scope's rule families follow its rule pack. Switch the pack on Posture or Rule packs.",
         _ => string.Empty,
     };
 
@@ -368,7 +368,7 @@ public sealed partial class PolicyModelViewModel : PanelViewModelBase, IDisposab
         ArgumentNullException.ThrowIfNull(argv);
         if (!PolicyActionGuard.IsAllowedRead(argv))
         {
-            throw new InvalidOperationException($"'{string.Join(' ', argv)}' is not a read-only Policies command, so it has to be reviewed first.");
+            throw new InvalidOperationException($"'{string.Join(' ', argv)}' is not a read-only Policies command. It needs review first.");
         }
 
         var options = background ? CliRunOptions.BackgroundRead : CliRunOptions.JsonRead;
@@ -474,7 +474,7 @@ public sealed partial class PolicyModelViewModel : PanelViewModelBase, IDisposab
         {
             if (generation == _generation)
             {
-                FailLoad(PoliciesState.CliUnavailable, "The defenseclaw CLI was not found", $"Policies cannot be read without it. {ex.Message}");
+                FailLoad(PoliciesState.CliUnavailable, "The defenseclaw CLI was not found", $"Policies cannot be read. {ex.Message}");
             }
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
@@ -510,7 +510,7 @@ public sealed partial class PolicyModelViewModel : PanelViewModelBase, IDisposab
         {
             Trust.MarkPartial(read.Problems);
             ReadWarningTitle = "Incomplete read";
-            ReadWarning = string.Join("\n", read.Problems) + "\nThe rest is shown; changes are off until a read is complete.";
+            ReadWarning = string.Join("\n", read.Problems) + "\nThe rest is shown. Changes are off until a read is complete.";
         }
 
         State = PoliciesState.Loaded;
@@ -525,7 +525,7 @@ public sealed partial class PolicyModelViewModel : PanelViewModelBase, IDisposab
         if (_model is not null && _lastLoadedAt is { } at)
         {
             ReadWarningTitle = "Showing an older read";
-            ReadWarning = $"{title}: {message} Showing the last good read (as of {at.LocalDateTime:HH:mm}); changes are off until the policies are read again.";
+            ReadWarning = $"{title}: {message} Showing the last read, from {at.LocalDateTime:HH:mm}. Changes are off until the policies are read again.";
             return;
         }
 

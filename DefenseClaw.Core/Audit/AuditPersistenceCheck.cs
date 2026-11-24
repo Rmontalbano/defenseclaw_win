@@ -70,12 +70,12 @@ public static class AuditPersistenceCheck
         {
             if (!File.Exists(databasePath))
             {
-                return new AuditPersistence(AuditPersistenceState.Missing, "audit.db does not exist yet, so no event of the new gateway can be seen.");
+                return new AuditPersistence(AuditPersistenceState.Missing, "audit.db does not exist yet.");
             }
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            return new AuditPersistence(AuditPersistenceState.Unreadable, "audit.db could not be looked at (" + ex.GetType().Name + ").");
+            return new AuditPersistence(AuditPersistenceState.Unreadable, "audit.db could not be checked (" + ex.GetType().Name + ").");
         }
 
         var from = since - Slack;
@@ -116,7 +116,7 @@ public static class AuditPersistenceCheck
             {
                 return new AuditPersistence(
                     AuditPersistenceState.NoNewRow,
-                    "audit.db answered, but holds no event written since the gateway started at " + Clock(since) + " (not even its start record).");
+                    "audit.db has no event since the gateway started at " + Clock(since) + ", not even its start record.");
             }
 
             var action = reader.IsDBNull(0) ? null : reader.GetString(0);
@@ -128,8 +128,8 @@ public static class AuditPersistenceCheck
             var newest = action is { Length: > 0 and <= 64 } a ? a : "an event";
             return new AuditPersistence(
                 AuditPersistenceState.Persisted,
-                (started ? "The gateway's start was recorded in audit.db" : "audit.db has events written since the gateway started") +
-                $"; the newest is {newest}" + (at is { } when ? " at " + Clock(when) : string.Empty) + ".",
+                (started ? "The gateway's start is recorded in audit.db" : "audit.db has events since the gateway started") +
+                $". Newest: {newest}" + (at is { } when ? " at " + Clock(when) : string.Empty) + ".",
                 at,
                 action);
         }
@@ -137,23 +137,22 @@ public static class AuditPersistenceCheck
         {
             return new AuditPersistence(
                 AuditPersistenceState.Busy,
-                $"audit.db was held by a writer for more than {Math.Max(1, busyTimeoutSeconds).ToString(CultureInfo.InvariantCulture)} s (SQLite busy), so this " +
-                "check could not see the newest events. The gateway's retention cleanup can hold it that long; that is contention, not damage. Refresh to look again.");
+                $"audit.db was busy for more than {Math.Max(1, busyTimeoutSeconds).ToString(CultureInfo.InvariantCulture)} s, so the newest events were not checked. " +
+                "Retention cleanup can hold it that long. Refresh to check again.");
         }
         catch (SqliteException ex) when (ex.Message.Contains("no such table", StringComparison.OrdinalIgnoreCase))
         {
-            return new AuditPersistence(AuditPersistenceState.NoNewRow, "audit.db has no audit_events table yet, so nothing has been recorded in it.");
+            return new AuditPersistence(AuditPersistenceState.NoNewRow, "audit.db has no audit_events table yet.");
         }
         catch (SqliteException ex)
         {
             return new AuditPersistence(
                 AuditPersistenceState.Unreadable,
-                $"audit.db could not be read for this check (SQLite error {ex.SqliteErrorCode.ToString(CultureInfo.InvariantCulture)}). One failed read says nothing " +
-                "about the state of the database, and this app changes nothing in it.");
+                $"audit.db could not be read (SQLite error {ex.SqliteErrorCode.ToString(CultureInfo.InvariantCulture)}). One failed read does not mean the database is damaged.");
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
         {
-            return new AuditPersistence(AuditPersistenceState.Unreadable, "audit.db could not be opened for this check (" + ex.GetType().Name + ").");
+            return new AuditPersistence(AuditPersistenceState.Unreadable, "audit.db could not be opened (" + ex.GetType().Name + ").");
         }
     }
 

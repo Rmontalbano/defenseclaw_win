@@ -64,12 +64,12 @@ public static class AuditArchive
 
         if (IsInside(fullPath, dataDirectory) || IsInside(Resolve(fullPath), dataDirectory))
         {
-            return $"The archive must be kept outside the live DefenseClaw folder ({dataDirectory}): an upgrade purges history there, and the live database is being written. Copy it somewhere else first.";
+            return $"Keep the archive outside the live DefenseClaw folder ({dataDirectory}). An upgrade purges history there. Copy it elsewhere first.";
         }
 
         if (Directory.Exists(fullPath))
         {
-            return "That is a folder. Choose the archived audit.db file itself.";
+            return "That is a folder. Choose the archived audit.db file.";
         }
 
         if (!File.Exists(fullPath))

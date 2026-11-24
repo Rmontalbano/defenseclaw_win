@@ -81,7 +81,7 @@ public sealed class RuleLabelLogsTests : IDisposable
         var limit = Row(panel, "limit");
         Assert.Equal("ACTION-COMPOUND-LIMIT, CMD-X", Field(limit, "Categories"));
         Assert.Equal(RuleIdLabels.Sentence("ACTION-COMPOUND-LIMIT"), Field(limit, "Rule meaning"));
-        Assert.StartsWith("The call ran; DefenseClaw recorded it as an alert", Field(limit, "Call outcome"), StringComparison.Ordinal);
+        Assert.StartsWith("The call ran and was recorded as an alert", Field(limit, "Call outcome"), StringComparison.Ordinal);
 
         var tamper = Row(panel, "tamper");
         Assert.Equal(RuleIdLabels.Sentence("tamper.agent_hook_config_write"), Field(tamper, "Rule meaning"));

@@ -79,7 +79,7 @@ public static class ShadowMeasurementRow
         var subject = IsEffectsLane(details) ? "the effects lane" : "secret flow tracking";
         var would = Would(details);
         return would.Length > 0
-            ? $"What {subject} would have done (would={would}); the call was not changed."
-            : $"What {subject} would have done; the call was not changed.";
+            ? $"What {subject} would have done (would={would}). The call was not changed."
+            : $"What {subject} would have done. The call was not changed.";
     }
 }

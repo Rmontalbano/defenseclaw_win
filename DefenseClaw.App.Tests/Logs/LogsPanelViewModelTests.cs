@@ -231,7 +231,7 @@ public sealed class LogsPanelViewModelTests : IDisposable
         Assert.True(panel.ShowTailFault);
         Assert.Contains("gateway.log", panel.TailFaultText, StringComparison.Ordinal);
         Assert.Contains("InvalidOperationException: boom", panel.TailFaultText, StringComparison.Ordinal);
-        Assert.Contains("retries in 2 s", panel.TailFaultText, StringComparison.Ordinal);
+        Assert.Contains("Retrying in 2 s", panel.TailFaultText, StringComparison.Ordinal);
     }
 
     [Fact]

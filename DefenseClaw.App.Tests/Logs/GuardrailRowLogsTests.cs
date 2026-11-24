@@ -23,8 +23,8 @@ public sealed class GuardrailRowLogsTests : IDisposable
     private const string Dropped =
         "hook blocked the call itself (fail-closed, PreToolUse): the agent got this block, not a gateway decision recorded for the call: \"gateway unreachable\"; see logs/hook-failures.dropped";
 
-    private const string OldLimit = "A shell command too long or too complex for the policy check.";
-    private const string OldOperand = "The command had more than 1024 operands: the first 1024, and every later word that may name a protected file or is a link, were checked; the other names were not.";
+    private const string OldLimit = "Shell command too long or too complex for the policy check";
+    private const string OldOperand = "More than 1024 operands, so later words were checked only for protected files and links";
 
     private static readonly DateTimeOffset Base = new(2026, 10, 1, 12, 0, 0, TimeSpan.Zero);
 
@@ -114,14 +114,14 @@ public sealed class GuardrailRowLogsTests : IDisposable
         var panel = await PanelAsync(version, actionableOnly: false);
 
         Assert.Equal(
-            "What the effects lane would have done (would=block); the call was not changed.",
+            "What the effects lane would have done (would=block). The call was not changed.",
             Field(Row(panel, "shadow-effects"), "Shadow measurement"));
         Assert.Equal(
-            "What secret flow tracking would have done (would=block); the call was not changed.",
+            "What secret flow tracking would have done (would=block). The call was not changed.",
             Field(Row(panel, "shadow-secret"), "Shadow measurement"));
-        Assert.Equal("Inspection timed out: the call was decided without this check", Field(Row(panel, "timeout-scan"), "Inspection timeout"));
+        Assert.Equal("Inspection timed out, call decided without it", Field(Row(panel, "timeout-scan"), "Inspection timeout"));
         Assert.Equal(
-            "Inspection timed out: the call was decided without this check (the caller canceled it)",
+            "Inspection canceled by the caller, call decided without it",
             Field(Row(panel, "timeout-canceled"), "Inspection timeout"));
 
         var cascade = Row(panel, "cascade");
@@ -160,7 +160,7 @@ public sealed class GuardrailRowLogsTests : IDisposable
         var row = Row(panel, "dropped");
         Assert.Equal("Hook (gateway unreachable)", Field(row, "Decided by"));
         Assert.EndsWith(
-            " The hook could not finish its usual record, so it logged the call in logs\\hook-failures.dropped.",
+            " The usual record could not be written, so the call is logged in logs\\hook-failures.dropped.",
             Field(row, "Explanation"),
             StringComparison.Ordinal);
     }
@@ -172,14 +172,14 @@ public sealed class GuardrailRowLogsTests : IDisposable
 
         var limit = Row(panel, "limit");
         Assert.Equal(
-            "An input too large or too complex for the policy check to read in full (a command, a tool's output or a model reply); DefenseClaw judged it at the rule pack's unknown tier.",
+            "Input too large or complex for the policy check, judged at the unknown tier",
             Field(limit, "Rule meaning"));
-        Assert.Equal("It went through; DefenseClaw recorded it as an alert (the strict rule pack blocks it).", Field(limit, "Call outcome"));
+        Assert.Equal("It ran and was recorded as an alert. The strict rule pack blocks it.", Field(limit, "Call outcome"));
 
         var drift = Row(panel, "drift");
-        Assert.Equal("The alignment check (a question to the LLM judge) found that this tool call does not serve the task the user gave.", Field(drift, "Rule meaning"));
+        Assert.Equal("Alignment check: this tool call does not serve the user's task", Field(drift, "Rule meaning"));
         Assert.Equal(
-            "Measured only: the call was not changed (the alignment lane records without acting in shadow mode, and observe mode never acts).",
+            "Measured only. The call was not changed.",
             Field(drift, "Call outcome"));
 
         Assert.Equal(OldOperand, Field(Row(panel, "operand"), "Rule meaning"));
@@ -192,7 +192,7 @@ public sealed class GuardrailRowLogsTests : IDisposable
 
         var limit = Row(panel, "limit");
         Assert.Equal(OldLimit, Field(limit, "Rule meaning"));
-        Assert.Equal("The call ran; DefenseClaw recorded it as an alert (the strict rule pack blocks it).", Field(limit, "Call outcome"));
+        Assert.Equal("The call ran and was recorded as an alert. The strict rule pack blocks it.", Field(limit, "Call outcome"));
         Assert.Equal("ACTION-COMPOUND-LIMIT, CMD-X", Field(limit, "Categories"));
 
         Assert.Equal(OldOperand, Field(Row(panel, "operand"), "Rule meaning"));

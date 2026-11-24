@@ -36,8 +36,8 @@ public sealed class RuleLabelAuditTests
         var pairs = Pairs(row);
         Assert.DoesNotContain(pairs, p => p.Label == "Rule IDs");
         var meaning = Assert.Single(pairs, p => p.Label == "Rule meaning");
-        Assert.Equal("A shell command too long or too complex for the policy check.", meaning.Value);
-        Assert.Contains(pairs, p => p.Label == "Call outcome" && p.Value.StartsWith("The call ran; DefenseClaw recorded it as an alert", StringComparison.Ordinal));
+        Assert.Equal("Shell command too long or too complex for the policy check", meaning.Value);
+        Assert.Contains(pairs, p => p.Label == "Call outcome" && p.Value.StartsWith("The call ran and was recorded as an alert", StringComparison.Ordinal));
         Assert.DoesNotContain(pairs, p => p.Label == "Rule note");
     }
 
@@ -49,7 +49,7 @@ public sealed class RuleLabelAuditTests
         var pairs = Pairs(row, new DetailPair("Rule Id", "ACTION-COMPOUND-LIMIT: Shell command exceeds policy evaluation limit"), new DetailPair("Mode", "action"));
         Assert.Equal(new DetailPair("Rule Id", "ACTION-COMPOUND-LIMIT: Shell command exceeds policy evaluation limit"), pairs[0]);
         Assert.Equal(new DetailPair("Mode", "action"), pairs[1]);
-        Assert.Contains(pairs, p => p.Label == "Rule meaning" && p.Value.StartsWith("A shell command too long", StringComparison.Ordinal));
+        Assert.Contains(pairs, p => p.Label == "Rule meaning" && p.Value.StartsWith("Shell command too long", StringComparison.Ordinal));
         Assert.Contains(pairs, p => p.Label == "Call outcome" && p.Value == "The call was blocked.");
     }
 
@@ -58,7 +58,7 @@ public sealed class RuleLabelAuditTests
     {
         var plain = Hook("no pairs here", "{\"rule_ids\":[\"tamper.agent_hook_config_write\"]}");
         var pairs = Pairs(plain);
-        Assert.Contains(pairs, p => p.Label == "Rule meaning" && p.Value.StartsWith("A shell command that writes", StringComparison.Ordinal));
+        Assert.Contains(pairs, p => p.Label == "Rule meaning" && p.Value.StartsWith("Shell command that writes", StringComparison.Ordinal));
         Assert.DoesNotContain(pairs, p => p.Label is "Call outcome" or "Rule note");
 
         var limitOnly = Pairs(Hook("no pairs here", "{\"rule_ids\":[\"ACTION-COMPOUND-LIMIT\"]}"));

@@ -73,7 +73,7 @@ public sealed partial class AlertsPanelViewModel
         var what = count == 1
             ? "1 detection-only finding of the last 24 hours is"
             : count.ToString("N0", CultureInfo.CurrentCulture) + " detection-only findings of the last 24 hours are";
-        return $"{what} not listed: a rule matched but could not decide the call. `defenseclaw audit export --since 24h` lists them.";
+        return $"{what} not listed: a rule matched but could not decide the call. List them with `defenseclaw audit export --since 24h`.";
     }
 
     /// <summary>

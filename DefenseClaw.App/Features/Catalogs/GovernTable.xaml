@@ -164,7 +164,7 @@
             </ItemsControl>
             <TextBlock Style="{StaticResource DcFieldLabel}"
                        Margin="0,8,0,4"
-                       Text="Exactly as the CLI printed it" />
+                       Text="Raw JSON from the CLI" />
             <Border Style="{StaticResource DcCodeBlock}">
                 <TextBox Style="{StaticResource DcMonoTextBox}"
                          MaxHeight="140"
@@ -176,6 +176,16 @@
             </Border>
         </StackPanel>
     </DataTemplate>
+
+    <!-- A cell that holds runtime text of any length (a skill's description): two lines at most, then an ellipsis. The tooltip (from DcCellText) has the whole text. -->
+    <Style x:Key="GovernCellTextClamp2" TargetType="TextBlock" BasedOn="{StaticResource DcCellTextQuiet}">
+        <Setter Property="TextWrapping" Value="Wrap" />
+        <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+        <Setter Property="LineStackingStrategy" Value="BlockLineHeight" />
+        <Setter Property="LineHeight" Value="16" />
+        <Setter Property="MaxHeight" Value="32" />
+        <Setter Property="Margin" Value="0,2,8,2" />
+    </Style>
 
     <!--
         Name, for the tables of items a registry can promote (Skills, MCPs; CUST-276): the name, and under it, for an item a registry promoted, the

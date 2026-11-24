@@ -155,7 +155,7 @@ public sealed partial class PolicyModelViewModel
 
         if (action.Kind == PolicyActionKind.RepinPack && !Services.Runtime.Check(DefenseClaw.Core.Runtime.RuntimeCapability.GuardrailRepin).IsAvailable)
         {
-            return "This runtime cannot re-pin a rule pack (it needs DefenseClaw 1.0.4 or later).";
+            return "Re-pinning a rule pack needs DefenseClaw 1.0.4 or later.";
         }
 
         return PolicyActionGuard.IsAllowedChange(action.Argv) ? null : "The Policies panel does not run this command.";
@@ -259,7 +259,7 @@ public sealed partial class PolicyModelViewModel
                     {
                         ShowNotice(
                             "Switching is withheld",
-                            $"'{action.Title}' was not offered because the pack did not validate ({validation.Summary}). The output is below; fix the pack, then try again.");
+                            $"'{action.Title}' was not applied because the pack did not validate ({validation.Summary}). Fix the pack using the output below, then try again.");
                         return;
                     }
 
@@ -290,7 +290,7 @@ public sealed partial class PolicyModelViewModel
                     {
                         ShowNotice(
                             "Activation is withheld",
-                            $"'{action.Title}' was not offered because policy validate did not pass. The output is below; fix what it names, then try again.");
+                            $"'{action.Title}' was not applied because policy validate failed. Fix what the output below names, then try again.");
                         return;
                     }
 
@@ -312,7 +312,7 @@ public sealed partial class PolicyModelViewModel
         }
         catch (CliNotFoundException ex)
         {
-            ShowNotice("The defenseclaw CLI was not found", $"The change cannot be prepared without it. {ex.Message}", InfoBarSeverity.Error);
+            ShowNotice("The defenseclaw CLI was not found", $"The change cannot be prepared. {ex.Message}", InfoBarSeverity.Error);
         }
         catch (ArgumentExpansionException ex)
         {
@@ -390,7 +390,7 @@ public sealed partial class PolicyModelViewModel
         }
         catch (CliNotFoundException ex)
         {
-            ShowNotice("The defenseclaw CLI was not found", $"A rule pack cannot be validated without it. {ex.Message}", InfoBarSeverity.Error);
+            ShowNotice("The defenseclaw CLI was not found", $"A rule pack cannot be validated. {ex.Message}", InfoBarSeverity.Error);
         }
         catch (ArgumentExpansionException ex)
         {
@@ -461,7 +461,7 @@ public sealed partial class PolicyModelViewModel
             }
 
             var note = transcript.Contains("'opa' binary not found", StringComparison.Ordinal)
-                ? "OPA (the opa executable) is not installed or not on PATH, so DefenseClaw cannot compile or test the Rego bundle. Install OPA, then try again."
+                ? "OPA is not installed or not on PATH, so the Rego bundle cannot be compiled or tested. Install OPA, then try again."
                 : string.Empty;
             ShowOutput("defenseclaw " + string.Join(' ', argv), transcript, false, note);
         }
@@ -485,7 +485,7 @@ public sealed partial class PolicyModelViewModel
         }
         else
         {
-            ShowNotice("The command did not finish", "The review dialog and the Activity panel have its output. The settings above are read again.", InfoBarSeverity.Warning);
+            ShowNotice("The command did not finish", "The review dialog and the Activity panel show its output. The settings are read again.", InfoBarSeverity.Warning);
         }
     }
 

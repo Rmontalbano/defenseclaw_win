@@ -227,7 +227,7 @@ public sealed class PolicyActionTests
         Assert.Equal(new[] { "guardrail", "mode", "observe", "--connector", "claudecode" }, toObserve.Argv);
         Assert.Equal("Switch claudecode to observe mode?", toObserve.Consequence.Heading);
         Assert.Equal("action \u2192 observe", toObserve.Consequence.Summary);
-        Assert.Equal("This weakens protection: claudecode stops blocking; findings are only logged, and its hooks fail open while the gateway is down unless their fail mode is set to closed.", toObserve.Consequence.Warning);
+        Assert.Equal("This weakens protection: claudecode stops blocking and only logs findings. Its hooks fail open while the gateway is down unless their fail mode is closed.", toObserve.Consequence.Warning);
         Assert.Contains("Only this connector changes; the others keep their mode. A running gateway restarts.", toObserve.Consequence.Details);
 
         // codex observes already; going to action is stricter
@@ -280,7 +280,7 @@ public sealed class PolicyActionTests
         Assert.Equal(new[] { "guardrail", "protection", "enable", "privacy-high-assurance" }, on.Argv);
         Assert.Equal("Turn on Privacy high assurance for the global pack?", on.Consequence.Heading);
         Assert.Equal("Turning it on tells DefenseClaw that every connector using the global pack works with high-assurance personal data.", on.Consequence.Summary);
-        Assert.Contains("Not covered, they have their own pack; turn it on there too: codex.", on.Consequence.Details);
+        Assert.Contains("Not covered, because they have their own pack: codex. Turn it on there too.", on.Consequence.Details);
         Assert.Contains(on.Consequence.Details, d => d.StartsWith("Builds guardrail\\protected-global\\default in your policy folder from default", StringComparison.Ordinal));
         Assert.Equal(string.Empty, on.Consequence.Warning);
 
@@ -302,7 +302,7 @@ public sealed class PolicyActionTests
             "This weakens protection: alerts on HIGH+ instead of MEDIUM+; blocks installs of CRITICAL instead of HIGH+; the firewall allows by default instead of denying.",
             permissive.Consequence.Warning);
         Assert.Contains("block CRITICAL \u2192 CRITICAL \u00B7 alert MEDIUM+ \u2192 HIGH+ \u00B7 installs HIGH+ \u2192 CRITICAL", permissive.Consequence.Details);
-        Assert.Contains("Its guardrail thresholds govern LLM traffic through the proxy; tool-call blocking is unchanged (see Posture).", permissive.Consequence.Details);
+        Assert.Contains("Its guardrail thresholds apply to LLM traffic through the proxy. Tool-call blocking is unchanged (see Posture).", permissive.Consequence.Details);
 
         var strict = model.Actions("policies", "strict").Single(a => a.Kind == PolicyActionKind.Activate);
         Assert.False(strict.Weakens);

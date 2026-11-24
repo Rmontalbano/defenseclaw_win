@@ -167,9 +167,9 @@ public sealed partial class PolicyFormViewModel : ObservableObject
     {
         Reset();
         TargetName = policy;
-        TargetNote = (isBuiltIn ? "A built-in policy is not edited in place: the CLI saves the result as a custom copy named " + policy + " in your policy folder, which then shadows the built-in. " : string.Empty)
+        TargetNote = (isBuiltIn ? "A built-in policy is not edited in place. The CLI saves a custom copy named " + policy + " in your policy folder, and the copy shadows the built-in. " : string.Empty)
                      + (isActive
-                         ? "This is the active policy, so the change is applied to the live policy data immediately."
+                         ? "This is the active policy, so the change is applied to the live policy data."
                          : "This is not the active policy, so the change is saved as a draft until you activate it.");
         Mode = PolicyFormMode.Edit;
     }

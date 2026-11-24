@@ -110,7 +110,7 @@ public sealed class PolicyModelPanelTests : IDisposable
 
         Go(vm, "chains");
         Assert.Equal("26 bounded chains · ✓ 4 can block · ◐ 22 alert only · built in, read-only", vm.Headline);
-        Assert.StartsWith("Built in and read-only", vm.ReadOnlyNote, StringComparison.Ordinal);
+        Assert.StartsWith("Built in.", vm.ReadOnlyNote, StringComparison.Ordinal);
         Pick(vm, "chain.sensitive_sql_read_then_unbounded_delete_same_table");
         Assert.Empty(vm.ActionGroups);
 
@@ -248,8 +248,8 @@ public sealed class PolicyModelPanelTests : IDisposable
 
         var summary = vm.Review.CommandReview!.Summary;
         Assert.StartsWith("alert level: MEDIUM+ → LOW+", summary, StringComparison.Ordinal);
-        Assert.Contains("- Only this connector changes; a running gateway restarts to apply it.", summary, StringComparison.Ordinal);
-        Assert.Contains("- These are the levels for tool calls. The policy's levels for LLM traffic through the guardrail proxy are separate (Policies view).", summary, StringComparison.Ordinal);
+        Assert.Contains("- Only this connector changes. A running gateway restarts.", summary, StringComparison.Ordinal);
+        Assert.Contains("- These are tool-call levels. LLM traffic through the guardrail proxy follows the policy's own levels (Policies view).", summary, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -544,7 +544,7 @@ public sealed class PolicyModelPanelTests : IDisposable
         Assert.Equal(3, vm.Rows.Count);
         Assert.Equal("codex", vm.SelectedRow?.Key);
         Assert.Equal("Showing an older read", vm.ReadWarningTitle);
-        Assert.Contains("Showing the last good read", vm.ReadWarning, StringComparison.Ordinal);
+        Assert.Contains("Showing the last read", vm.ReadWarning, StringComparison.Ordinal);
         Assert.False(vm.CanChange);
         Assert.Contains("last read failed", vm.ChangesBlockedReason, StringComparison.Ordinal);
         Assert.All(vm.ActionGroups.SelectMany(g => g.Actions).Where(a => !a.IsRead), a => Assert.False(a.IsEnabled));

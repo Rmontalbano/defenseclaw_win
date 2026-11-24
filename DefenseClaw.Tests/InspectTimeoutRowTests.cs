@@ -35,11 +35,11 @@ public sealed class InspectTimeoutRowTests
         var scan = InspectTimeoutRow.Parse(action, Scan)!;
         Assert.True(scan.IsScanTimeout);
         Assert.False(scan.IsCallerCanceled);
-        Assert.Equal("Inspection timed out: the call was decided without this check", scan.Label);
+        Assert.Equal("Inspection timed out, call decided without it", scan.Label);
 
         var canceled = InspectTimeoutRow.Parse(action, Canceled)!;
         Assert.True(canceled.IsCallerCanceled);
-        Assert.Equal("Inspection timed out: the call was decided without this check (the caller canceled it)", canceled.Label);
+        Assert.Equal("Inspection canceled by the caller, call decided without it", canceled.Label);
     }
 
     [Theory]
@@ -105,7 +105,7 @@ public sealed class InspectTimeoutRowTests
     {
         var note = Assert.Single(GuardrailRowNotes.For("inspect-tool-timeout", "shell", Canceled));
         Assert.Equal("Inspection timeout", note.Key);
-        Assert.Contains("the caller canceled it", note.Value, StringComparison.Ordinal);
+        Assert.Contains("canceled by the caller", note.Value, StringComparison.Ordinal);
         Assert.Equal(InspectTimeoutRow.Parse("inspect-tool-timeout", Scan)!.Label, GuardrailRowNotes.Headline("inspect-tool-timeout", "shell", Scan));
     }
 }

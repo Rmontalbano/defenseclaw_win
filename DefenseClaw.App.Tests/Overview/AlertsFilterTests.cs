@@ -307,7 +307,7 @@ public class AlertsFilterTests
             Assert.Equal(3, vm.Alerts.First(a => a.RuleId == "CMD-ENV-DUMP" && a.Action == "block").RepeatCount);
             Assert.True(vm.Alerts.First(a => a.Action == "block" && a.RuleId == "CMD-ENV-DUMP").IsRepeated);
             Assert.Equal(1, vm.Alerts.Single(a => a.RuleId == "OTHER").RepeatCount);
-            Assert.Equal("3 group(s) · 5 of 5 alerts", vm.CountSummary);
+            Assert.Equal("3 groups · 5 of 5 alerts", vm.CountSummary);
 
             vm.CollapseRepeats = false;
             Assert.Equal(5, vm.Alerts.Count);
@@ -329,7 +329,7 @@ public class AlertsFilterTests
 
             Assert.True(vm.IsEmpty);
             Assert.Equal("No alerts match the current filters", vm.EmptyTitle);
-            Assert.Contains("11 alert(s) are loaded", vm.EmptyDetail, StringComparison.Ordinal);
+            Assert.Contains("11 loaded alerts are hidden", vm.EmptyDetail, StringComparison.Ordinal);
         });
     }
 

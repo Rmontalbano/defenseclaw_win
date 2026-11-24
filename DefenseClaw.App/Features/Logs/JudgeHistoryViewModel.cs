@@ -195,7 +195,7 @@ public sealed partial class JudgeHistoryViewModel : ObservableObject
     public bool IsEmpty => !IsLoading && Items.Count == 0 && !HasBanner;
 
     /// <summary>The text of the empty state, the TUI's.</summary>
-    public string EmptyText => "No judge responses persisted yet. Make sure guardrail.retain_judge_bodies is on and that traffic has been inspected.";
+    public string EmptyText => "No judge responses yet. Check that guardrail.retain_judge_bodies is on and traffic has been inspected.";
 
     partial void OnBannerTextChanged(string value) => OnPropertyChanged(nameof(IsEmpty));
 
@@ -283,8 +283,8 @@ public sealed partial class JudgeHistoryViewModel : ObservableObject
         CountText = Items.Count == 0
             ? string.Empty
             : HasMore
-                ? $"Newest {Items.Count.ToString(CultureInfo.InvariantCulture)} shown; older ones exist"
-                : $"{Items.Count.ToString(CultureInfo.InvariantCulture)} shown, all there are";
+                ? $"Newest {Items.Count.ToString(CultureInfo.InvariantCulture)} shown. Older ones exist."
+                : $"{Items.Count.ToString(CultureInfo.InvariantCulture)} shown, all of them";
         OnPropertyChanged(nameof(IsEmpty));
         OnPropertyChanged(nameof(ShowError));
         OnPropertyChanged(nameof(ShowGuidance));

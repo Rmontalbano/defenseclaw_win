@@ -151,7 +151,7 @@ public class AlertsReviewTests
                 await vm.OpenDismissCommand.ExecuteAsync(null);
 
                 Assert.Equal("defenseclaw alerts dismiss --id alert-001 --id alert-002 --id alert-003 --yes", vm.ConfirmCommandText);
-                Assert.Contains("exactly the alerts listed below", vm.PreviewSummary, StringComparison.Ordinal);
+                Assert.Contains("only to the alerts listed below", vm.PreviewSummary, StringComparison.Ordinal);
 
                 await vm.ConfirmReviewCommand.ExecuteAsync(null);
 
@@ -211,7 +211,7 @@ public class AlertsReviewTests
 
                 Assert.True(vm.ShowActionSuccess);
                 Assert.Contains("Acknowledged 27 alert(s).", vm.ActionBannerText, StringComparison.Ordinal);
-                Assert.Contains("The preview showed 25 alert(s) but 27 were applied", vm.ActionBannerText, StringComparison.Ordinal);
+                Assert.Contains("The preview showed 25 alerts but 27 were applied", vm.ActionBannerText, StringComparison.Ordinal);
             });
     }
 
@@ -239,7 +239,7 @@ public class AlertsReviewTests
                 await vm.OpenDismissCommand.ExecuteAsync(null);
                 await vm.ConfirmReviewCommand.ExecuteAsync(null);
 
-                Assert.Contains("The preview showed 25 alert(s) but 24 were applied", vm.ActionBannerText, StringComparison.Ordinal);
+                Assert.Contains("The preview showed 25 alerts but 24 were applied", vm.ActionBannerText, StringComparison.Ordinal);
             });
     }
 

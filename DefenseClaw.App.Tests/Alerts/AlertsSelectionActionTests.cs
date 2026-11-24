@@ -251,7 +251,7 @@ public sealed class AlertsSelectionActionTests : IDisposable
             await vm.OpenAcknowledgeSelectionCommand.ExecuteAsync(null);
 
             Assert.Equal(new[] { "alerts", "acknowledge", "--id", "real-1", "--dry-run" }, Assert.Single(calls));
-            Assert.Contains("1 selected gateway-only row(s) have no audit id", vm.ReviewIntro, StringComparison.Ordinal);
+            Assert.Contains("1 selected gateway-only row has no audit id", vm.ReviewIntro, StringComparison.Ordinal);
             vm.CancelReviewCommand.Execute(null);
 
             // Nothing but gateway-only rows: no review, no command, a plain sentence.
@@ -311,7 +311,7 @@ public sealed class AlertsSelectionActionTests : IDisposable
             Assert.False(vm.IsReviewOpen);
             Assert.Equal(6, calls.Count);
             Assert.Equal(450, calls.Where(c => !c.Contains("--dry-run")).Sum(c => IdsIn(c).Length));
-            Assert.Contains("450 alert(s) in 3 runs", vm.ActionBannerText, StringComparison.Ordinal);
+            Assert.Contains("450 alerts in 3 runs", vm.ActionBannerText, StringComparison.Ordinal);
             Assert.All(calls.Where(c => !c.Contains("--dry-run")), c => Assert.True(IdsIn(c).Length <= AlertsPanelViewModel.IdChunkSize));
         });
     }

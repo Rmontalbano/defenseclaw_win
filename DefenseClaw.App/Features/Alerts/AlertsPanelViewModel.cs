@@ -743,8 +743,8 @@ public sealed partial class AlertsPanelViewModel : PanelViewModelBase, IAcceptsN
         ChunkText = string.Empty;
         HasChunkText = false;
         IsSeverityReview = true;
-        ReviewIntro = "This applies to the active alerts of the chosen severity in DefenseClaw - the whole class as of the preview - not only the alerts listed here. The preview below is the CLI's own dry run and changes nothing, and the command that runs is limited to what it found.";
-        CommandNote = "This is the exact command that will run. Nothing happens until you confirm. --before is the moment of the preview, so an alert that arrives later is left alone (or, for a short list, --id names each alert). --yes is the CLI's own confirmation for a broad selector.";
+        ReviewIntro = "Applies to all active alerts of the chosen severity, not only those listed. The preview below is a dry run and changes nothing.";
+        CommandNote = "This command runs when you confirm. --before is the preview time, so alerts that arrive later are left alone. --yes is the CLI's confirmation for a broad selector.";
         _openingReview = true;
         try
         {
@@ -867,7 +867,7 @@ public sealed partial class AlertsPanelViewModel : PanelViewModelBase, IAcceptsN
         PreviewOutput = string.Empty;
         HasPreviewOutput = false;
         SetReviewError(string.Empty);
-        PreviewSummary = "Previewing: running the same command with --dry-run, which changes nothing…";
+        PreviewSummary = "Running the same command with --dry-run. Nothing changes…";
 
         try
         {
@@ -900,8 +900,8 @@ public sealed partial class AlertsPanelViewModel : PanelViewModelBase, IAcceptsN
             if (!match.Success ||
                 !int.TryParse(match.Groups["n"].Value, NumberStyles.None, CultureInfo.InvariantCulture, out var matched))
             {
-                PreviewSummary = "The preview finished, but its output was not in the expected form, so nothing can be applied.";
-                SetReviewError("Expected a line like 'Preview: N alert(s) matched'. The full output is shown above and in Activity.");
+                PreviewSummary = "The preview output was not in the expected form. Nothing can be applied.";
+                SetReviewError("Expected a line like 'Preview: N alert(s) matched'. Full output is above and in Activity.");
                 return;
             }
 
@@ -999,7 +999,7 @@ public sealed partial class AlertsPanelViewModel : PanelViewModelBase, IAcceptsN
                 .Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
                 .LastOrDefault();
             var result = string.IsNullOrWhiteSpace(done)
-                ? (IsSeverityReview ? $"Ran 'defenseclaw alerts {verb} --severity {choice!.Value}'." : $"Ran 'defenseclaw alerts {verb}' on {_idChunks[_chunkIndex].Count} alert(s).")
+                ? (IsSeverityReview ? $"Ran 'defenseclaw alerts {verb} --severity {choice!.Value}'." : $"Ran 'defenseclaw alerts {verb}' on {_idChunks[_chunkIndex].Count} {(_idChunks[_chunkIndex].Count == 1 ? "alert" : "alerts")}.")
                 : done;
             var note = DifferenceNote(output, previewed);
 
@@ -1024,7 +1024,7 @@ public sealed partial class AlertsPanelViewModel : PanelViewModelBase, IAcceptsN
 
                 if (_idChunks.Count > 1)
                 {
-                    result = $"{(string.Equals(verb, DismissVerb, StringComparison.Ordinal) ? "Dismissed" : "Acknowledged")} {_appliedSoFar} alert(s) in {_idChunks.Count} runs.";
+                    result = $"{(string.Equals(verb, DismissVerb, StringComparison.Ordinal) ? "Dismissed" : "Acknowledged")} {_appliedSoFar} {(_appliedSoFar == 1 ? "alert" : "alerts")} in {_idChunks.Count} runs.";
                     note = string.Empty;
                 }
 
@@ -1137,7 +1137,7 @@ public sealed partial class AlertsPanelViewModel : PanelViewModelBase, IAcceptsN
     private void SetChunkText()
     {
         ChunkText = _idChunks.Count > 1
-            ? $"Run {_chunkIndex + 1} of {_idChunks.Count} - {_reviewIdTotal.ToString("N0", CultureInfo.CurrentCulture)} alerts in all, {IdChunkSize} at most per command so the command line stays short. Each run is previewed and confirmed on its own."
+            ? $"Run {_chunkIndex + 1} of {_idChunks.Count}: {_reviewIdTotal.ToString("N0", CultureInfo.CurrentCulture)} alerts, {IdChunkSize} per command. Each run is previewed and confirmed separately."
             : string.Empty;
         HasChunkText = ChunkText.Length > 0;
     }
@@ -1147,12 +1147,12 @@ public sealed partial class AlertsPanelViewModel : PanelViewModelBase, IAcceptsN
         var doing = string.Equals(verb, DismissVerb, StringComparison.Ordinal) ? "Dismissing" : "Acknowledging";
         if (matched == 0)
         {
-            return $"None of the {named.ToString("N0", CultureInfo.CurrentCulture)} {_reviewSetName} alerts is active any more (already acknowledged or dismissed), so there is nothing to {verb}.";
+            return $"None of the {named.ToString("N0", CultureInfo.CurrentCulture)} {_reviewSetName} alerts is active (already acknowledged or dismissed). Nothing to {verb}.";
         }
 
         var count = matched.ToString("N0", CultureInfo.CurrentCulture);
-        var gone = matched < named ? $" ({named - matched} of the {named} named are no longer active)" : string.Empty;
-        return $"{count} {_reviewSetName} {(matched == 1 ? "alert matches" : "alerts match")}{gone}. {doing} applies to exactly the {_reviewSetName} alerts named in the command below, and to nothing else.";
+        var gone = matched < named ? $" ({named - matched} of {named} are no longer active)" : string.Empty;
+        return $"{count} {_reviewSetName} {(matched == 1 ? "alert matches" : "alerts match")}{gone}. {doing} applies only to the alerts named in the command below.";
     }
 
     private string DescribePreview(int matched, SeverityChoice choice, string verb, bool exactIds)
@@ -1160,7 +1160,7 @@ public sealed partial class AlertsPanelViewModel : PanelViewModelBase, IAcceptsN
         var scope = choice.IsAll ? "active alert" : $"active {choice.Value} alert";
         if (matched == 0)
         {
-            return $"No {scope} matches, so there is nothing to {verb}.";
+            return $"No {scope} matches. Nothing to {verb}.";
         }
 
         var doing = string.Equals(verb, DismissVerb, StringComparison.Ordinal) ? "Dismissing" : "Acknowledging";
@@ -1169,14 +1169,14 @@ public sealed partial class AlertsPanelViewModel : PanelViewModelBase, IAcceptsN
         if (exactIds)
         {
             // Every match is listed below, and the command names each of them.
-            return $"{count} {scope}{plural} match. {doing} applies to exactly the {(matched == 1 ? "alert" : "alerts")} listed below, and to nothing that arrives after this preview.";
+            return $"{count} {scope}{plural} match. {doing} applies only to the {(matched == 1 ? "alert" : "alerts")} listed below, not to later arrivals.";
         }
 
         var everything = choice.IsAll ? "every active alert of every severity" : $"the whole {choice.Value} severity class";
         return
             $"{count} {scope}{plural} match. {doing} applies to {everything} " +
-            $"in DefenseClaw as of this preview, not only the {_all.Count.ToString("N0", CultureInfo.CurrentCulture)} loaded in this list; " +
-            "an alert that arrives after it is left alone.";
+            $"as of this preview, not only the {_all.Count.ToString("N0", CultureInfo.CurrentCulture)} loaded in the list. " +
+            "Later alerts are left alone.";
     }
 
     /// <summary>The ids a dry run printed, in the order it printed them (at most <see cref="PreviewedIdLimit"/>).</summary>
@@ -1224,7 +1224,7 @@ public sealed partial class AlertsPanelViewModel : PanelViewModelBase, IAcceptsN
 
         var shown = previewed.ToString("N0", CultureInfo.CurrentCulture);
         var ran = actual.Value.ToString("N0", CultureInfo.CurrentCulture);
-        return $" The preview showed {shown} alert(s) but {ran} were {(applied is null ? "matched" : "applied")}: the list changed between the preview and the apply.";
+        return $" The preview showed {shown} {(previewed == 1 ? "alert" : "alerts")} but {ran} were {(applied is null ? "matched" : "applied")}. The list changed in between.";
     }
 
     /// <summary>One stream of an invocation's transcript as text, capped so a chatty run cannot flood a dialog.</summary>
@@ -1237,7 +1237,7 @@ public sealed partial class AlertsPanelViewModel : PanelViewModelBase, IAcceptsN
 
         return lines.Count <= maxLines
             ? string.Join('\n', lines)
-            : string.Join('\n', lines.Take(maxLines)) + $"\n… and {lines.Count - maxLines} more line(s) - see Activity";
+            : string.Join('\n', lines.Take(maxLines)) + $"\n… and {lines.Count - maxLines} more {(lines.Count - maxLines == 1 ? "line" : "lines")}. See Activity.";
     }
 
     /// <summary>The CLI's own error, in its own words: the last few stderr lines (click prints <c>Error: ...</c>).</summary>
@@ -1408,7 +1408,7 @@ public sealed partial class AlertsPanelViewModel : PanelViewModelBase, IAcceptsN
         SourceNote = $"GET /alerts · newest {GatewayMonitor.AlertLimit} · fetched {fetched}";
         SetEmpty(
             "No alerts in the last poll",
-            "The gateway is answering and reported no findings in the most recent window.");
+            "The gateway reported no findings in the latest poll.");
 
         // The same list instance means the same findings (see GatewayMonitor), and the
         // filters re-run themselves when they change - nothing else can alter the result.
@@ -1773,18 +1773,18 @@ public sealed partial class AlertsPanelViewModel : PanelViewModelBase, IAcceptsN
     {
         var egress = _all.Count(item => string.Equals(item.Kind, AlertKinds.Egress, StringComparison.Ordinal));
         var count = (_all.Count - egress).ToString("N0", CultureInfo.CurrentCulture);
-        var what = _queueHasMore ? $"newest {count} (more are waiting)" : count;
+        var what = _queueHasMore ? $"newest {count}, more waiting" : count;
         var egressNote = egress > 0
-            ? $" · {egress.ToString("N0", CultureInfo.CurrentCulture)} egress"
-            : _egressProblem.Length > 0 ? $" · {_egressProblem}" : string.Empty;
+            ? $", {egress.ToString("N0", CultureInfo.CurrentCulture)} egress"
+            : _egressProblem.Length > 0 ? $", {_egressProblem}" : string.Empty;
 
         // A finding whose attributes are too large to load is still listed (with what the queue knows); the note says how many are like that.
         var oversized = _all.Count(static item => item.IsOversized);
         var oversizedNote = oversized switch
         {
             0 => string.Empty,
-            1 => " · 1 finding too large to display",
-            _ => $" · {oversized.ToString("N0", CultureInfo.CurrentCulture)} findings too large to display",
+            1 => ", 1 finding too large to display",
+            _ => $", {oversized.ToString("N0", CultureInfo.CurrentCulture)} findings too large to display",
         };
         return $"Unacknowledged findings · {what}{egressNote}{oversizedNote} · read {Relative(_queueReadAt)}";
     }
@@ -1795,7 +1795,7 @@ public sealed partial class AlertsPanelViewModel : PanelViewModelBase, IAcceptsN
     /// the fallback load agree on it.
     /// </summary>
     private string WithFallbackNote(string reason) =>
-        _allFromAudit ? $"{reason} · showing {_all.Count} finding(s) from audit.db instead" : reason;
+        _allFromAudit ? $"{reason} · showing {_all.Count} {(_all.Count == 1 ? "finding" : "findings")} from audit.db instead" : reason;
 
     /// <summary>Records what the source says about an empty list, then shows the right text.</summary>
     private void SetEmpty(string title, string detail)
@@ -1817,8 +1817,8 @@ public sealed partial class AlertsPanelViewModel : PanelViewModelBase, IAcceptsN
         {
             EmptyTitle = "No alerts match the current filters";
             EmptyDetail =
-                $"{_poolCount} alert(s) are loaded but hidden by the severity, kind or text filter. " +
-                "Use Clear to show them again.";
+                $"{_poolCount} loaded {(_poolCount == 1 ? "alert is" : "alerts are")} hidden by the severity, kind or text filter. " +
+                $"Clear filters to show {(_poolCount == 1 ? "it" : "them")}.";
             return;
         }
 
@@ -1826,8 +1826,8 @@ public sealed partial class AlertsPanelViewModel : PanelViewModelBase, IAcceptsN
         {
             EmptyTitle = $"No alerts for {Services.ConnectorScope.Current}";
             EmptyDetail =
-                $"{_scopeHiddenCount} alert(s) belong to other connectors or to none. " +
-                "Pick All connectors in the toolbar (or press Ctrl+Shift+M) to see them.";
+                $"{_scopeHiddenCount} {(_scopeHiddenCount == 1 ? "alert belongs" : "alerts belong")} to other connectors or none. " +
+                "Pick All connectors in the toolbar or press Ctrl+Shift+M.";
             return;
         }
 
@@ -1836,8 +1836,8 @@ public sealed partial class AlertsPanelViewModel : PanelViewModelBase, IAcceptsN
             // Everything loaded is acknowledged or dismissed: a good outcome, not an error.
             EmptyTitle = "Every loaded alert is acknowledged";
             EmptyDetail =
-                $"{_all.Count} loaded alert(s) are recorded as acknowledged or dismissed in audit.db and are hidden. " +
-                "New findings appear here as they arrive.";
+                $"{_all.Count} loaded {(_all.Count == 1 ? "alert is" : "alerts are")} acknowledged or dismissed, and hidden. " +
+                "New findings appear here.";
             return;
         }
 
@@ -1941,7 +1941,7 @@ public sealed partial class AlertsPanelViewModel : PanelViewModelBase, IAcceptsN
         var summary = _all.Count == 0
             ? string.Empty
             : CollapseRepeats
-                ? $"{Alerts.Count} group(s) · {filtered.Count} of {pool.Count} alerts"
+                ? $"{Alerts.Count} {(Alerts.Count == 1 ? "group" : "groups")} · {filtered.Count} of {pool.Count} alerts"
                 : $"{Alerts.Count} of {pool.Count} alerts";
         CountSummary = HiddenAcknowledgedCount > 0
             ? $"{summary} · {HiddenAcknowledgedCount} acknowledged hidden"
@@ -2293,7 +2293,7 @@ public sealed partial class AlertItem : ObservableObject
             ConfidenceText = string.Empty,
             StructuredText = structuredOver is null
                 ? Pretty(structured)
-                : $"({structuredOver.Reason}; it is left in the database, so its attributes are not shown here)",
+                : $"({structuredOver.Reason}; left in the database, not shown here)",
             Fields = WithNotice(ToFields(structured), notice),
             HookStructured = structured,
             OversizedNotice = notice,

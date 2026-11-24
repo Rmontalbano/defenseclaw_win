@@ -19,22 +19,22 @@ public static class RuleIdLabels
     private static readonly IReadOnlyDictionary<string, string> Sentences = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
     {
         ["ACTION-OPERAND-BOUND"] =
-            "The command had more than 1024 operands: the first 1024, and every later word that may name a protected file or is a link, were checked; the other names were not.",
-        ["ACTION-SHARE-BODY-UNREAD"] = "A script on a network share could not be read for the policy check.",
+            "More than 1024 operands, so later words were checked only for protected files and links",
+        ["ACTION-SHARE-BODY-UNREAD"] = "Network share script not readable for the policy check",
         ["TOOL-PATH-UNVERIFIED"] =
-            "A Windows file path (a short name or a user-profile folder) the file system could not verify, so the file it opens could not be checked.",
-        ["tamper.agent_hook_config_disable"] = "An edit that turns off the agent's DefenseClaw hooks in its settings.",
-        ["tamper.agent_hook_config_write"] = "A shell command that writes to an agent's hook settings file.",
-        [CompoundLimit] = "A shell command too long or too complex for the policy check.",
+            "Windows path the file system could not verify, so the file was not checked",
+        ["tamper.agent_hook_config_disable"] = "Edit that turns off the agent's DefenseClaw hooks",
+        ["tamper.agent_hook_config_write"] = "Shell command that writes to an agent's hook settings file",
+        [CompoundLimit] = "Shell command too long or too complex for the policy check",
     };
 
     /// <summary>The finding id of the alignment check (1.0.10): a tool call that does not serve the task the user gave.</summary>
     public const string AlignmentDrift = "ALIGNMENT-DRIFT";
 
-    private const string AlignmentDriftSentence = "The alignment check (a question to the LLM judge) found that this tool call does not serve the task the user gave.";
+    private const string AlignmentDriftSentence = "Alignment check: this tool call does not serve the user's task";
 
     private const string CascadeCompoundLimitSentence =
-        "An input too large or too complex for the policy check to read in full (a command, a tool's output or a model reply); DefenseClaw judged it at the rule pack's unknown tier.";
+        "Input too large or complex for the policy check, judged at the unknown tier";
 
     private static readonly Regex AnyIdCascade = new(
         @"(?<![\w.\-])(?:llm-judge:)?(?:" + string.Join("|", Sentences.Keys.Append(AlignmentDrift).Select(Regex.Escape)) + "|" + Regex.Escape(JudgeEscalationFinding.RuleId) + @")(?![\w.\-])",
@@ -248,13 +248,13 @@ public static class RuleIdLabels
         if (cascadeEra)
         {
             return observe
-                ? "It went through; DefenseClaw recorded it as an alert (observe mode)."
-                : "It went through; DefenseClaw recorded it as an alert (the strict rule pack blocks it).";
+                ? "It ran and was recorded as an alert (observe mode)."
+                : "It ran and was recorded as an alert. The strict rule pack blocks it.";
         }
 
         return observe
-            ? "The call ran; DefenseClaw recorded it as an alert (observe mode)."
-            : "The call ran; DefenseClaw recorded it as an alert (the strict rule pack blocks it).";
+            ? "The call ran and was recorded as an alert (observe mode)."
+            : "The call ran and was recorded as an alert. The strict rule pack blocks it.";
     }
 
     /// <summary>
@@ -277,12 +277,12 @@ public static class RuleIdLabels
         // The same rule as CompoundLimitOutcome, so one row reads one way on every surface: an allow whose raw_action is alert was recorded as an alert.
         if (RanAsAlert(verdict, action, Word(values.GetValueOrDefault("raw_action"))))
         {
-            return "The call ran; DefenseClaw recorded an alert.";
+            return "The call ran and was recorded as an alert.";
         }
 
         if (verdict is "allow" or "allowed" || (verdict.Length == 0 && Word(values.GetValueOrDefault("would_block")) == "false"))
         {
-            return "Measured only: the call was not changed (the alignment lane records without acting in shadow mode, and observe mode never acts).";
+            return "Measured only. The call was not changed.";
         }
 
         return null;

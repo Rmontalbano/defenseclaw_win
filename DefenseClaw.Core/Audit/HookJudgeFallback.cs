@@ -55,12 +55,12 @@ public static partial class HookJudgeFallback
     /// <summary>The reason in plain words, for the detail pane: what happened and that the rules decided.</summary>
     public static string Describe(string reason) => reason switch
     {
-        "timeout" => "The judge did not answer in time (a wait for a free judge slot, guardrail.judge.max_parallel, counts too), so the rules decided this call.",
-        "error" => "The judge call failed (a provider error, or an empty or unreadable answer), so the rules decided this call.",
-        "late" => "The hook could not wait longer for the judge, so the rules decided this call; the judge's verdict is recorded when it arrives.",
-        "busy" => "The hook-lane judge was at capacity, so the rules decided this call.",
-        "budget" => "The hook's earlier judge calls used up its time budget, so the rules decided this call.",
-        _ => $"The judge gave no verdict ({reason}), so the rules decided this call.",
+        "timeout" => "The judge did not answer in time, or no judge slot was free (guardrail.judge.max_parallel). The rules decided this call.",
+        "error" => "The judge call failed (provider error or empty answer). The rules decided this call.",
+        "late" => "The judge answered too late. The rules decided this call; the verdict is recorded when it arrives.",
+        "busy" => "The hook-lane judge was at capacity. The rules decided this call.",
+        "budget" => "The hook's judge time budget was used up. The rules decided this call.",
+        _ => $"The judge gave no verdict ({reason}). The rules decided this call.",
     };
 
     /// <summary>The <c>key=value</c> part of a hook details text, before the quoted envelope copy (<c>details_json=</c>).</summary>

@@ -35,29 +35,27 @@ public sealed record HookFailureRefusal(HookFailureKind Kind, string Event, stri
     /// <summary>The row's title in place of the action word: says it was the hook, not a policy.</summary>
     public string Headline => Kind switch
     {
-        HookFailureKind.CallRefused => "Hook blocked the call itself: the gateway did not answer",
-        HookFailureKind.ResultRefused => "Hook blocked the tool's result itself: the gateway did not answer",
-        HookFailureKind.EventRefused => $"Hook blocked its {Event} event itself: the gateway did not answer",
-        HookFailureKind.UnnamedEventRefused => "Hook blocked a hook event itself: the gateway did not answer",
+        HookFailureKind.CallRefused => "Hook blocked the call: the gateway did not answer",
+        HookFailureKind.ResultRefused => "Hook blocked the tool result: the gateway did not answer",
+        HookFailureKind.EventRefused => $"Hook blocked its {Event} event: the gateway did not answer",
+        HookFailureKind.UnnamedEventRefused => "Hook blocked a hook event: the gateway did not answer",
         _ => "Ran unchecked during a gateway outage",
     };
 
     /// <summary>Why, in plain words, for the detail pane.</summary>
     public string Explanation => Base + (Dropped
-        ? " The hook could not finish its usual record, so it logged the call in " + HookFailureRow.DroppedLog + "."
-        : " The hook logged the call in " + HookFailureRow.FailuresLog + ".");
+        ? " The usual record could not be written, so the call is logged in " + HookFailureRow.DroppedLog + "."
+        : " Logged in " + HookFailureRow.FailuresLog + ".");
 
     private string Base => Kind switch
     {
         HookFailureKind.RanUnchecked =>
-            "The gateway was down or did not answer, and this connector's hook_fail_mode is open, so the hook let the call run without a gateway check. " +
-            "No policy saw it.",
+            "The gateway did not answer and this connector's hook_fail_mode is open, so the call ran without a gateway check. No policy saw it.",
         HookFailureKind.ResultRefused =>
-            "The tool had already run. The gateway was down or did not answer, and this connector's hook_fail_mode is closed, so the hook refused the " +
-            "tool's result on its own. No gateway policy decided it, so there is no rule to look for.",
+            "The tool had already run. The gateway did not answer and this connector's hook_fail_mode is closed, so the hook blocked the result. " +
+            "No gateway policy decided it.",
         _ =>
-            "The gateway was down or did not answer, and this connector's hook_fail_mode is closed, so the hook refused on its own. No gateway policy " +
-            "decided it, so there is no rule to look for.",
+            "The gateway did not answer and this connector's hook_fail_mode is closed, so the hook blocked it. No gateway policy decided it.",
     };
 }
 

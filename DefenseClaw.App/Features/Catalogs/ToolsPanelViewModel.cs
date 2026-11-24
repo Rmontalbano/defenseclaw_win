@@ -60,9 +60,8 @@ public sealed partial class ToolsPanelViewModel : GovernPanelViewModelBase
     protected override string BuildEmptyTitle(string scope) => $"No tool rules for {scope}";
 
     protected override string BuildEmptyDetail(string scope) =>
-        "Tools have no catalog on a standalone install: this list shows only the tools that have been blocked or allowed. " +
-        "Nothing here means no tool is being blocked or allowed by name; every tool still goes through the normal scan. " +
-        "Use “Manage a tool by name” below to add a rule or to check what applies to a tool.";
+        "This list shows only tools that were blocked or allowed by name; every tool still gets the normal scan. " +
+        "Use “Manage a tool by name” below to add a rule or check one.";
 
     protected override GovernRow? ParseRow(JsonElement item, string? groupConnector)
     {
@@ -125,7 +124,7 @@ public sealed partial class ToolsPanelViewModel : GovernPanelViewModelBase
             RuleScope = scope,
             SourceScope = sourceScope,
             Description = scope == "source"
-                ? "Source-scoped rules are recorded for audit only; the runtime never reads them, so they do not block or allow anything."
+                ? "Source-scoped rules are audit-only. The runtime does not read them, so they block and allow nothing."
                 : null,
             MetaLine = JoinMeta(("applies to", scopeText)),
             StateLabel = state.Label,
@@ -197,8 +196,8 @@ public sealed partial class ToolsPanelViewModel : GovernPanelViewModelBase
         GovernVerbs.Block =>
             "Blocks the tool at runtime for the scope shown. Resolution order: block @connector/tool, allow @connector/tool, block tool, allow tool, then the normal scan.",
         GovernVerbs.Allow =>
-            "An allowed tool skips rule, pattern and judge scanning at runtime. Write tools still get CodeGuard. Resolution order: block @connector/tool, allow @connector/tool, block tool, allow tool, then the normal scan.",
-        GovernVerbs.Unblock => "Removes the rule only; the tool goes back to the normal scan.",
+            "An allowed tool skips rule, pattern and judge scanning. Write tools still get CodeGuard. Resolution order: block @connector/tool, allow @connector/tool, block tool, allow tool, then the normal scan.",
+        GovernVerbs.Unblock => "Removes the rule only. The tool goes back to the normal scan.",
         _ => base.NoteFor(verb, row),
     };
 

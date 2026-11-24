@@ -88,8 +88,8 @@ public sealed class AlertsKindTilesDetailTests : IDisposable
             Assert.Equal(new[] { 1, 1, 1, 0 }, vm.Tiles.Select(t => t.Count).ToArray());
             Assert.Equal(1, vm.InfoFilter.Count);
             Assert.True(vm.ShowInfoFilter);
-            Assert.Contains("· 2 egress ·", vm.SourceNote, StringComparison.Ordinal);
-            Assert.StartsWith("Unacknowledged findings · 2 ·", vm.SourceNote, StringComparison.Ordinal);
+            Assert.Contains(", 2 egress ·", vm.SourceNote, StringComparison.Ordinal);
+            Assert.StartsWith("Unacknowledged findings · 2, 2 egress ·", vm.SourceNote, StringComparison.Ordinal);
         });
     }
 

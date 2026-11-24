@@ -73,9 +73,8 @@ public sealed partial class PluginsPanelViewModel : GovernPanelViewModelBase
     protected override string BuildEmptyDetail(string scope)
     {
         var detail =
-            "DefenseClaw 0.8.10 reads plugin folders it manages (and, for Codex, ~\\.codex\\plugins). Claude Code's own plugin " +
-            "store (~\\.claude\\plugins\\cache and installed_plugins.json) is not read, so plugins installed with Claude Code do " +
-            "not appear here. An empty list means nothing was found where it looked, not that no plugin is installed.";
+            "DefenseClaw 0.8.10 reads the plugin folders it manages (and ~\\.codex\\plugins for Codex). Claude Code's own plugin " +
+            "store (~\\.claude\\plugins\\cache and installed_plugins.json) is not read, so plugins installed with Claude Code are not listed.";
         return ArtifactCount > 0
             ? detail + $" The {ArtifactCount} entr{(ArtifactCount == 1 ? "y" : "ies")} listed below are not plugins."
             : detail;
@@ -142,7 +141,7 @@ public sealed partial class PluginsPanelViewModel : GovernPanelViewModelBase
             ActionsText = state.ActionsText,
             IsArtifact = artifact,
             ArtifactNote = artifact
-                ? "Not a plugin (listing artifact). This is part of Claude Code's own plugin store; DefenseClaw 0.8.10 lists it as if it were a plugin."
+                ? "Not a plugin (listing artifact). It belongs to Claude Code's plugin store, which DefenseClaw 0.8.10 lists as plugins."
                 : null,
             IsBlocked = state.Blocked,
             IsAllowed = state.Allowed,
@@ -175,11 +174,11 @@ public sealed partial class PluginsPanelViewModel : GovernPanelViewModelBase
     protected override string? NoteFor(GovernVerbs verb, GovernRow row) => verb switch
     {
         GovernVerbs.Block =>
-            "Blocked plugins are rejected by the admission gate before any scan. A plugin that is already installed keeps running; use Disable or Quarantine for that.",
+            "Blocked plugins are rejected by the admission gate before any scan, but an installed plugin keeps running. Use Disable or Quarantine to stop it.",
         GovernVerbs.Allow =>
             "Allow-listed plugins skip the scan gate during install. Allowing also removes the plugin from the block list.",
         GovernVerbs.Remove =>
-            "Deletes the plugin's files. There is no quarantine copy and no undo. The CLI prints a reminder to restart the gateway; this command does not restart it.",
+            "Deletes the plugin's files, with no quarantine copy and no undo. The gateway is not restarted; the CLI only prints a reminder.",
         _ => base.NoteFor(verb, row),
     };
 
@@ -272,8 +271,8 @@ public sealed partial class PluginsPanelViewModel : GovernPanelViewModelBase
                 SecretFieldWarnings.For(
                     "The install source",
                     target,
-                    "'plugin install' has no option to read it from elsewhere, and the CLI also records the install source in its own " +
-                    "log. Download and extract the archive yourself, then install from the folder (an absolute path) instead."),
+                    "'plugin install' cannot read it from elsewhere, and the CLI logs the install source. " +
+                    "Download and extract the archive yourself, then install from the folder (absolute path)."),
                 InstallSourceWarning(target),
             });
         }
@@ -295,16 +294,16 @@ public sealed partial class PluginsPanelViewModel : GovernPanelViewModelBase
         {
             return new CommandReviewWarning(
                 InstallSourceTitle,
-                "The source is a plain http:// address: the download is not encrypted or checked, so anyone on the network path can change " +
-                "what gets installed. Prefer an https:// address or a folder on this machine.");
+                "The source is a plain http:// address, so the download is not encrypted or checked and anyone on the network path can change " +
+                "it. Use an https:// address or a folder on this machine.");
         }
 
         if (target.StartsWith(@"\\", StringComparison.Ordinal) || target.StartsWith("//", StringComparison.Ordinal))
         {
             return new CommandReviewWarning(
                 InstallSourceTitle,
-                "The source is a network share (UNC path). Whoever controls the share controls what gets installed, and an unreachable " +
-                "share can stall the install. Prefer a copy of the folder on this machine.");
+                "The source is a network share (UNC path). Whoever controls the share controls what is installed, and an unreachable " +
+                "share can stall the install. Use a local copy of the folder.");
         }
 
         return null;
@@ -335,7 +334,7 @@ public sealed partial class PluginsPanelViewModel : GovernPanelViewModelBase
         }
 
         return "That is not an absolute folder path, a registry package name, a clawhub:// URI or an http(s):// URL. " +
-               "A relative folder would be resolved against DefenseClaw's own working directory, not the one you are " +
-               "thinking of: enter the full path, for example C:\\plugins\\my-plugin.";
+               "A relative folder resolves against DefenseClaw's working directory, so enter the full path, " +
+               "for example C:\\plugins\\my-plugin.";
     }
 }

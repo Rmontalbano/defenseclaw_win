@@ -41,11 +41,11 @@
             <Separator />
             <MenuItem Header="Show same target"
                       Icon="{ctl:DcSymbolIcon Filter24}"
-                      ToolTip="Searches for this row's target, which narrows the list to the events about it."
+                      ToolTip="Search for this row's target."
                       Click="OnShowSameTarget" />
             <MenuItem Header="Show same run"
                       Icon="{ctl:DcSymbolIcon Filter24}"
-                      ToolTip="Shows every event of this row's run, in any time range."
+                      ToolTip="Show every event of this row's run, in any time range."
                       Click="OnShowSameRun" />
         </ContextMenu>
 
@@ -186,7 +186,7 @@
                            SearchWidth="260"
                            SearchPlaceholder="Search details, event, tool, target…"
                            SearchAutomationName="Search details, event, tool and target"
-                           SearchHelpText="Free text over the details, event name, tool and target. Narrow to one field with connector:codex, severity:high, run:, trace:, request:, session:, id:, actor:, type:, target:, action: or details: - quote a value that has spaces, target:&quot;my skill&quot;. Shortcut Ctrl+F; Esc clears it.">
+                           SearchHelpText="Free text over details, event, tool and target. Or one field: connector:codex, severity:high, run:, trace:, request:, session:, id:, actor:, type:, target:, action:, details:. Quote spaces: target:&quot;my skill&quot;. Ctrl+F focuses; Esc clears.">
             <ctl:DcPageToolbar.ConnectorSlot>
                 <ctl:DcConnectorScopeChip Model="{Binding ConnectorChip}" />
             </ctl:DcPageToolbar.ConnectorSlot>
@@ -196,19 +196,19 @@
                                Command="{Binding ResetFiltersCommand}"
                                ToolTip="Reset filters"
                                AutomationProperties.Name="Reset filters"
-                               AutomationProperties.HelpText="Set every filter back to its default: all buckets, any severity, all connectors, the last 24 hours, no text. The Actionable only switch is left as you set it." />
+                               AutomationProperties.HelpText="Reset all filters: any bucket, severity and connector, last 24 hours, no text. Actionable only is not changed." />
                     <ui:Button Icon="{ctl:DcSymbolIcon ArrowDownload24}"
                                Command="{Binding ExportCommand}"
                                ToolTip="Export the list to JSON or CSV (Ctrl+E)"
                                AutomationProperties.Name="Export"
                                AutomationProperties.AcceleratorKey="Ctrl+E"
-                               AutomationProperties.HelpText="Save the events these filters select (the newest 5,000 at most) as a JSON or CSV file. Shortcut Ctrl+E." />
+                               AutomationProperties.HelpText="Save the filtered events (newest 5,000 at most) as JSON or CSV. Ctrl+E." />
                     <ui:Button Icon="{ctl:DcSymbolIcon ArrowClockwise24}"
                                Command="{Binding RefreshCommand}"
                                ToolTip="Refresh (F5)"
                                AutomationProperties.Name="Refresh"
                                AutomationProperties.AcceleratorKey="F5"
-                               AutomationProperties.HelpText="Run the current query again from the newest event. Shortcut F5." />
+                               AutomationProperties.HelpText="Run the query again from the newest event. F5." />
                 </StackPanel>
             </ctl:DcPageToolbar.Actions>
         </ctl:DcPageToolbar>
@@ -222,7 +222,7 @@
                         Severity="Informational"
                         IsClosable="False"
                         Title="{Binding ArchiveBanner}"
-                        Message="This is a read-only copy of an earlier DefenseClaw audit database. Switch to Live for current events."
+                        Message="Read-only copy of an earlier audit database. Switch to Live for current events."
                         IsOpen="{Binding ShowArchiveBanner, Mode=OneWay}"
                         AutomationProperties.LiveSetting="Polite" />
             <ui:InfoBar x:Name="ArchiveProblemBar"
@@ -242,15 +242,15 @@
                                  SelectedValue="{Binding SourceKey, Mode=TwoWay}"
                                  Visibility="{Binding ShowSourceSwitch, Converter={StaticResource BoolToVisibility}}"
                                  AutomationProperties.Name="Audit source"
-                                 AutomationProperties.HelpText="Live shows the current audit log. Archive shows the read-only audit database kept from before an upgrade, set in Settings.">
+                                 AutomationProperties.HelpText="Live: the current audit log. Archive: the read-only database from before an upgrade, set in Settings.">
                     <ctl:DcSegment Value="live" Content="Live" ToolTip="The current audit log" />
-                    <ctl:DcSegment Value="archive" Content="Archive" ToolTip="The archived audit database from before the upgrade (read-only)" />
+                    <ctl:DcSegment Value="archive" Content="Archive" ToolTip="Audit database from before the upgrade (read-only)" />
                 </ctl:DcSegmented>
 
                 <ctl:DcSegmented Margin="0,0,12,8"
                                  SelectedValue="{Binding ActivePreset, Mode=TwoWay}"
                                  AutomationProperties.Name="Audit view"
-                                 AutomationProperties.HelpText="Narrow the list to one kind of event: all, risk (high and critical), blocks, scans or credentials. The filters below still apply.">
+                                 AutomationProperties.HelpText="Show one kind of event: all, risk (high and critical), blocks, scans or credentials. Filters below still apply.">
                     <ctl:DcSegment Value="all" Content="All" ToolTip="Every event" />
                     <ctl:DcSegment Value="risk" Content="Risk" ToolTip="High and critical severity" />
                     <ctl:DcSegment Value="blocks" Content="Blocks" ToolTip="Blocks, rejections, enforcement and quarantine" />
@@ -266,7 +266,7 @@
                                  ToolTip="{Binding ActionableToolTip}"
                                  ToolTipService.ShowOnDisabled="True"
                                  AutomationProperties.Name="Actionable only"
-                                 AutomationProperties.HelpText="Show the events the DefenseClaw TUI shows by default: HIGH, CRITICAL and ERROR, and anything that blocked, denied, rejected, quarantined or failed. Paused while a search, a view, an action filter, a run or a minimum severity is on." />
+                                 AutomationProperties.HelpText="Shows HIGH, CRITICAL and ERROR events and anything that blocked, denied, rejected, quarantined or failed, as the TUI does. Paused while a search, view, action filter, run or minimum severity is set." />
 
                 <Border Style="{StaticResource DcChip}"
                         Margin="0,0,12,8"
@@ -283,7 +283,7 @@
                            Appearance="Secondary"
                            Icon="{ctl:DcSymbolIcon Dismiss12}"
                            Command="{Binding ClearRunFilterCommand}"
-                           ToolTip="Showing one run's events. Click to show every run again."
+                           ToolTip="Showing one run. Click to show all runs."
                            AutomationProperties.Name="Clear the run filter"
                            Visibility="{Binding HasRunFilter, Converter={StaticResource BoolToVisibility}}">
                     <TextBlock Text="{Binding RunFilterText}" />
@@ -318,7 +318,7 @@
                            Text="{Binding ExportNote}"
                            AutomationProperties.LiveSetting="Polite" />
                 <!-- Where the empty detail pane's "Select a row ..." used to be. -->
-                <TextBlock Margin="0,0,12,8" Text="Select a row for every column and its pretty-printed structured_json.">
+                <TextBlock Margin="0,0,12,8" Text="Select a row for its columns and structured_json.">
                     <TextBlock.Style>
                         <Style TargetType="TextBlock" BasedOn="{StaticResource DcCaption}">
                             <Setter Property="VerticalAlignment" Value="Center" />
@@ -579,7 +579,7 @@
                                            CommandParameter="{Binding}"
                                            ToolTip="Show every event of this run, in any time range"
                                            AutomationProperties.Name="Same run"
-                                           AutomationProperties.HelpText="Shows only the events that share this event's run id, in every time range." />
+                                           AutomationProperties.HelpText="Shows only events with this run id, in any time range." />
                             </WrapPanel>
 
                             <StackPanel Visibility="{Binding HasDetailPairs, Converter={StaticResource BoolToVisibility}}">

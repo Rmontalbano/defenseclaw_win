@@ -409,7 +409,7 @@ public sealed class GovernPanelArgvTests : IDisposable
         Assert.Equal(
             "defenseclaw mcp set --command npx --args [\"-y\",\"@example/docs-mcp\"] --transport stdio --env LOG_LEVEL=debug --connector codex -- docs",
             vm.ConfirmCommandText);
-        Assert.Contains("Environment values are part of this command line", vm.ConfirmNote, StringComparison.Ordinal);
+        Assert.Contains("Environment values are on the command line", vm.ConfirmNote, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -425,7 +425,7 @@ public sealed class GovernPanelArgvTests : IDisposable
         Assert.Equal(
             "defenseclaw mcp set --url https://mcp.example.test/sse --skip-scan -- remote",
             vm.ConfirmCommandText);
-        Assert.Contains("no check at all", vm.ConfirmNote, StringComparison.Ordinal);
+        Assert.Contains("added unchecked", vm.ConfirmNote, StringComparison.Ordinal);
     }
 
     [Fact]

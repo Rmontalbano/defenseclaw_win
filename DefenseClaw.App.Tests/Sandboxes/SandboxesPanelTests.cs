@@ -142,13 +142,13 @@ public sealed class SandboxesPanelTests : IDisposable
         Assert.Contains("Linux and macOS only", model.StateDetail, StringComparison.Ordinal);
         Assert.Contains("offers no sandbox actions", model.StateDetail, StringComparison.Ordinal);
         Assert.Equal("Linux and macOS only", model.CaptionText);
-        Assert.Equal("The connected runtime has not been identified yet.", model.RuntimeFact);
+        Assert.Equal("The connected runtime is not identified yet.", model.RuntimeFact);
         Assert.Contains(SandboxesPanelViewModel.ElsewhereSetupCommand, model.ElsewhereText, StringComparison.Ordinal);
-        Assert.StartsWith("On a Linux or macOS host", model.ElsewhereText, StringComparison.Ordinal);
+        Assert.StartsWith("On Linux or macOS", model.ElsewhereText, StringComparison.Ordinal);
     }
 
     [Theory]
-    [InlineData("95159fd", "The connected runtime (defenseclaw-cli 1.0.0) has the sandbox commands; they target Linux and macOS.")]
+    [InlineData("95159fd", "The connected runtime (defenseclaw-cli 1.0.0) has sandbox commands for Linux and macOS.")]
     [InlineData("0.8.10", "The connected runtime (defenseclaw-cli 0.8.10) has no sandbox commands.")]
     public async Task The_page_says_what_the_connected_runtime_has_and_follows_it_while_on_screen(string runtimeSet, string expected)
     {
@@ -204,7 +204,7 @@ public sealed class SandboxesPanelTests : IDisposable
 
             var texts = VisualTree.Descendants<System.Windows.Controls.TextBlock>(page).Where(t => t.IsVisible).Select(t => t.Text).ToArray();
             Assert.Contains("Sandboxes are not available on Windows", texts);
-            Assert.Contains(texts, t => t.Contains("Linux and macOS only, so there is nothing to set up on this PC", StringComparison.Ordinal));
+            Assert.Contains(texts, t => t.Contains("Linux and macOS only. This app offers no sandbox actions on Windows.", StringComparison.Ordinal));
 
             // One button, and it is Open Setup; no text box to copy a command from.
             var button = Assert.Single(VisualTree.Descendants<System.Windows.Controls.Primitives.ButtonBase>(page), b => b.IsVisible);

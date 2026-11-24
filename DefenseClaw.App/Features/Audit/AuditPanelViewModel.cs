@@ -190,7 +190,7 @@ public sealed partial class AuditPanelViewModel : PanelViewModelBase, IAcceptsNa
     public override string Title => "Audit";
 
     public override string Description =>
-        "Browse audit_events by bucket, severity, connector and time. Read-only, keyset paged.";
+        "Audit events by bucket, severity, connector and time. Read-only.";
 
     public ObservableCollection<AuditRow> Rows { get; } = new();
 
@@ -222,7 +222,7 @@ public sealed partial class AuditPanelViewModel : PanelViewModelBase, IAcceptsNa
     /// <summary>What the list footer says while <see cref="IsRowCapReached"/>.</summary>
     public string RowCapNotice =>
         $"Showing the newest {MaxRows.ToString("N0", CultureInfo.CurrentCulture)} matching events. " +
-        "Narrow the time range or add a filter to reach older ones.";
+        "Narrow the time range or add a filter to see older ones.";
 
     public override async Task InitializeAsync(CancellationToken cancellationToken = default)
     {
@@ -1188,7 +1188,7 @@ public sealed class AuditRow
         var fields = new List<AuditDetailField>();
 
         // "id TEXT PRIMARY KEY" admits NULL, and the reader hands such a row an empty id: say so rather than omit the field.
-        Add("id", string.IsNullOrEmpty(source.Id) ? "(none - this row's id is NULL)" : source.Id);
+        Add("id", string.IsNullOrEmpty(source.Id) ? "(none: id is NULL)" : source.Id);
         Add("timestamp", source.RawTimestamp);
         Add("bucket", source.Bucket);
         Add("action", source.Action);
@@ -1227,7 +1227,7 @@ public sealed class AuditRow
     {
         if (string.IsNullOrWhiteSpace(raw))
         {
-            return "(no structured payload on this row)";
+            return "(no structured payload)";
         }
 
         try

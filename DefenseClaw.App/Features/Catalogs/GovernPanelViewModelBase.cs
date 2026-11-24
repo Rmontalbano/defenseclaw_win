@@ -196,7 +196,7 @@ public abstract partial class GovernPanelViewModelBase : PanelViewModelBase, IGo
 
     /// <summary>The first line of <see cref="PartialDiscoveryMessage"/>; the MCP panel overrides it with the Mac app's wording.</summary>
     protected virtual string PartialDiscoveryHeadline =>
-        "These are the entries the CLI could read; others may be missing. Changes are off until discovery completes.";
+        "Some entries may be missing. Changes are off until discovery completes.";
 
     /// <summary>What the trust looked like when the rows were last told about it; they are re-notified only when it changes.</summary>
     private (bool Trusted, string? Reason) _trustSeen = (true, null);
@@ -657,8 +657,8 @@ public abstract partial class GovernPanelViewModelBase : PanelViewModelBase, IGo
             FailLoad(
                 GovernState.Error,
                 $"The {NounLabel} list is too large to read here",
-                $"'{command}' printed more than the {CliInvocation.MaxRetainedOutputLines}-line / {CliInvocation.MaxRetainedOutputBytes / 1024} KiB " +
-                "of output this app keeps for one command, so the start of the JSON was dropped. Narrow the list with Connector scope, or run the command in a terminal.",
+                $"'{command}' printed more than {CliInvocation.MaxRetainedOutputLines} lines / {CliInvocation.MaxRetainedOutputBytes / 1024} KiB, " +
+                "so the start of the JSON was dropped. Narrow the list with Connector scope, or run the command in a terminal.",
                 scopeKey);
             return;
         }
@@ -728,7 +728,7 @@ public abstract partial class GovernPanelViewModelBase : PanelViewModelBase, IGo
         if (haveGoodData)
         {
             var age = _lastLoadedAt is { } at ? $"as of {at.LocalDateTime:HH:mm}" : "earlier";
-            RefreshWarning = $"{title}: {message} Showing the last good read ({age}); changes are off until the list is read again.";
+            RefreshWarning = $"{title}: {message} Showing the last good read ({age}). Changes are off until the list is read again.";
             return;
         }
 
@@ -761,7 +761,7 @@ public abstract partial class GovernPanelViewModelBase : PanelViewModelBase, IGo
         if (GovernJson.IsNoConnectorMessage(stdout))
         {
             throw new FormatException(
-                $"No connector is configured, so there is nothing to list. The CLI said: {stdout.Trim()}");
+                $"No connector is configured. The CLI said: {stdout.Trim()}");
         }
 
         var rows = new List<GovernRow>();
@@ -957,7 +957,7 @@ public abstract partial class GovernPanelViewModelBase : PanelViewModelBase, IGo
 
         if (IsBusy)
         {
-            ShowResult("Please wait", "Another command is still running. Try again when it finishes.", InfoBarSeverity.Informational);
+            ShowResult("Please wait", "Another command is running. Try again when it finishes.", InfoBarSeverity.Informational);
             return;
         }
 
@@ -1029,7 +1029,7 @@ public abstract partial class GovernPanelViewModelBase : PanelViewModelBase, IGo
     }
 
     private string ScanNote(string what) =>
-        $"Runs the {NounLabel} scanner over {what} and records the results and an audit event. It changes scan results and findings; it does not change any {NounLabel}. A scan can take minutes.";
+        $"Runs the {NounLabel} scanner over {what} and records the results and an audit event, without changing any {NounLabel}. A scan can take minutes.";
 
     /// <summary>Builds the reviewed command for a mutating row verb; null when the verb does not apply.</summary>
     protected virtual GovernPlan? PlanFor(GovernRow row, GovernVerbs verb)
@@ -1043,7 +1043,7 @@ public abstract partial class GovernPanelViewModelBase : PanelViewModelBase, IGo
         // 'skill scan all' means every skill, not a skill called "all": there is no way to scan that one by name.
         if (verb == GovernVerbs.Scan && string.Equals(row.Name, "all", StringComparison.OrdinalIgnoreCase))
         {
-            ShowResult("Scan not offered", $"A {NounLabel} called “all” cannot be scanned by name: the CLI reads that name as every {NounLabel}. Use Scan all.", InfoBarSeverity.Warning);
+            ShowResult("Scan not offered", $"A {NounLabel} called “all” cannot be scanned by name, because the CLI reads it as every {NounLabel}. Use Scan all.", InfoBarSeverity.Warning);
             return null;
         }
 
@@ -1102,7 +1102,7 @@ public abstract partial class GovernPanelViewModelBase : PanelViewModelBase, IGo
     protected virtual string? NoteFor(GovernVerbs verb, GovernRow row) => verb switch
     {
         GovernVerbs.Disable =>
-            "Runtime only: the files stay where they are. Claude Code and Codex enforce it at their prompt hooks; other connectors only record it.",
+            "The files stay in place. Claude Code and Codex enforce this at their prompt hooks, and other connectors only record it.",
         GovernVerbs.Enable => "Clears the runtime-disable record. Nothing is installed or restored.",
         GovernVerbs.Quarantine =>
             $"Moves the {NounLabel}'s files into DefenseClaw's quarantine area so they stop loading. Undo with Restore.",
@@ -1126,7 +1126,7 @@ public abstract partial class GovernPanelViewModelBase : PanelViewModelBase, IGo
             GovernVerbs.Restore => $"Restored “{name}”.",
             GovernVerbs.Remove => $"Removed “{name}”.",
             GovernVerbs.Unset => $"Removed “{name}” from the config.",
-            GovernVerbs.Scan => $"Scanned “{name}”; its Scan result is read again below.",
+            GovernVerbs.Scan => $"Scanned “{name}”. The Scan result is read again below.",
             _ => "Done.",
         };
     }
@@ -1368,7 +1368,7 @@ public abstract partial class GovernPanelViewModelBase : PanelViewModelBase, IGo
             {
                 ShowResult(
                     "Command failed",
-                    $"{Summarize(invocation)} The list was not re-read; press Refresh to see the current state. Full output is in Activity.",
+                    $"{Summarize(invocation)} The list was not re-read. Press Refresh to see the current state. Full output is in Activity.",
                     InfoBarSeverity.Error);
             }
         }
@@ -1415,7 +1415,7 @@ public abstract partial class GovernPanelViewModelBase : PanelViewModelBase, IGo
             var stdout = string.Concat(invocation.OutputLines.Where(l => l.Stream == CliStream.StandardOutput).Select(l => l.Text + "\n")).Trim();
             if (stdout.StartsWith('[') || stdout.StartsWith('{'))
             {
-                return $"Catalog command failed (exit {invocation.ExitCode?.ToString() ?? "unknown"}); returned rows could not be trusted.";
+                return $"Catalog command failed (exit {invocation.ExitCode?.ToString() ?? "unknown"}). Its rows cannot be trusted.";
             }
         }
 

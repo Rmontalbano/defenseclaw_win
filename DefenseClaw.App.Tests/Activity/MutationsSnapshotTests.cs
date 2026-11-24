@@ -196,7 +196,7 @@ public sealed class MutationsSnapshotTests : IDisposable
         await model.LoadAsync();
 
         Assert.Equal(MutationReader.DefaultLimit, model.Rows.Count);
-        Assert.StartsWith("Showing the newest 500 changes; older ones are in the Audit panel.", model.StatusNote, StringComparison.Ordinal);
+        Assert.StartsWith("Showing the newest 500 changes. Older ones are in the Audit panel.", model.StatusNote, StringComparison.Ordinal);
         Assert.EndsWith("1 change too large to display.", model.StatusNote, StringComparison.Ordinal);
         Assert.All(model.Rows.Where(r => r.Id != "big"), row => Assert.Equal(string.Empty, row.OversizedNotice));
     }

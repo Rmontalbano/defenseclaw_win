@@ -685,7 +685,7 @@ public sealed partial class LogsPanelViewModel : PanelViewModelBase, IAcceptsNav
         var reason = e.Exception.Message.ReplaceLineEndings(" ").Trim();
         state.FaultText =
             $"The tail of {Path.GetFileName(state.FilePath)} hit an error ({e.Exception.GetType().Name}: {reason}). " +
-            $"New lines are paused; it retries in {Math.Max(1, (int)Math.Ceiling(e.RetryIn.TotalSeconds))} s and resumes by itself.";
+            $"New lines are paused. Retrying in {Math.Max(1, (int)Math.Ceiling(e.RetryIn.TotalSeconds))} s.";
         ShowFaultOf(state);
     }
 
@@ -847,7 +847,7 @@ public sealed partial class LogsPanelViewModel : PanelViewModelBase, IAcceptsNav
                 }
 
                 ShowRotationNotice = true;
-                RotationNoticeText = $"{Path.GetFileName(state.FilePath)} rotated or was truncated - the buffer was cleared and is replaying from the top of the new file.";
+                RotationNoticeText = $"{Path.GetFileName(state.FilePath)} rotated or was truncated. The buffer was cleared and is reading the new file from the top.";
             }
         });
     }
@@ -1055,7 +1055,7 @@ public sealed partial class LogsPanelViewModel : PanelViewModelBase, IAcceptsNav
                 : !structured.Loaded ? "The stream has not been read yet."
                 : structured.Entries.Count == 0 ? $"No data in audit.db for the {structured.Name} stream yet."
                 : structured.Kind == EventStreamKind.Verdicts && SelectedPreset == LogPresets.NoNoise
-                    ? "Nothing matches the current filters. The default preset, no-noise, hides quiet INFO, LOW and MEDIUM rows as the TUI's does; choose preset \"all\" to see every row read."
+                    ? "Nothing matches the filters. The no-noise preset hides quiet INFO, LOW and MEDIUM rows. Choose preset \"all\" to see every row."
                     : "Nothing matches the current filters.";
             return;
         }
@@ -1064,12 +1064,12 @@ public sealed partial class LogsPanelViewModel : PanelViewModelBase, IAcceptsNav
         if (file.Buffer.Count > 0)
         {
             EmptyTitle = "No log lines";
-            EmptyDetail = "Nothing matches the current filters. Choose preset \"all\", Any severity and \"all\" actions and events, or clear the search, to see the buffered lines again.";
+            EmptyDetail = "Nothing matches the filters. Choose preset \"all\", Any severity and \"all\" for action and event, or clear the search.";
         }
         else if (!File.Exists(path))
         {
             EmptyTitle = $"{Path.GetFileName(path)} does not exist yet";
-            EmptyDetail = "It is created the first time the gateway/sidecar writes to it. This is not an error.";
+            EmptyDetail = "Created when the gateway first writes to it. Not an error.";
         }
         else
         {
@@ -1175,7 +1175,7 @@ public sealed partial class LogsPanelViewModel : PanelViewModelBase, IAcceptsNav
         catch (Exception ex)
 #pragma warning restore CA1031
         {
-            failure = $"Could not read the {state.Name} stream from audit.db ({ex.GetType().Name}: {ex.Message.ReplaceLineEndings(" ").Trim()}). Showing what was last read; Reload tries again.";
+            failure = $"Could not read the {state.Name} stream from audit.db ({ex.GetType().Name}: {ex.Message.ReplaceLineEndings(" ").Trim()}). Showing the last read. Reload to retry.";
         }
 
         // Moved on while the read ran (another stream, another read, or off the screen): this answer is stale.
@@ -1197,7 +1197,7 @@ public sealed partial class LogsPanelViewModel : PanelViewModelBase, IAcceptsNav
         switch (result!.Status)
         {
             case EventStreamStatus.LegacySchema:
-                StreamNoticeText = "This audit.db predates the canonical event schema (no bucket / event_name columns), so the Verdicts and Events streams are not available. The gateway and watchdog logs still are.";
+                StreamNoticeText = "This audit.db predates the canonical event schema (no bucket or event_name columns). Verdicts and Events are unavailable. The gateway and watchdog logs still work.";
                 ShowStreamNotice = true;
                 state.Missing = false;
                 break;

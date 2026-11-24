@@ -91,9 +91,9 @@ public sealed partial class AuditPanelViewModel
 
     /// <summary>What the switch says when pointed at: what the list shows, or why it is paused.</summary>
     public string ActionableToolTip => ActionableSuspendedBy is { } why
-        ? $"Actionable only is paused while {why}. Clear it to bring the actionable view back."
-        : "Show what the DefenseClaw TUI shows by default: HIGH, CRITICAL and ERROR events, and any event that blocked, denied, rejected, quarantined or failed. " +
-          "Turn it off to see every event in the window.";
+        ? $"Actionable only is paused while {why}. Clear that filter to resume it."
+        : "Shows what the TUI shows by default: HIGH, CRITICAL and ERROR events, and events that blocked, denied, rejected, quarantined or failed. " +
+          "Turn off to see every event in the window.";
 
     /// <summary>A filter, or the choice itself, changed: the switch, its tooltip and the state of the list may all have moved.</summary>
     private void RaiseActionableState()
@@ -131,7 +131,7 @@ public sealed partial class AuditPanelViewModel
 
         if (actionable)
         {
-            var what = platformOnly ? "actionable platform row(s)" : Rows.Count == 1 ? "actionable event" : "actionable events";
+            var what = platformOnly ? (Rows.Count == 1 ? "actionable platform row" : "actionable platform rows") : Rows.Count == 1 ? "actionable event" : "actionable events";
             var left = HiddenCount > 0 ? string.Create(CultureInfo.CurrentCulture, $" · {HiddenCount:N0} low-signal hidden") : string.Empty;
             return $"{count}{(more ? "+" : string.Empty)} {what}{(more ? " loaded" : string.Empty)}{left} · {range}";
         }
@@ -139,7 +139,7 @@ public sealed partial class AuditPanelViewModel
         return total is { } counted
             ? $"{count} of {counted.ToString("N0", CultureInfo.CurrentCulture)} matching events · {range}"
             : platformOnly
-                ? $"{count} platform row(s) loaded · {range}"
+                ? $"{count} platform {(Rows.Count == 1 ? "row" : "rows")} loaded · {range}"
                 : $"{count}{(more ? "+" : string.Empty)} matching events loaded · {range}";
     }
 
@@ -148,7 +148,7 @@ public sealed partial class AuditPanelViewModel
     {
         EmptyTitle = "No matching events";
         EmptyDetail = SelectedConnector.PlatformOnly
-            ? "No platform-scoped rows in this window. Platform rows are the ones with no connector attribution."
+            ? "No platform rows in this window. Platform rows have no connector."
             : "Widen the time range, lower the minimum severity, or clear the action filter.";
 
         if (!actionable)
@@ -159,7 +159,7 @@ public sealed partial class AuditPanelViewModel
         EmptyTitle = "No actionable events";
         var hidden = HiddenCount.ToString("N0", CultureInfo.CurrentCulture);
         EmptyDetail = HasMore
-            ? $"None among the newest {hidden} events. Load more to look further back, or turn off \"Actionable only\" to see them all."
+            ? $"None in the newest {hidden} events. Load more, or turn off \"Actionable only\" to see all."
             : HiddenCount > 0
                 ? $"{hidden} low-signal {(HiddenCount == 1 ? "event is" : "events are")} hidden. Turn off \"Actionable only\" to see {(HiddenCount == 1 ? "it" : "them")}."
                 : "Widen the time range, or clear a filter.";

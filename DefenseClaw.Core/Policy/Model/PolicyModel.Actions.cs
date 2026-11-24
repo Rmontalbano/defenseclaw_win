@@ -237,7 +237,7 @@ public sealed partial class PolicyModel
         var scope = connector.Length > 0 ? connector : "every connector";
         var details = new List<string>(PackConsequence(connector, pack, false).Details)
         {
-            "Only the digest pinned in config.yaml changes; the rule files are not touched.",
+            "Only the digest pinned in config.yaml changes. The rule files are not touched.",
             "The gateway then enforces the edited pack, here and in every other scope that uses this pack.",
         };
         var consequence = new PolicyConsequence(
@@ -332,7 +332,7 @@ public sealed partial class PolicyModel
         }
 
         var warning = weakens
-            ? $"This weakens protection: {scope} stops blocking; findings are only logged, and its hooks fail open while the gateway is down unless their fail mode is set to closed."
+            ? $"This weakens protection: {scope} stops blocking and only logs findings. Its hooks fail open while the gateway is down unless their fail mode is closed."
             : string.Empty;
         return new PolicyConsequence(
             connector.Length > 0 ? $"Switch {connector} to {mode} mode?" : $"Set the global guardrail mode to {mode}?",
@@ -376,11 +376,11 @@ public sealed partial class PolicyModel
         }
         else if (connector.Length > 0)
         {
-            details.Add("Only this connector changes; a running gateway restarts to apply it.");
+            details.Add("Only this connector changes. A running gateway restarts.");
         }
         else if (Catalog.MultiConnector)
         {
-            details.Add("Every connector without its own level follows it; a running gateway restarts to apply it.");
+            details.Add("Every connector without its own level follows it. A running gateway restarts.");
             if (change.KeepOwn.Count > 0)
             {
                 details.Add("Keep their own level: " + string.Join(", ", change.KeepOwn) + ".");
@@ -396,7 +396,7 @@ public sealed partial class PolicyModel
             details.Add($"Alerts start at {after.AlertAt}: anything that blocks also alerts.");
         }
 
-        details.Add("These are the levels for tool calls. The policy's levels for LLM traffic through the guardrail proxy are separate (Policies view).");
+        details.Add("These are tool-call levels. LLM traffic through the guardrail proxy follows the policy's own levels (Policies view).");
 
         var loosened = change.LoosenedText();
         var what = string.Equals(kind, "block", StringComparison.Ordinal) ? "block" : "alert";
@@ -505,20 +505,20 @@ public sealed partial class PolicyModel
         if (enable)
         {
             summary = ProtectionClaim(pack.Name, scope);
-            var rules = pack.RuleCount > 0 ? $" ({I(pack.RuleCount)} rule{(pack.RuleCount != 1 ? "s" : string.Empty)}; the details list them)" : string.Empty;
+            var rules = pack.RuleCount > 0 ? $" ({I(pack.RuleCount)} rule{(pack.RuleCount != 1 ? "s" : string.Empty)}, listed in the details)" : string.Empty;
             details.Add(covers.Length > 0 ? $"It blocks: {covers}{rules}." : "It adds the pack's blocking rules.");
             var target = ComposedPackFolder(row);
             var profileFolder = Path.GetFileName(target);
             var scopeFolder = Path.GetFileName(Path.GetDirectoryName(target) ?? string.Empty);
             var current = PolicyLevels.Or(row.Pack, "-");
             details.Add(
-                $"Builds {Path.Combine("guardrail", scopeFolder, profileFolder)} in your policy folder from {current} and the opt-in packs, checks it, and switches {where} to it; a running gateway restarts.");
+                $"Builds {Path.Combine("guardrail", scopeFolder, profileFolder)} in your policy folder from {current} and the opt-in packs, checks it, and switches {where} to it. A running gateway restarts.");
             if (connector.Length == 0)
             {
                 var own = OwnSetting("pack");
                 if (own.Count > 0)
                 {
-                    details.Add("Not covered, they have their own pack; turn it on there too: " + string.Join(", ", own) + ".");
+                    details.Add("Not covered, because they have their own pack: " + string.Join(", ", own) + ". Turn it on there too.");
                 }
             }
 
@@ -529,7 +529,7 @@ public sealed partial class PolicyModel
                 weakens = true;
                 var (oldBlock, oldAlert) = PolicyLevels.ProfileLevelsFor(row.PackFolder, Catalog.PackPostures);
                 var (newBlock, newAlert) = PolicyLevels.ProfileLevelsFor(target, Catalog.PackPostures);
-                warning = $"This weakens protection: the gateway takes tool-call levels from the pack's manifest posture (defenseclaw-pack.json), else its folder name, so {profileFolder} is treated as {after}: blocks {newBlock} and alerts on {newAlert} instead of {oldBlock} and {oldAlert} ({before}).";
+                warning = $"This weakens protection: the gateway reads tool-call levels from the pack's posture in defenseclaw-pack.json, or else its folder name. {profileFolder} counts as {after}: it blocks {newBlock} and alerts on {newAlert}, not {oldBlock} and {oldAlert} ({before}).";
             }
         }
         else
@@ -617,7 +617,7 @@ public sealed partial class PolicyModel
         }
 
         details.Add("The gateway reloads the policy.");
-        details.Add("Its guardrail thresholds govern LLM traffic through the proxy; tool-call blocking is unchanged (see Posture).");
+        details.Add("Its guardrail thresholds apply to LLM traffic through the proxy. Tool-call blocking is unchanged (see Posture).");
         return new PolicyConsequence(
             $"Activate the {chosen.Name} policy?",
             $"{before} → {chosen.Name}",

@@ -106,7 +106,7 @@ public sealed class HookRowLogsTests : IDisposable
         var panel = await PanelAsync("1.0.8");
         var row = Row(panel, "refused");
 
-        Assert.StartsWith("legacy.audit.guardrail.block Hook blocked the call itself", row.Message, StringComparison.Ordinal);
+        Assert.StartsWith("legacy.audit.guardrail.block Hook blocked the call", row.Message, StringComparison.Ordinal);
         Assert.Contains("gateway unreachable", row.Message, StringComparison.Ordinal);
         Assert.Equal(HookFailureRow.SourceLabel, Field(row, "Decided by"));
         Assert.Equal("gateway unreachable", Field(row, "Hook's reason"));
