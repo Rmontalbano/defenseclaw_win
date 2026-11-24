@@ -6,7 +6,7 @@ This is a community project, not an official Cisco product.
 
 ## Design principle
 
-The app does not write DefenseClaw state itself. Every change runs through the `defenseclaw` CLI as a logged invocation, and the exact argv, live output and exit status appear in the Activity panel. Every state-changing command goes through a review first. The app refuses known secrets on argv: a value it recognises as a secret is never put on the command line, and other secrets reach the CLI through its own prompt, stdin, or one child process's environment.
+The app does not write DefenseClaw state itself. Every change runs through the `defenseclaw` CLI as a logged invocation, and the exact argv, live output and exit status appear in Activity. Every state-changing command goes through a review first. The app refuses known secrets on argv: a value it recognises as a secret is never put on the command line, and other secrets reach the CLI through its own prompt, stdin, or one child process's environment.
 
 Three routes can still put a value on argv, because the CLI takes it there: `mcp set --env`, `mcp set --url` and `plugin install <url>`. The review warns when a value looks like a secret in those forms. The warning does not stop the command.
 

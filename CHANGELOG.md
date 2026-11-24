@@ -78,6 +78,17 @@ workflow uses that section as the release's Highlights and fails when it is empt
 - Installer (`DefenseClawWin-X.Y.Z-Setup-x64.exe`, per user, no administrator rights), portable zip, `install.ps1` one-line
   installer, `checksums.txt`, and GitHub build-provenance attestations for every release asset.
 
+### Changed
+- Shorter, plainer text on every page. Row details, card intros, help, tooltips, wizard steps and review warnings say the state, then the
+  action. Each warning, command, flag, path and version is kept. Text the runtime supplies is not reworded. Long log messages and skill
+  descriptions are clipped to two lines, and the full text is in the detail pane and the tooltip.
+- One word for each thing across pages: "Activity", "this machine", "fail mode", "Setup installer". Text names the button to use
+  ("select Refresh"), and every reviewed action says "Nothing runs until you confirm."
+- Facts that were only in a tooltip are now on screen. On Overview, a fail mode row has an "Outage behaviour" expander with one case per
+  line, attention rows have an expander for the outage rule, and a protected-file change says "Attribution is by time." The Hook fail mode
+  row reads "not saved, policy tier decides" where that rule applies. The Settings auto-start row lists when the gateway is not started.
+- First run: the "policy" fail mode choice now says it keeps a mode saved earlier, and that other hook failures always block.
+
 ### Fixed
 - Overview rule-pack rows (the connector table's "Rule pack" column, the scoped Configuration row, "Policy posture", the scoped policy row) and the strict-pack
   fail-mode note now name the pack the runtime picks: the connector's entry before the global one, and `rule_pack` before `rule_pack_dir`. Before, only a
